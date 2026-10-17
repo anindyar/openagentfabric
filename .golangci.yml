@@ -15,6 +15,9 @@ linters:
         - fmt.Fprintln
     misspell:
       locale: UK
+      # Upstream API names (vLLM --gpu-memory-utilization, gpuMemoryUtilization).
+      ignore-rules:
+        - utilization
 formatters:
   enable:
     - gofmt

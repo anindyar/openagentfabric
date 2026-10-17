@@ -25,6 +25,7 @@ It covers:
 - Detect the RoCE GID index on every bring-up; it has changed from 3 to 4. It depends on how many addresses the netdev has. On one netdev, RoCE v2 GIDs were seen at index 3 (first IP) and 5 (second IP). Choose the RoCE v2 GID whose address is the rail IP. Use MTU 9000 and check it with `ib_write_bw` on each rail (about 92 Gbps per rail, about 185 Gbps with both).
 - vLLM on GB10 needs `LD_PRELOAD` of the system libnccl (2.30.x). On a 3-node point-to-point mesh, use `NCCL_IB_DISABLE=1` (sockets).
 - Each vLLM grabs about 90% of unified memory by default, so always set `--gpu-memory-utilization` per model.
+- DGX OS (docker 29) gives containers the GPU through **CDI** (`/var/run/cdi/nvidia.yaml`, device `nvidia.com/gpu=all`). No `nvidia` docker runtime is registered. Compose files must request the GPU with `gpus: all` or a CDI device, never `runtime: nvidia`. `nvidia-smi` works but shows no memory usage on unified memory, so read free memory from `/proc/meminfo`.
 - Weights must be present on every node in a TP/PP group. Pull them once and rsync them over the fabric. Check disk space before every pull.
 
 ## Routing defaults (vSR)
