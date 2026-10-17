@@ -96,11 +96,12 @@ func TestRenderedStackOnDocker(t *testing.T) {
 		// request fails upstream (5xx), not at authentication.
 		{"gateway accepts the generated key", chat(key), func(c int) bool { return c != 401 && c != 403 }},
 	}
+	client := &http.Client{Timeout: 10 * time.Second}
 	for _, p := range probes {
 		var code int
 		deadline := time.Now().Add(2 * time.Minute)
 		for {
-			resp, err := http.DefaultClient.Do(p.req().WithContext(ctx))
+			resp, err := client.Do(p.req().WithContext(ctx))
 			if err == nil {
 				code = resp.StatusCode
 				_ = resp.Body.Close()

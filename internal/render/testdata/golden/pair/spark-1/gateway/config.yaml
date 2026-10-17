@@ -11,7 +11,7 @@ config:
         gen_ai.usage.prompt_tokens: llm.inputTokens
         span.name: '"openai.chat"'
     headers:
-      Authorization: Basic $LANGFUSE_OTLP_AUTH
+      Authorization: '"Basic $LANGFUSE_OTLP_AUTH"'
     otlpEndpoint: http://192.168.1.11:3000/api/public/otel
     otlpProtocol: http
     randomSampling: "1.0"

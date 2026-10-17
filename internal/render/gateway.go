@@ -95,6 +95,8 @@ func (r *renderer) gateway(n config.Node) (Project, error) {
 
 // tracing exports one OTLP span per LLM call to Langfuse, with the GenAI
 // attributes Langfuse reads (as in agentgateway's own Langfuse example).
+// config.tracing is deprecated in agentgateway 1.6 in favour of
+// frontendPolicies.tracing; it still works at the pinned version.
 func (r *renderer) tracing(obs config.Node) map[string]any {
 	sample, capture := "1.0", false
 	if lf := r.Cluster.Spec.Observability.Langfuse; lf != nil {
@@ -116,9 +118,11 @@ func (r *renderer) tracing(obs config.Node) map[string]any {
 		fields["gen_ai.completion"] = `flattenRecursive(llm.completion.map(c, {"role":"assistant", "content": c}))`
 	}
 	return map[string]any{
-		"otlpEndpoint":   "http://" + hostPort(obs.Address, config.PortLangfuse) + "/api/public/otel",
-		"otlpProtocol":   "http",
-		"headers":        map[string]string{"Authorization": "Basic $LANGFUSE_OTLP_AUTH"},
+		"otlpEndpoint": "http://" + hostPort(obs.Address, config.PortLangfuse) + "/api/public/otel",
+		"otlpProtocol": "http",
+		// Header values are CEL expressions: a quoted string literal. The
+		// variable is shell-expanded first; base64 never contains a quote.
+		"headers":        map[string]string{"Authorization": `"Basic $LANGFUSE_OTLP_AUTH"`},
 		"randomSampling": sample,
 		"fields":         map[string]any{"add": fields},
 	}
