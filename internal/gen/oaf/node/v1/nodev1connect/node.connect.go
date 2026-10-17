@@ -35,6 +35,10 @@ const (
 	NodeServiceRemoveProjectProcedure = "/oaf.node.v1.NodeService/RemoveProject"
 	// NodeServiceProjectStatusProcedure is the procedure name of the NodeService's ProjectStatus RPC.
 	NodeServiceProjectStatusProcedure = "/oaf.node.v1.NodeService/ProjectStatus"
+	// NodeServiceListProjectsProcedure is the procedure name of the NodeService's ListProjects RPC.
+	NodeServiceListProjectsProcedure = "/oaf.node.v1.NodeService/ListProjects"
+	// NodeServiceFabricProcedure is the procedure name of the NodeService's Fabric RPC.
+	NodeServiceFabricProcedure = "/oaf.node.v1.NodeService/Fabric"
 )
 
 var (
@@ -73,6 +77,20 @@ var (
 			Procedure:  NodeServiceProjectStatusProcedure,
 		}
 	})
+	nodeServiceListProjectsSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("ListProjects"),
+			Procedure:  NodeServiceListProjectsProcedure,
+		}
+	})
+	nodeServiceFabricSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("Fabric"),
+			Procedure:  NodeServiceFabricProcedure,
+		}
+	})
 )
 
 // NodeServiceClient is a client for the oaf.node.v1.NodeService service.
@@ -88,6 +106,10 @@ type NodeServiceClient interface {
 	RemoveProject(context.Context, *v1.RemoveProjectRequest) (*v1.RemoveProjectResponse, error)
 	// ProjectStatus reports a project's containers.
 	ProjectStatus(context.Context, *v1.ProjectStatusRequest) (*v1.ProjectStatusResponse, error)
+	// ListProjects names the projects the agent manages.
+	ListProjects(context.Context, *v1.ListProjectsRequest) (*v1.ListProjectsResponse, error)
+	// Fabric reports the QSFP ports (read-only discovery).
+	Fabric(context.Context, *v1.FabricRequest) (*v1.FabricResponse, error)
 }
 
 // NewNodeServiceClient constructs a client for the oaf.node.v1.NodeService service. Multiple
@@ -109,6 +131,10 @@ type NodeServiceHandler interface {
 	RemoveProject(context.Context, *v1.RemoveProjectRequest) (*v1.RemoveProjectResponse, error)
 	// ProjectStatus reports a project's containers.
 	ProjectStatus(context.Context, *v1.ProjectStatusRequest) (*v1.ProjectStatusResponse, error)
+	// ListProjects names the projects the agent manages.
+	ListProjects(context.Context, *v1.ListProjectsRequest) (*v1.ListProjectsResponse, error)
+	// Fabric reports the QSFP ports (read-only discovery).
+	Fabric(context.Context, *v1.FabricRequest) (*v1.FabricResponse, error)
 }
 
 // RegisterNodeServiceHandler registers svc as the oaf.node.v1.NodeService implementation on server.
@@ -120,6 +146,8 @@ func RegisterNodeServiceHandler(server *connect.Server, svc NodeServiceHandler) 
 		connect.Method{Spec: nodeServiceApplyProjectSpec(), Handler: adapter.applyProject},
 		connect.Method{Spec: nodeServiceRemoveProjectSpec(), Handler: adapter.removeProject},
 		connect.Method{Spec: nodeServiceProjectStatusSpec(), Handler: adapter.projectStatus},
+		connect.Method{Spec: nodeServiceListProjectsSpec(), Handler: adapter.listProjects},
+		connect.Method{Spec: nodeServiceFabricSpec(), Handler: adapter.fabric},
 	)
 }
 
@@ -144,6 +172,14 @@ func (UnimplementedNodeServiceHandler) RemoveProject(context.Context, *v1.Remove
 
 func (UnimplementedNodeServiceHandler) ProjectStatus(context.Context, *v1.ProjectStatusRequest) (*v1.ProjectStatusResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.ProjectStatus is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) ListProjects(context.Context, *v1.ListProjectsRequest) (*v1.ListProjectsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.ListProjects is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) Fabric(context.Context, *v1.FabricRequest) (*v1.FabricResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.Fabric is not implemented")
 }
 
 type nodeServiceClient struct {
@@ -185,6 +221,22 @@ func (c *nodeServiceClient) RemoveProject(ctx context.Context, req *v1.RemovePro
 func (c *nodeServiceClient) ProjectStatus(ctx context.Context, req *v1.ProjectStatusRequest) (*v1.ProjectStatusResponse, error) {
 	var res v1.ProjectStatusResponse
 	if err := c.client.CallUnary(ctx, nodeServiceProjectStatusSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) ListProjects(ctx context.Context, req *v1.ListProjectsRequest) (*v1.ListProjectsResponse, error) {
+	var res v1.ListProjectsResponse
+	if err := c.client.CallUnary(ctx, nodeServiceListProjectsSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) Fabric(ctx context.Context, req *v1.FabricRequest) (*v1.FabricResponse, error) {
+	var res v1.FabricResponse
+	if err := c.client.CallUnary(ctx, nodeServiceFabricSpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -246,6 +298,30 @@ func (h nodeServiceHandler) projectStatus(ctx context.Context, _ connect.Spec, s
 		return err
 	}
 	res, err := h.svc.ProjectStatus(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) listProjects(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.ListProjectsRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.ListProjects(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) fabric(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.FabricRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.Fabric(ctx, &req)
 	if err != nil {
 		return err
 	}

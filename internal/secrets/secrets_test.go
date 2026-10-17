@@ -93,3 +93,19 @@ func TestValueConcurrentCallersAgree(t *testing.T) {
 		}
 	}
 }
+
+func TestPreviewNeverWrites(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "secrets")
+	p := Preview{Store: Store{Dir: dir}}
+	v, err := p.Value("postgres-password")
+	if err != nil || v != Placeholder {
+		t.Fatalf("missing secret: %q %v", v, err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatal("preview created the secrets directory")
+	}
+	stored, _ := Store{Dir: dir}.Value("postgres-password")
+	if v, _ := p.Value("postgres-password"); v != stored {
+		t.Fatal("preview does not return an existing secret")
+	}
+}

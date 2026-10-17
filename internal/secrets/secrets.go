@@ -39,19 +39,11 @@ func (s Store) Value(name string) (string, error) {
 	if !validName.MatchString(name) {
 		return "", fmt.Errorf("invalid secret name %q", name)
 	}
-	p := filepath.Join(s.Dir, name)
-	b, err := os.ReadFile(p)
-	if err == nil {
-		v := strings.TrimSpace(string(b))
-		if v == "" {
-			return "", fmt.Errorf("secret %s is empty", p)
-		}
-		return v, nil
+	v, ok, err := s.read(name)
+	if err != nil || ok {
+		return v, err
 	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return "", err
-	}
-	v, err := generate()
+	v, err = generate()
 	if err != nil {
 		return "", err
 	}
@@ -60,6 +52,43 @@ func (s Store) Value(name string) (string, error) {
 	}
 	// Re-read so that a concurrent writer that won the race decides the value.
 	return s.Value(name)
+}
+
+func (s Store) read(name string) (string, bool, error) {
+	p := filepath.Join(s.Dir, name)
+	b, err := os.ReadFile(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	v := strings.TrimSpace(string(b))
+	if v == "" {
+		return "", false, fmt.Errorf("secret %s is empty", p)
+	}
+	return v, true, nil
+}
+
+// Placeholder stands in for a secret that Preview has not generated.
+var Placeholder = strings.Repeat("0", 64)
+
+// Preview reads existing secrets but never creates one: a missing secret
+// reads as Placeholder. A dry run uses it so that it changes nothing.
+type Preview struct {
+	Store Store
+}
+
+// Value implements Source.
+func (p Preview) Value(name string) (string, error) {
+	if !validName.MatchString(name) {
+		return "", fmt.Errorf("invalid secret name %q", name)
+	}
+	v, ok, err := p.Store.read(name)
+	if err != nil || ok {
+		return v, err
+	}
+	return Placeholder, nil
 }
 
 func generate() (string, error) {

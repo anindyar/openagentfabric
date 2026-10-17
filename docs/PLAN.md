@@ -161,7 +161,10 @@ Each PR is small and has tests. **Exit criteria** are what I will demonstrate at
    Known gaps: vSR is rendered in M3 (until then `model: auto` → `routing.defaults.fast`); per-key rate limits are not
    rendered yet; Langfuse browser media uploads need the S3 port published (not yet); deployments over 3 nodes
    (triangle) are refused until the triangle work.
-8. `oaf install` / `oaf apply --dry-run` / `oaf status` / `oaf uninstall`.
+8. `oaf install` / `oaf apply --dry-run` / `oaf status` / `oaf uninstall`. ✅ `internal/reconcile` plans through the agents
+   (`ApplyProject` dry run + `ListProjects`; a dropped model is removed), applies in dependency order, and reports status.
+   `--dry-run` generates no secrets. `install` = preflight on every agent, then apply. Agents are placed by hand for now
+   ([install.md](install.md)); agent bootstrap over SSH and fabric bring-up (item 6) are the remaining M1 work.
 - **Exit:** on the real pair, a clean install brings up every pinned component healthy; a re-run is a no-op;
   uninstall leaves the hosts clean; rails measure ≥ 85 Gbps each.
 

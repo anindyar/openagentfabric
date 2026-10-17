@@ -124,6 +124,90 @@ func TestApplyIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestDryRunReportsWithoutWriting(t *testing.T) {
+	c, docker, state := newAgent(t)
+	ctx := context.Background()
+	req := project("services: {web: {image: busybox}}\n", &nodev1.File{Path: ".env", Content: []byte("A=1\n"), Mode: 0o600})
+	req.DryRun = true
+	dry, err := c.ApplyProject(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !dry.GetChanged() || strings.Join(dry.GetChangedPaths(), ",") != ".env,compose.yaml" {
+		t.Fatalf("dry run of a new project: %v", dry)
+	}
+	if _, err := os.Stat(filepath.Join(state, "projects/demo")); !os.IsNotExist(err) {
+		t.Fatal("dry run wrote files")
+	}
+	if docker.count(" up ") != 0 {
+		t.Fatal("dry run ran compose up")
+	}
+
+	req.DryRun = false
+	if _, err := c.ApplyProject(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	// Same content, different mode: only that path is reported.
+	req.DryRun = true
+	req.Files[1].Mode = 0o644
+	dry, err = c.ApplyProject(ctx, req)
+	if err != nil || strings.Join(dry.GetChangedPaths(), ",") != ".env" {
+		t.Fatalf("mode change: %v %v", dry, err)
+	}
+	// A dropped file is reported as changed.
+	req.Files = req.Files[:1]
+	dry, err = c.ApplyProject(ctx, req)
+	if err != nil || strings.Join(dry.GetChangedPaths(), ",") != ".env" {
+		t.Fatalf("removed file: %v %v", dry, err)
+	}
+}
+
+func TestListProjects(t *testing.T) {
+	c, _, state := newAgent(t)
+	ctx := context.Background()
+	empty, err := c.ListProjects(ctx, &nodev1.ListProjectsRequest{})
+	if err != nil || len(empty.GetNames()) != 0 {
+		t.Fatalf("no projects yet: %v %v", empty, err)
+	}
+	for _, n := range []string{"zeta", "alpha"} {
+		req := project("services: {}\n")
+		req.Name = n
+		if _, err := c.ApplyProject(ctx, req); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Leftover swap directories and stray files are not projects.
+	_ = os.MkdirAll(filepath.Join(state, "projects", ".alpha.new-123"), 0o755)
+	_ = os.WriteFile(filepath.Join(state, "projects", "README"), []byte("x"), 0o644)
+	list, err := c.ListProjects(ctx, &nodev1.ListProjectsRequest{})
+	if err != nil || strings.Join(list.GetNames(), ",") != "alpha,zeta" {
+		t.Fatalf("list: %v %v", list, err)
+	}
+}
+
+func TestFabricOverRPC(t *testing.T) {
+	c, _, _ := newAgent(t)
+	resp, err := c.Fabric(context.Background(), &nodev1.FabricRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ports, err := FabricFromProto(resp.GetPorts())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ports) != 2 || len(ports[0].Halves) != 2 || ports[0].Halves[0].Name != "enp1s0f0np0" {
+		t.Fatalf("ports: %+v", ports)
+	}
+	// The round trip keeps what the renderer needs: addresses and GIDs.
+	h := ports[0].Halves[0]
+	if len(h.Addrs) == 0 || h.RDMADev == "" {
+		t.Fatalf("lost addresses or RDMA device: %+v", h)
+	}
+	if idx, ok := h.RoCEv2GIDFor(h.Addrs[0].Addr()); !ok || idx != 3 {
+		t.Fatalf("GID for %s = %d, %v", h.Addrs[0], idx, ok)
+	}
+}
+
 func TestApplyRejectsUnsafeInput(t *testing.T) {
 	c, docker, state := newAgent(t)
 	ctx := context.Background()

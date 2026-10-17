@@ -1,7 +1,6 @@
 package node
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -73,20 +72,6 @@ func fileMode(f *nodev1.File) fs.FileMode {
 	return fs.FileMode(f.GetMode())
 }
 
-// digest identifies a desired file set: paths, modes and contents.
-func digest(files []*nodev1.File) [32]byte {
-	sorted := append([]*nodev1.File(nil), files...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].GetPath() < sorted[j].GetPath() })
-	h := sha256.New()
-	for _, f := range sorted {
-		fmt.Fprintf(h, "%s\x00%o\x00%d\x00", f.GetPath(), fileMode(f), len(f.GetContent()))
-		h.Write(f.GetContent())
-	}
-	var d [32]byte
-	copy(d[:], h.Sum(nil))
-	return d
-}
-
 // readDir loads an existing project directory as files, for comparison.
 func readDir(dir string) ([]*nodev1.File, error) {
 	var files []*nodev1.File
@@ -148,7 +133,27 @@ func writeProject(root, name string, files []*nodev1.File) error {
 	return os.RemoveAll(old)
 }
 
-func sameFiles(a, b []*nodev1.File) bool {
-	da, db := digest(a), digest(b)
-	return bytes.Equal(da[:], db[:])
+// changedPaths lists the paths whose presence, mode or content differ
+// between the current and desired file sets, sorted.
+func changedPaths(current, desired []*nodev1.File) []string {
+	key := func(f *nodev1.File) string {
+		sum := sha256.Sum256(f.GetContent())
+		return fmt.Sprintf("%o:%x", fileMode(f), sum)
+	}
+	cur := map[string]string{}
+	for _, f := range current {
+		cur[f.GetPath()] = key(f)
+	}
+	var out []string
+	for _, f := range desired {
+		if k, ok := cur[f.GetPath()]; !ok || k != key(f) {
+			out = append(out, f.GetPath())
+		}
+		delete(cur, f.GetPath())
+	}
+	for p := range cur {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }

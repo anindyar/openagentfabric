@@ -15,6 +15,10 @@ service NodeService {
   rpc RemoveProject(RemoveProjectRequest) returns (RemoveProjectResponse);
   // ProjectStatus reports a project's containers.
   rpc ProjectStatus(ProjectStatusRequest) returns (ProjectStatusResponse);
+  // ListProjects names the projects the agent manages.
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  // Fabric reports the QSFP ports (read-only discovery).
+  rpc Fabric(FabricRequest) returns (FabricResponse);
 }
 
 message InfoRequest {}
@@ -50,6 +54,8 @@ message ApplyProjectRequest {
   string name = 1;
   // Must include compose.yaml. Paths are relative to the project directory.
   repeated File files = 2;
+  // Report what would change without writing files or running compose.
+  bool dry_run = 3;
 }
 
 message File {
@@ -62,6 +68,8 @@ message File {
 message ApplyProjectResponse {
   bool changed = 1;
   repeated Service services = 2;
+  // Paths added, changed (content or mode) or removed, sorted.
+  repeated string changed_paths = 3;
 }
 
 message RemoveProjectRequest {
@@ -87,4 +95,41 @@ message Service {
   string state = 2;
   string health = 3;
   string image = 4;
+}
+
+message ListProjectsRequest {}
+
+message ListProjectsResponse {
+  // Sorted project names (without the "oaf-" prefix).
+  repeated string names = 1;
+}
+
+message FabricRequest {}
+
+message FabricResponse {
+  repeated FabricPort ports = 1;
+}
+
+// One physical QSFP port; its halves are the two rails (one per PCIe domain).
+message FabricPort {
+  int32 index = 1;
+  repeated FabricNetdev halves = 2;
+}
+
+message FabricNetdev {
+  string name = 1;
+  string pci = 2;
+  string oper_state = 3;
+  int32 mtu = 4;
+  int32 speed_mbps = 5;
+  // Addresses in CIDR form, excluding link-local.
+  repeated string addrs = 6;
+  string rdma_dev = 7;
+  repeated Gid gids = 8;
+}
+
+message Gid {
+  int32 index = 1;
+  string type = 2;
+  string gid = 3;
 }

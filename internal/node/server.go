@@ -14,6 +14,7 @@ import (
 
 	"connectrpc.com/connect/v2"
 
+	"openagentfabric.dev/oaf/internal/fabric"
 	nodev1 "openagentfabric.dev/oaf/internal/gen/oaf/node/v1"
 	"openagentfabric.dev/oaf/internal/gen/oaf/node/v1/nodev1connect"
 	"openagentfabric.dev/oaf/internal/hostexec"
@@ -80,7 +81,15 @@ func (s *Server) ApplyProject(ctx context.Context, req *nodev1.ApplyProjectReque
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, connect.NewError(connect.CodeInternal, err.Error())
 	}
-	changed := !sameFiles(current, req.GetFiles())
+	paths := changedPaths(current, req.GetFiles())
+	changed := len(paths) > 0
+	if req.GetDryRun() {
+		services, err := s.services(ctx, req.GetName())
+		if err != nil {
+			return nil, err
+		}
+		return &nodev1.ApplyProjectResponse{Changed: changed, Services: services, ChangedPaths: paths}, nil
+	}
 	if changed {
 		if err := writeProject(s.projectsDir(), req.GetName(), req.GetFiles()); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, "writing project: "+err.Error())
@@ -94,7 +103,7 @@ func (s *Server) ApplyProject(ctx context.Context, req *nodev1.ApplyProjectReque
 	if err != nil {
 		return nil, err
 	}
-	return &nodev1.ApplyProjectResponse{Changed: changed, Services: services}, nil
+	return &nodev1.ApplyProjectResponse{Changed: changed, Services: services, ChangedPaths: paths}, nil
 }
 
 // RemoveProject implements NodeService.
@@ -142,4 +151,34 @@ func (s *Server) services(ctx context.Context, name string) ([]*nodev1.Service, 
 		out = append(out, &nodev1.Service{Name: st.Service, State: st.State, Health: st.Health, Image: st.Image})
 	}
 	return out, nil
+}
+
+// ListProjects implements NodeService.
+func (s *Server) ListProjects(context.Context, *nodev1.ListProjectsRequest) (*nodev1.ListProjectsResponse, error) {
+	entries, err := os.ReadDir(s.projectsDir())
+	if errors.Is(err, fs.ErrNotExist) {
+		return &nodev1.ListProjectsResponse{}, nil
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err.Error())
+	}
+	resp := &nodev1.ListProjectsResponse{}
+	for _, e := range entries { // ReadDir sorts by name
+		if !e.IsDir() || validateName(e.Name()) != nil {
+			continue // skips the .<name>.new-*/.old swap directories
+		}
+		if _, err := os.Stat(filepath.Join(s.projectsDir(), e.Name(), ComposeFile)); err == nil {
+			resp.Names = append(resp.Names, e.Name())
+		}
+	}
+	return resp, nil
+}
+
+// Fabric implements NodeService.
+func (s *Server) Fabric(ctx context.Context, _ *nodev1.FabricRequest) (*nodev1.FabricResponse, error) {
+	ports, err := fabric.Discover(ctx, hostexec.ReadOnly{Inner: s.Inspect})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, "fabric discovery: "+err.Error())
+	}
+	return &nodev1.FabricResponse{Ports: FabricToProto(ports)}, nil
 }
