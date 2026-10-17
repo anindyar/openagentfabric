@@ -1,0 +1,309 @@
+package render
+
+import (
+	"fmt"
+	"maps"
+	"net/netip"
+	"path"
+	"slices"
+	"strconv"
+	"strings"
+
+	"openagentfabric.dev/oaf/internal/config"
+	"openagentfabric.dev/oaf/internal/fabric"
+)
+
+// models renders one project per enabled deployment per node. A deployment
+// that spans a group runs one vLLM per node: rank 0 serves the API, the others
+// run headless, and they rendezvous over the QSFP link (torch.distributed,
+// no Ray).
+func (r *renderer) models() ([]Project, error) {
+	var out []Project
+	for i, d := range r.Cluster.Spec.Models {
+		if !d.IsEnabled() {
+			continue
+		}
+		ps, err := r.model(i, d)
+		if err != nil {
+			return nil, fmt.Errorf("model %q: %w", d.Name, err)
+		}
+		out = append(out, ps...)
+	}
+	return out, nil
+}
+
+func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
+	v := r.Versions.Version
+	img, err := r.image("vllm")
+	if err != nil {
+		return nil, err
+	}
+	m, ok := r.Catalog.Lookup(d.CatalogRef)
+	if !ok {
+		return nil, fmt.Errorf("no catalog entry %q", d.CatalogRef)
+	}
+	nodes := r.Cluster.PlacementNodes(d.Placement)
+	prof, err := config.Profile(d, m, len(nodes))
+	if err != nil {
+		return nil, err
+	}
+	var ranks []rankNet
+	if len(nodes) > 1 {
+		if ranks, err = r.rankNetworks(nodes); err != nil {
+			return nil, err
+		}
+	}
+	apiKey, err := r.secret(SecretVLLMAPIKey)
+	if err != nil {
+		return nil, err
+	}
+
+	weights := path.Join("/models", m.ID)
+	maxLen := prof.MaxModelLen
+	if d.MaxModelLen != 0 {
+		maxLen = d.MaxModelLen
+	}
+	var out []Project
+	for rank, nodeName := range nodes {
+		node, _ := r.Cluster.Node(nodeName)
+		env := newEnvFile()
+
+		args := []string{
+			weights,
+			"--served-model-name", d.Name,
+			"--gpu-memory-utilization", strconv.FormatFloat(d.GPUMemoryUtilization, 'f', -1, 64),
+			"--tensor-parallel-size", strconv.Itoa(prof.TensorParallel),
+		}
+		if pp := prof.PP(); pp > 1 {
+			args = append(args, "--pipeline-parallel-size", strconv.Itoa(pp))
+		}
+		if maxLen != 0 {
+			args = append(args, "--max-model-len", strconv.Itoa(maxLen))
+		}
+		if prof.Quantization != "" {
+			args = append(args, "--quantization", prof.Quantization)
+		}
+		if len(nodes) > 1 {
+			args = append(args,
+				"--nnodes", strconv.Itoa(len(nodes)),
+				"--node-rank", strconv.Itoa(rank),
+				"--master-addr", ranks[0].ip.String(),
+				"--master-port", strconv.Itoa(config.MasterPort(i)))
+		}
+		if rank == 0 {
+			args = append(args, "--host", "0.0.0.0", "--port", strconv.Itoa(r.Cluster.ModelPort(i)))
+		} else {
+			args = append(args, "--headless")
+		}
+		args = append(args, prof.Args...)
+		args = append(args, d.Args...)
+
+		cenv := map[string]string{
+			// Weights are pulled and verified by oaf (M2), never by vLLM at runtime.
+			"HF_HUB_OFFLINE":       "1",
+			"TRANSFORMERS_OFFLINE": "1",
+		}
+		if rank == 0 {
+			cenv["VLLM_API_KEY"] = env.ref("VLLM_API_KEY", apiKey)
+		}
+
+		s := newService(img)
+		s.NetworkMode = "host" // NCCL/RDMA and the API port need the host network
+		s.GPUs = "all"         // a CDI device request on DGX OS; never runtime: nvidia
+		s.ShmSize = "10gb"
+		s.Command = args
+		s.Volumes = []string{path.Join(modelsPath(node), m.ID) + ":" + weights + ":ro"}
+		if p := r.Cluster.Spec.Fabric.NCCL.LDPreload; p != "" {
+			cenv["LD_PRELOAD"] = p
+			s.Volumes = append(s.Volumes, p+":"+p+":ro")
+		}
+		if len(nodes) > 1 {
+			maps.Copy(cenv, r.ncclEnv(ranks[rank]))
+			s.Ulimits = map[string]int{"memlock": -1}
+			if r.transport() == config.TransportIB {
+				s.Devices = []string{"/dev/infiniband:/dev/infiniband"}
+			}
+		}
+		maps.Copy(cenv, r.Cluster.Spec.Fabric.NCCL.Env)
+		maps.Copy(cenv, prof.Env)
+		maps.Copy(cenv, d.Env)
+		s.Environment = cenv
+		s.StopGracePeriod = "60s"
+		if rank == 0 {
+			// Large models take many minutes to load; start_period covers that.
+			probe := fmt.Sprintf("import urllib.request; urllib.request.urlopen('http://127.0.0.1:%d/health', timeout=5)", r.Cluster.ModelPort(i))
+			s.Healthcheck = &healthcheck{Test: []string{"CMD", "python3", "-c", probe}, Interval: "30s", Timeout: "10s", Retries: 3, StartPeriod: "30m"}
+		}
+
+		p, err := finish(Project{Node: nodeName, Name: modelProjectName(d.Name)}, v, &composeFile{Services: map[string]*service{"vllm": s}}, env)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func modelsPath(n config.Node) string {
+	if n.Storage != nil && n.Storage.ModelsPath != "" {
+		return n.Storage.ModelsPath
+	}
+	return DefaultModelsPath
+}
+
+// transport resolves fabric.nccl.transport: auto is sockets on a triangle
+// (RDMA cannot cross a mesh hop) and RoCE everywhere else.
+func (r *renderer) transport() string {
+	t := r.Cluster.Spec.Fabric.NCCL.Transport
+	if t == "" || t == config.TransportAuto {
+		if r.Cluster.Spec.Fabric.Topology == config.TopologyTriangle {
+			return config.TransportSocket
+		}
+		return config.TransportIB
+	}
+	return t
+}
+
+// rankNet is one rank's view of the link it uses: both rails of its port.
+type rankNet struct {
+	ip      netip.Addr // rail 0 address, the rendezvous/bootstrap address
+	netdevs []string
+	rdma    []string
+	gid     int
+}
+
+func (r *renderer) ncclEnv(n rankNet) map[string]string {
+	e := map[string]string{
+		"VLLM_HOST_IP":       n.ip.String(),
+		"NCCL_SOCKET_IFNAME": n.netdevs[0],
+		"GLOO_SOCKET_IFNAME": n.netdevs[0],
+	}
+	if r.transport() == config.TransportSocket {
+		e["NCCL_IB_DISABLE"] = "1"
+		return e
+	}
+	e["NCCL_IB_DISABLE"] = "0"
+	e["NCCL_IB_HCA"] = strings.Join(n.rdma, ",")
+	e["NCCL_IB_GID_INDEX"] = strconv.Itoa(n.gid)
+	return e
+}
+
+// rankNetworks finds, for a two-node group, the cable between the nodes and
+// each end's rails. Larger groups span a triangle and need per-peer routing,
+// which is not supported yet.
+func (r *renderer) rankNetworks(nodes []string) ([]rankNet, error) {
+	if len(nodes) != 2 {
+		return nil, fmt.Errorf("deployments across %d nodes are not supported yet (only pairs)", len(nodes))
+	}
+	var link *config.Link
+	for i := range r.Cluster.Spec.Fabric.Links {
+		l := &r.Cluster.Spec.Fabric.Links[i]
+		if l.A.Node == nodes[0] && l.B.Node == nodes[1] || l.A.Node == nodes[1] && l.B.Node == nodes[0] {
+			link = l
+			break
+		}
+	}
+	if link == nil {
+		return nil, fmt.Errorf("no fabric link between %s and %s", nodes[0], nodes[1])
+	}
+	out := make([]rankNet, len(nodes))
+	for rank, name := range nodes {
+		end := link.A
+		if link.B.Node == name {
+			end = link.B
+		}
+		rn, err := r.railsOf(name, end, link.Subnets)
+		if err != nil {
+			return nil, err
+		}
+		out[rank] = rn
+	}
+	return out, nil
+}
+
+func (r *renderer) railsOf(node string, end config.LinkEnd, subnets []string) (rankNet, error) {
+	if end.Port == nil {
+		return rankNet{}, fmt.Errorf("the link end on %s has no port; run cabling discovery to fill in fabric.links", node)
+	}
+	ports, ok := r.Fabric[node]
+	if !ok {
+		return rankNet{}, fmt.Errorf("no fabric discovery for node %s", node)
+	}
+	i := slices.IndexFunc(ports, func(p fabric.Port) bool { return p.Index == *end.Port })
+	if i < 0 {
+		return rankNet{}, fmt.Errorf("node %s has no QSFP port %d", node, *end.Port)
+	}
+	port := ports[i]
+	if !port.Up() {
+		return rankNet{}, fmt.Errorf("port %d on %s has no carrier", port.Index, node)
+	}
+	var rn rankNet
+	for h, nd := range port.Halves {
+		var subnet netip.Prefix
+		if h < len(subnets) {
+			var err error
+			if subnet, err = netip.ParsePrefix(subnets[h]); err != nil {
+				return rankNet{}, fmt.Errorf("fabric subnet %q: %w", subnets[h], err)
+			}
+		}
+		ip, ok := railIP(nd, subnet)
+		if !ok {
+			return rankNet{}, fmt.Errorf("%s on %s has no IPv4 address%s; run fabric bring-up", nd.Name, node, inSubnet(subnet))
+		}
+		gid, err := r.gidFor(nd, ip)
+		if err != nil {
+			return rankNet{}, fmt.Errorf("%s on %s: %w", nd.Name, node, err)
+		}
+		if h == 0 {
+			rn.ip, rn.gid = ip, gid
+		} else if gid != rn.gid {
+			// NCCL takes one GID index for all HCAs.
+			return rankNet{}, fmt.Errorf("the rails of port %d on %s have different RoCE v2 GID indexes (%d, %d); set fabric.roce.gidIndex", port.Index, node, rn.gid, gid)
+		}
+		rn.netdevs = append(rn.netdevs, nd.Name)
+		if nd.RDMADev == "" && r.transport() == config.TransportIB {
+			return rankNet{}, fmt.Errorf("%s on %s has no RDMA device", nd.Name, node)
+		}
+		rn.rdma = append(rn.rdma, nd.RDMADev)
+	}
+	return rn, nil
+}
+
+// railIP is the netdev's IPv4 address in subnet, or its first IPv4 address
+// when no subnet is given.
+func railIP(nd fabric.Netdev, subnet netip.Prefix) (netip.Addr, bool) {
+	for _, a := range nd.Addrs {
+		if a.Addr().Is4() && (!subnet.IsValid() || subnet.Contains(a.Addr())) {
+			return a.Addr(), true
+		}
+	}
+	return netip.Addr{}, false
+}
+
+func inSubnet(p netip.Prefix) string {
+	if p.IsValid() {
+		return " in " + p.String()
+	}
+	return ""
+}
+
+// gidFor resolves fabric.roce.gidIndex. "auto" picks the RoCE v2 GID that
+// carries the rail address: the index moves as addresses are added.
+func (r *renderer) gidFor(nd fabric.Netdev, ip netip.Addr) (int, error) {
+	g := r.Cluster.Spec.Fabric.RoCE.GIDIndex
+	if g != "" && g != "auto" {
+		n, err := strconv.Atoi(g)
+		if err != nil {
+			return 0, fmt.Errorf("fabric.roce.gidIndex %q: %w", g, err)
+		}
+		return n, nil
+	}
+	if r.transport() == config.TransportSocket {
+		return 0, nil
+	}
+	idx, ok := nd.RoCEv2GIDFor(ip)
+	if !ok {
+		return 0, fmt.Errorf("no RoCE v2 GID for %s", ip)
+	}
+	return idx, nil
+}

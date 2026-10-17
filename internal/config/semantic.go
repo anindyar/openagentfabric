@@ -1,7 +1,9 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -362,13 +364,13 @@ func (k *checker) models() {
 		}
 		ports[node][port] = owner
 	}
-	gwPort := DefaultGatewayPort
-	if g := k.c.Spec.Routing.Gateway; g != nil && g.Port != 0 {
-		gwPort = g.Port
-	}
 	for _, n := range k.c.Spec.Nodes {
+		svc := ServicePorts(n)
+		for _, p := range sortedKeys(svc) {
+			reserve(n.Name, p, svc[p], "spec.nodes")
+		}
 		if n.HasRole(RoleGateway) {
-			reserve(n.Name, gwPort, "the gateway", "spec.routing.gateway.port")
+			reserve(n.Name, k.c.GatewayPort(), "the gateway", "spec.routing.gateway.port")
 		}
 	}
 
@@ -406,10 +408,13 @@ func (k *checker) models() {
 		if !d.IsEnabled() {
 			continue
 		}
-		for _, n := range placed {
+		for r, n := range placed {
 			memory[n] += d.GPUMemoryUtilization
-			if d.Port != 0 {
-				reserve(n, d.Port, fmt.Sprintf("model %q", d.Name), p+".port")
+			if r == 0 {
+				reserve(n, k.c.ModelPort(i), fmt.Sprintf("model %q", d.Name), p+".port")
+				if len(placed) > 1 {
+					reserve(n, MasterPort(i), fmt.Sprintf("model %q (rendezvous)", d.Name), p)
+				}
 			}
 		}
 	}
@@ -444,27 +449,16 @@ func (k *checker) placementNodes(pl Placement, path string) ([]string, bool) {
 
 // profileFor picks the named profile, or the first whose node count matches.
 func (k *checker) profileFor(d ModelDeployment, m *CatalogModel, nodes int, path string) (*ServingProf, bool) {
-	if d.Profile != "" {
-		for i := range m.Profiles {
-			if m.Profiles[i].Name == d.Profile {
-				pr := &m.Profiles[i]
-				if pr.Nodes != nodes {
-					k.errorf(path+".profile", "profile %q needs %d node(s), but the placement has %d", pr.Name, pr.Nodes, nodes)
-					return nil, false
-				}
-				return pr, true
-			}
+	p, err := Profile(d, m, nodes)
+	if err != nil {
+		field := ".placement"
+		if d.Profile != "" {
+			field = ".profile"
 		}
-		k.errorf(path+".profile", "model %q has no profile %q", m.ID, d.Profile)
+		k.errorf(path+field, "%s", err)
 		return nil, false
 	}
-	for i := range m.Profiles {
-		if m.Profiles[i].Nodes == nodes {
-			return &m.Profiles[i], true
-		}
-	}
-	k.errorf(path+".placement", "model %q has no serving profile for %d node(s)", m.ID, nodes)
-	return nil, false
+	return p, true
 }
 
 // --- routing -------------------------------------------------------------
@@ -516,11 +510,11 @@ func (k *checker) routing() {
 	}
 }
 
-func sortedKeys[V any](m map[string]V) []string {
-	keys := make([]string, 0, len(m))
+func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
+	keys := make([]K, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }

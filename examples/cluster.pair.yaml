@@ -62,3 +62,8 @@ spec:
   observability:
     langfuse: { enabled: true }
     metrics: { retention: 15d }
+  licenseAcceptances:                    # recorded by `oaf install` after the user reads each page
+    - subject: image/vllm                # the vLLM image ships NVIDIA CUDA libraries under NVIDIA's EULA
+      url: https://docs.nvidia.com/cuda/eula/index.html
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-10-17T12:00:00Z

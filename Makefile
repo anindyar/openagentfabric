@@ -57,7 +57,7 @@ licenses:
 
 # Needs a docker engine: drives real docker compose.
 integration:
-	CGO_ENABLED=1 $(GO) test -race -count=1 -tags integration ./internal/node/...
+	CGO_ENABLED=1 $(GO) test -race -count=1 -timeout 25m -tags integration ./internal/node/... ./internal/render/...
 
 # Fails if committed generated code is stale.
 generate-check: generate

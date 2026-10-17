@@ -78,6 +78,12 @@ func TestSemanticRules(t *testing.T) {
 		{"port collides with gateway", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Models[0].Port = DefaultGatewayPort
 		}, Options{}, "spec.models[0].port", "already used by the gateway"},
+		{"port collides with a stack service", pairExample, func(c *Cluster, _ *Catalog) {
+			c.Spec.Models[0].Port = PortNodeExporter
+		}, Options{}, "spec.models[0].port", "already used by node_exporter"},
+		{"explicit port collides with a default one", pairExample, func(c *Cluster, _ *Catalog) {
+			c.Spec.Models[1].Port = DefaultModelPortBase // model 0's default port, also on spark-1
+		}, Options{}, "spec.models[1].port", `already used by model "fast"`},
 		{"entitled model without entitlement", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Models = append(c.Spec.Models, ModelDeployment{
 				Name: "ddx", CatalogRef: "ddx", Placement: Placement{Node: "spark-2"}, GPUMemoryUtilization: 0.2,

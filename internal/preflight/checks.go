@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"openagentfabric.dev/oaf/internal/config"
 	"openagentfabric.dev/oaf/internal/fabric"
 )
 
@@ -28,19 +29,14 @@ var checks = []check{
 	{"time", checkTime},
 }
 
-// hostPorts are the host ports the OAF stack listens on. Provisional until
-// the compose renderers own the port map (docs/PLAN.md M1).
-var hostPorts = map[int]string{
-	4000:  "agentgateway (API)",
-	15000: "agentgateway (admin)",
-	8899:  "vSR",
-	3000:  "Langfuse web",
-	3001:  "Grafana",
-	9090:  "Prometheus",
-	9100:  "node_exporter",
-	8443:  "oafd",
-	7701:  "oaf-node",
-}
+// hostPorts are the host ports the OAF stack can listen on: every role's
+// service ports plus the default gateway port. vSR is rendered in M3.
+var hostPorts = func() map[int]string {
+	p := config.ServicePorts(config.Node{Roles: []string{config.RoleControl, config.RoleGateway, config.RoleObservability, config.RoleInference}})
+	p[config.DefaultGatewayPort] = "agentgateway (API)"
+	p[8899] = "vSR"
+	return p
+}()
 
 func trim(b []byte) string { return strings.TrimSpace(string(b)) }
 

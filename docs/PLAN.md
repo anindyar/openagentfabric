@@ -152,7 +152,15 @@ Each PR is small and has tests. **Exit criteria** are what I will demonstrate at
 4. `oaf-node`: systemd unit, mTLS Connect server, `compose up/down/status` for a project. ✅ `oaf node serve`, `oaf pki init`. The agent only touches `oaf-*` compose projects under `/var/lib/oaf/projects`. Applies are atomic and idempotent.
 5. Preflight checks (each check is a unit with fake command runners in tests). ✅ `oaf preflight [--ssh user@host]`. It is read-only by construction (an allowlisted runner), and its tests replay a real capture from a busy DGX Spark. Landed before item 4 because it needs no agent.
 6. Fabric: cabling discovery, MTU and IPs, GID detection, `ib_write_bw` runner.
-7. Renderers + golden tests: compose for each component.
+7. Renderers + golden tests: compose for each component. ✅ `internal/render`: per-node projects `node-exporter`, `gateway`
+   (agentgateway), `langfuse` (web, worker, Postgres, ClickHouse, Valkey, SeaweedFS `weed mini`), `metrics` (Prometheus,
+   Grafana) and `model-<name>` (vLLM; pairs run TP across the link with `--nnodes`/`--headless`, NCCL rails and GID from
+   discovery). Secrets come from `/etc/oaf/secrets` (generated, 0600) and reach containers only through each project's
+   0600 `.env`; configs hold none (gateway keys as SHA-256 hashes). GPUs via `gpus: all` (CDI). CI renders the example
+   pair, runs `docker compose config` on every project and brings up the control-node projects for real.
+   Known gaps: vSR is rendered in M3 (until then `model: auto` → `routing.defaults.fast`); per-key rate limits are not
+   rendered yet; Langfuse browser media uploads need the S3 port published (not yet); deployments over 3 nodes
+   (triangle) are refused until the triangle work.
 8. `oaf install` / `oaf apply --dry-run` / `oaf status` / `oaf uninstall`.
 - **Exit:** on the real pair, a clean install brings up every pinned component healthy; a re-run is a no-op;
   uninstall leaves the hosts clean; rails measure ≥ 85 Gbps each.
