@@ -52,9 +52,12 @@ metadata plus the LICENSE file wherever the metadata said `NOASSERTION`).
 | github.com/spf13/cobra | v1.10.2 | Apache-2.0 | CLI |
 | github.com/spf13/pflag | v1.0.9 | BSD-3-Clause | CLI flags (via cobra) |
 | github.com/inconshreveable/mousetrap | v1.1.0 | Apache-2.0 | via cobra (Windows only) |
+| github.com/santhosh-tekuri/jsonschema/v6 | v6.0.3 | Apache-2.0 | schema validation of cluster.yaml and the catalog |
+| go.yaml.in/yaml/v3 | v3.0.5 | MIT + Apache-2.0 | YAML decoding |
+| golang.org/x/text | v0.43.0 | BSD-3-Clause | schema error messages (via jsonschema) |
 
 Planned (added with the PR that first uses them): connectrpc/connect-go (Apache-2.0),
-go-git/go-git (Apache-2.0), santhosh-tekuri/jsonschema (Apache-2.0), go.yaml.in/yaml (MIT + Apache-2.0),
+go-git/go-git (Apache-2.0),
 google/go-containerregistry (Apache-2.0); UI: React, Vite, TanStack (MIT).
 
 ## Not used (recorded so nobody adds them by accident)

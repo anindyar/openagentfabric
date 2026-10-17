@@ -1,0 +1,381 @@
+package config
+
+// Types mirror schema/cluster.schema.json and schema/catalog.schema.json.
+// Documents are schema-validated before they are decoded into these types,
+// so the types do not repeat structural checks.
+
+// APIVersion is the only supported apiVersion.
+const APIVersion = "oaf/v1alpha1"
+
+// Cluster is cluster.yaml.
+type Cluster struct {
+	APIVersion string      `yaml:"apiVersion"`
+	Kind       string      `yaml:"kind"`
+	Metadata   Metadata    `yaml:"metadata"`
+	Spec       ClusterSpec `yaml:"spec"`
+}
+
+// Metadata names a cluster.
+type Metadata struct {
+	Name        string            `yaml:"name"`
+	Description string            `yaml:"description,omitempty"`
+	Labels      map[string]string `yaml:"labels,omitempty"`
+}
+
+// ClusterSpec is the desired state.
+type ClusterSpec struct {
+	Bundle             Bundle              `yaml:"bundle"`
+	Nodes              []Node              `yaml:"nodes"`
+	Fabric             Fabric              `yaml:"fabric"`
+	Groups             []Group             `yaml:"groups,omitempty"`
+	Models             []ModelDeployment   `yaml:"models,omitempty"`
+	Routing            Routing             `yaml:"routing,omitempty"`
+	Observability      Observability       `yaml:"observability,omitempty"`
+	Entitlements       []EntitlementRef    `yaml:"entitlements,omitempty"`
+	LicenseAcceptances []LicenseAcceptance `yaml:"licenseAcceptances,omitempty"`
+	Apps               []map[string]any    `yaml:"apps,omitempty"`
+	Agents             []map[string]any    `yaml:"agents,omitempty"`
+}
+
+// Bundle selects the pinned component set.
+type Bundle struct {
+	Version string `yaml:"version"`
+	Channel string `yaml:"channel,omitempty"`
+}
+
+// Node roles.
+const (
+	RoleControl       = "control"
+	RoleGateway       = "gateway"
+	RoleObservability = "observability"
+	RoleInference     = "inference"
+)
+
+// Node is one GB10 box.
+type Node struct {
+	Name    string            `yaml:"name"`
+	Address string            `yaml:"address"`
+	Serial  string            `yaml:"serial,omitempty"`
+	Roles   []string          `yaml:"roles"`
+	SSH     *SSH              `yaml:"ssh,omitempty"`
+	Storage *Storage          `yaml:"storage,omitempty"`
+	Labels  map[string]string `yaml:"labels,omitempty"`
+}
+
+// HasRole reports whether the node has role r.
+func (n Node) HasRole(r string) bool {
+	for _, x := range n.Roles {
+		if x == r {
+			return true
+		}
+	}
+	return false
+}
+
+// SSH is used only for bootstrap.
+type SSH struct {
+	User string `yaml:"user,omitempty"`
+	Port int    `yaml:"port,omitempty"`
+}
+
+// Storage holds per-node paths and disk headroom.
+type Storage struct {
+	ModelsPath string   `yaml:"modelsPath,omitempty"`
+	DataPath   string   `yaml:"dataPath,omitempty"`
+	MinFreeGiB *float64 `yaml:"minFreeGiB,omitempty"`
+}
+
+// Topologies.
+const (
+	TopologySingle   = "single"
+	TopologyPair     = "pair"
+	TopologyTriangle = "triangle"
+	TopologyPairs    = "pairs"
+)
+
+// NCCL transports.
+const (
+	TransportAuto   = "auto"
+	TransportIB     = "ib"
+	TransportSocket = "socket"
+)
+
+// Fabric describes the switchless QSFP fabric.
+type Fabric struct {
+	Topology   string            `yaml:"topology"`
+	MTU        int               `yaml:"mtu,omitempty"`
+	Links      []Link            `yaml:"links,omitempty"`
+	RoCE       RoCE              `yaml:"roce,omitempty"`
+	NCCL       NCCL              `yaml:"nccl,omitempty"`
+	Acceptance *FabricAcceptance `yaml:"acceptance,omitempty"`
+}
+
+// RoCE settings. GIDIndex is "auto" or an integer, kept as a string.
+type RoCE struct {
+	GIDIndex string `yaml:"gidIndex,omitempty"`
+}
+
+// NCCL settings.
+type NCCL struct {
+	Transport string            `yaml:"transport,omitempty"`
+	LDPreload string            `yaml:"ldPreload,omitempty"`
+	Env       map[string]string `yaml:"env,omitempty"`
+}
+
+// FabricAcceptance holds bandwidth thresholds.
+type FabricAcceptance struct {
+	MinGbpsPerRail  *float64 `yaml:"minGbpsPerRail,omitempty"`
+	MinGbpsDualRail *float64 `yaml:"minGbpsDualRail,omitempty"`
+}
+
+// Link is one QSFP cable.
+type Link struct {
+	A      LinkEnd `yaml:"a"`
+	B      LinkEnd `yaml:"b"`
+	Rail   *int    `yaml:"rail,omitempty"`
+	Subnet string  `yaml:"subnet,omitempty"`
+}
+
+// LinkEnd is one end of a cable.
+type LinkEnd struct {
+	Node      string `yaml:"node"`
+	Interface string `yaml:"interface,omitempty"`
+}
+
+// Group is a placement group for multi-node deployments.
+type Group struct {
+	Name  string   `yaml:"name"`
+	Nodes []string `yaml:"nodes"`
+}
+
+// ModelDeployment is one served model.
+type ModelDeployment struct {
+	Name                 string            `yaml:"name"`
+	CatalogRef           string            `yaml:"catalogRef"`
+	Profile              string            `yaml:"profile,omitempty"`
+	Enabled              *bool             `yaml:"enabled,omitempty"`
+	Placement            Placement         `yaml:"placement"`
+	GPUMemoryUtilization float64           `yaml:"gpuMemoryUtilization"`
+	MaxModelLen          int               `yaml:"maxModelLen,omitempty"`
+	Port                 int               `yaml:"port,omitempty"`
+	Args                 []string          `yaml:"args,omitempty"`
+	Env                  map[string]string `yaml:"env,omitempty"`
+}
+
+// IsEnabled applies the schema default (true).
+func (m ModelDeployment) IsEnabled() bool { return m.Enabled == nil || *m.Enabled }
+
+// Placement is exactly one of Node or Group.
+type Placement struct {
+	Node  string `yaml:"node,omitempty"`
+	Group string `yaml:"group,omitempty"`
+}
+
+// Routing modes.
+const (
+	ModeObserve = "observe"
+	ModeActive  = "active"
+)
+
+// Routing is the OAF routing abstraction rendered into agentgateway and vSR.
+type Routing struct {
+	Mode     string          `yaml:"mode,omitempty"`
+	Gateway  *Gateway        `yaml:"gateway,omitempty"`
+	Keys     []APIKey        `yaml:"keys,omitempty"`
+	Defaults RoutingDefaults `yaml:"defaults,omitempty"`
+	Rules    []RoutingRule   `yaml:"rules,omitempty"`
+}
+
+// Gateway listener settings.
+type Gateway struct {
+	Port int         `yaml:"port,omitempty"`
+	TLS  *GatewayTLS `yaml:"tls,omitempty"`
+}
+
+// GatewayTLS settings.
+type GatewayTLS struct {
+	Enabled       bool   `yaml:"enabled,omitempty"`
+	CertSecretRef string `yaml:"certSecretRef,omitempty"`
+}
+
+// APIKey references a generated key secret.
+type APIKey struct {
+	Name              string   `yaml:"name"`
+	SecretRef         string   `yaml:"secretRef"`
+	Models            []string `yaml:"models,omitempty"`
+	RequestsPerMinute int      `yaml:"requestsPerMinute,omitempty"`
+}
+
+// RoutingDefaults are the fast and fallback targets.
+type RoutingDefaults struct {
+	Fast     string `yaml:"fast,omitempty"`
+	Fallback string `yaml:"fallback,omitempty"`
+}
+
+// RoutingRule is one ordered routing rule.
+type RoutingRule struct {
+	Name     string        `yaml:"name"`
+	Match    RuleMatch     `yaml:"match"`
+	Target   string        `yaml:"target"`
+	Requires *RuleRequires `yaml:"requires,omitempty"`
+}
+
+// RuleMatch fires if any signal fires.
+type RuleMatch struct {
+	Signals []Signal `yaml:"signals,omitempty"`
+}
+
+// Signal is a vSR classification signal.
+type Signal struct {
+	Type          string   `yaml:"type"`
+	Threshold     *float64 `yaml:"threshold,omitempty"`
+	Domains       []string `yaml:"domains,omitempty"`
+	Keywords      []string `yaml:"keywords,omitempty"`
+	CaseSensitive bool     `yaml:"caseSensitive,omitempty"`
+}
+
+// RuleRequires gates a rule on an entitlement feature.
+type RuleRequires struct {
+	Entitlement string `yaml:"entitlement,omitempty"`
+}
+
+// Observability settings.
+type Observability struct {
+	Langfuse *LangfuseSettings `yaml:"langfuse,omitempty"`
+	Metrics  *MetricsSettings  `yaml:"metrics,omitempty"`
+}
+
+// LangfuseSettings control tracing.
+type LangfuseSettings struct {
+	Enabled        *bool    `yaml:"enabled,omitempty"`
+	SampleRate     *float64 `yaml:"sampleRate,omitempty"`
+	CaptureContent *bool    `yaml:"captureContent,omitempty"`
+}
+
+// MetricsSettings control Prometheus.
+type MetricsSettings struct {
+	Retention      string `yaml:"retention,omitempty"`
+	ScrapeInterval string `yaml:"scrapeInterval,omitempty"`
+}
+
+// EntitlementRef points to a signed entitlement file.
+type EntitlementRef struct {
+	File string `yaml:"file"`
+}
+
+// LicenseAcceptance records that a user accepted an upstream licence.
+type LicenseAcceptance struct {
+	Subject    string `yaml:"subject"`
+	URL        string `yaml:"url"`
+	AcceptedBy string `yaml:"acceptedBy"`
+	AcceptedAt string `yaml:"acceptedAt"`
+}
+
+// Catalog is catalog/models.yaml.
+type Catalog struct {
+	APIVersion string         `yaml:"apiVersion"`
+	Kind       string         `yaml:"kind"`
+	Models     []CatalogModel `yaml:"models"`
+}
+
+// Lookup returns the catalog entry with the given id.
+func (c *Catalog) Lookup(id string) (*CatalogModel, bool) {
+	for i := range c.Models {
+		if c.Models[i].ID == id {
+			return &c.Models[i], true
+		}
+	}
+	return nil, false
+}
+
+// CatalogModel is one model the catalog knows how to serve.
+type CatalogModel struct {
+	ID          string        `yaml:"id"`
+	DisplayName string        `yaml:"displayName,omitempty"`
+	Description string        `yaml:"description,omitempty"`
+	Source      ModelSource   `yaml:"source"`
+	License     ModelLicense  `yaml:"license"`
+	Entitlement *Entitlement  `yaml:"entitlement,omitempty"`
+	SizeGiB     float64       `yaml:"sizeGiB"`
+	Classes     []string      `yaml:"classes"`
+	Profiles    []ServingProf `yaml:"profiles"`
+}
+
+// Entitlement names the feature that unlocks a model.
+type Entitlement struct {
+	Feature string `yaml:"feature"`
+}
+
+// ModelSource is exactly one of HuggingFace or Entitled.
+type ModelSource struct {
+	HuggingFace *HFSource       `yaml:"huggingface,omitempty"`
+	Entitled    *EntitledSource `yaml:"entitled,omitempty"`
+}
+
+// HFSource pins a Hugging Face repo at a commit.
+type HFSource struct {
+	Repo     string   `yaml:"repo"`
+	Revision string   `yaml:"revision"`
+	Include  []string `yaml:"include,omitempty"`
+}
+
+// EntitledSource is delivered with an entitlement.
+type EntitledSource struct {
+	SHA256 string `yaml:"sha256"`
+}
+
+// ModelLicense carries the facts the bundler and acceptance flow need.
+type ModelLicense struct {
+	SPDX            string `yaml:"spdx,omitempty"`
+	Name            string `yaml:"name,omitempty"`
+	URL             string `yaml:"url,omitempty"`
+	AcceptURL       string `yaml:"acceptUrl,omitempty"`
+	Gated           bool   `yaml:"gated"`
+	Redistributable bool   `yaml:"redistributable"`
+}
+
+// ServingProf is one way to serve a model on a GB10 topology.
+type ServingProf struct {
+	Name                 string            `yaml:"name"`
+	Engine               string            `yaml:"engine,omitempty"`
+	Nodes                int               `yaml:"nodes"`
+	TensorParallel       int               `yaml:"tensorParallel"`
+	PipelineParallel     int               `yaml:"pipelineParallel,omitempty"`
+	GPUMemoryUtilization float64           `yaml:"gpuMemoryUtilization"`
+	MaxModelLen          int               `yaml:"maxModelLen,omitempty"`
+	Quantization         string            `yaml:"quantization,omitempty"`
+	Args                 []string          `yaml:"args,omitempty"`
+	Env                  map[string]string `yaml:"env,omitempty"`
+	Baseline             *Baseline         `yaml:"baseline,omitempty"`
+}
+
+// PP applies the schema default (1).
+func (p ServingProf) PP() int {
+	if p.PipelineParallel == 0 {
+		return 1
+	}
+	return p.PipelineParallel
+}
+
+// Baseline is the reference performance for a profile.
+type Baseline struct {
+	TokPerSec float64  `yaml:"tokPerSec"`
+	TTFTMsP50 float64  `yaml:"ttftMsP50,omitempty"`
+	Tolerance *float64 `yaml:"tolerance,omitempty"`
+	Workload  Workload `yaml:"workload"`
+	Measured  Measured `yaml:"measured"`
+}
+
+// Workload is the benchmark shape.
+type Workload struct {
+	InputTokens  int `yaml:"inputTokens"`
+	OutputTokens int `yaml:"outputTokens"`
+	Concurrency  int `yaml:"concurrency"`
+}
+
+// Measured records provenance of a baseline.
+type Measured struct {
+	Date          string `yaml:"date"`
+	BundleVersion string `yaml:"bundleVersion"`
+	Notes         string `yaml:"notes,omitempty"`
+}

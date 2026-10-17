@@ -8,6 +8,11 @@ linters:
     - revive
     - unconvert
   settings:
+    errcheck:
+      # Write errors to the CLI's own output stream are not actionable.
+      exclude-functions:
+        - fmt.Fprintf
+        - fmt.Fprintln
     misspell:
       locale: UK
 formatters:
