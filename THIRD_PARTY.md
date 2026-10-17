@@ -4,6 +4,9 @@ This is the register of every component that OAF installs, runs, or links. Every
 must keep it accurate. A component may enter `bundle/versions.yaml` only after it has a row here.
 The reasoning, risks and obligations for each licence are in [`docs/licence-audit.md`](docs/licence-audit.md).
 
+Exact versions, digests and licence-file hashes are pinned in [`bundle/versions.yaml`](bundle/versions.yaml).
+A test fails if a pinned component has no row here.
+
 Licences were last verified on **2026-10-17** against each project's repository (GitHub licence
 metadata plus the LICENSE file wherever the metadata said `NOASSERTION`).
 
@@ -27,7 +30,7 @@ metadata plus the LICENSE file wherever the metadata said `NOASSERTION`).
 | SeaweedFS | github.com/seaweedfs/seaweedfs | Apache-2.0 | image | Approved S3 store for Langfuse, replacing the archived MinIO. Langfuse support level is "community". Audit §3.3. |
 | Prometheus | github.com/prometheus/prometheus | Apache-2.0 | image | OK. |
 | node_exporter | github.com/prometheus/node_exporter | Apache-2.0 | image | OK. |
-| dcgm-exporter | github.com/NVIDIA/dcgm-exporter | Apache-2.0 (exporter) | image | Exporter is OK. The DCGM libraries in the image are under NVIDIA terms. Support on GB10 is unverified (spike in M1). |
+| dcgm-exporter | github.com/NVIDIA/dcgm-exporter | Apache-2.0 (exporter) | image | **Not pinned yet.** Exporter is OK. The DCGM libraries in the image are under NVIDIA terms. Support on GB10 is unverified (spike in M1). |
 | Grafana | github.com/grafana/grafana | AGPL-3.0 | image | OK **only** as an unmodified image, embedded through iframe or its HTTP API. Never vendor or patch it. See audit §3.4. |
 
 ## Host-level dependencies (installed or checked by preflight)

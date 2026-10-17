@@ -379,3 +379,47 @@ type Measured struct {
 	BundleVersion string `yaml:"bundleVersion"`
 	Notes         string `yaml:"notes,omitempty"`
 }
+
+// Versions is bundle/versions.yaml: the pinned component set of one release.
+type Versions struct {
+	APIVersion string      `yaml:"apiVersion"`
+	Kind       string      `yaml:"kind"`
+	Version    string      `yaml:"version"`
+	Components []Component `yaml:"components"`
+}
+
+// Component is one pinned upstream image.
+type Component struct {
+	Name       string           `yaml:"name"`
+	ThirdParty string           `yaml:"thirdParty"`
+	Image      string           `yaml:"image"`
+	Platforms  []string         `yaml:"platforms"`
+	Upstream   Upstream         `yaml:"upstream"`
+	License    ComponentLicense `yaml:"license"`
+}
+
+// Upstream is the source repo and tag an image is built from.
+type Upstream struct {
+	Repo string `yaml:"repo"`
+	Ref  string `yaml:"ref"`
+}
+
+// LicenseFileURL is where the licence file can be fetched at the pinned ref.
+func (c Component) LicenseFileURL() string {
+	return "https://raw.githubusercontent.com/" + c.Upstream.Repo + "/" + c.Upstream.Ref + "/" + c.License.File
+}
+
+// ComponentLicense records the licence and its pinned file hash.
+type ComponentLicense struct {
+	SPDX          string `yaml:"spdx"`
+	File          string `yaml:"file"`
+	SHA256        string `yaml:"sha256"`
+	IncludedTerms []Term `yaml:"includedTerms,omitempty"`
+	AcceptURL     string `yaml:"acceptUrl,omitempty"`
+}
+
+// Term is third-party terms shipped inside an image.
+type Term struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+}

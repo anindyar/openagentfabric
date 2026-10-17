@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=../schema/versions.schema.json
+#
+# Every component OAF deploys, pinned by digest. This file IS the release: each OAF
+# version is tested as this exact set (CLAUDE.md rule 7). To upgrade a component,
+# bump its tag + digest + licence hash together, then `make license-drift` and the
+# acceptance test. Digests are multi-arch index digests; arm64 is required.
+#
+# Resolved 2026-10-17 with `docker buildx imagetools inspect`.
+apiVersion: oaf/v1alpha1
+kind: BundleVersions
+version: 0.1.0-dev
+
+components:
+  # --- gateway + routing -------------------------------------------------
+  - name: agentgateway
+    thirdParty: agentgateway
+    image: ghcr.io/agentgateway/agentgateway:v1.6.0@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: agentgateway/agentgateway, ref: v1.6.0 }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: 3b1ee5b1e14fda40515c18ec2f0796d632e65a20b2aca8f017c654bc26ca77bd }
+
+  # Standalone vSR image (router with its own listener). The M3 spike decides
+  # between this and the extproc image behind agentgateway (docs/PLAN.md §5).
+  - name: vsr
+    thirdParty: vLLM Semantic Router (vSR)
+    image: ghcr.io/vllm-project/semantic-router/vllm-sr:v0.4.0@sha256:f6037c06796d6b6f678b2289b4fd618c6fa22b1487b276241f9382f9557ac690
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: vllm-project/semantic-router, ref: v0.4.0 }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4 }
+
+  # --- inference ---------------------------------------------------------
+  # Contains NVIDIA CUDA/cuDNN/NCCL binaries: user-acceptance flow, never bundled
+  # offline (docs/licence-audit.md §3.1, §3.7). Whether this upstream image runs
+  # well on GB10 (vs the community Spark builds) is decided in M2.
+  - name: vllm
+    thirdParty: vLLM
+    image: docker.io/vllm/vllm-openai:v0.31.0@sha256:c1c9f6fd5c109ba7f0546a59f5b2f15fb87f64c77782e90a27b648b42a8e67c3
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: vllm-project/vllm, ref: v0.31.0 }
+    license:
+      spdx: Apache-2.0
+      file: LICENSE
+      sha256: c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+      includedTerms:
+        - { name: NVIDIA CUDA Toolkit EULA, url: "https://docs.nvidia.com/cuda/eula/index.html" }
+      acceptUrl: "https://docs.nvidia.com/cuda/eula/index.html"
+
+  # --- observability: Langfuse and its stores ----------------------------
+  - name: langfuse-web
+    thirdParty: Langfuse (web + worker)
+    image: docker.io/langfuse/langfuse:4.63.0@sha256:67f48d12a190e4ad585249c75ae1ce172b449de3dbbe7486b8179cd28e21408e
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: langfuse/langfuse, ref: v4.63.0 }
+    license: { spdx: MIT, file: LICENSE, sha256: fd09d42b5b16606ad2042cc1edf3a82da1c47743709f170c959c74758af229d6 }
+
+  - name: langfuse-worker
+    thirdParty: Langfuse (web + worker)
+    image: docker.io/langfuse/langfuse-worker:4.63.0@sha256:ca32a8fb2a214c7b5f42dd9c540c8072e41db659cb621f317911ce695ad6bca2
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: langfuse/langfuse, ref: v4.63.0 }
+    license: { spdx: MIT, file: LICENSE, sha256: fd09d42b5b16606ad2042cc1edf3a82da1c47743709f170c959c74758af229d6 }
+
+  # Langfuse v4 recommends Postgres 16.
+  - name: postgres
+    thirdParty: PostgreSQL
+    image: docker.io/library/postgres:16.15@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: postgres/postgres, ref: REL_16_15 }
+    license: { spdx: PostgreSQL, file: COPYRIGHT, sha256: 3d6af92ff8a4c2cdf69afb1cf44edea727922f5cd0cf8b5f72b11cdecac8fdfd }
+
+  # Langfuse v4 needs ClickHouse >= 25.12 (26.4 recommended). 26.8 is an LTS line.
+  - name: clickhouse
+    thirdParty: ClickHouse
+    image: docker.io/clickhouse/clickhouse-server:26.8.29.10@sha256:6ded2b2c2f2c46f12784bd8000c75f8aa7363372ed64afccaa932456b8cb41e4
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: ClickHouse/ClickHouse, ref: v26.8.29.10-lts }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: af5d33e7f3dbbd25e889d8bdc61c83562c257d20c22386bb04106cd22937341a }
+
+  # Langfuse officially supports Valkey >= 8. Run with maxmemory-policy=noeviction.
+  - name: valkey
+    thirdParty: Valkey
+    image: docker.io/valkey/valkey:8.1.10@sha256:640c5e62cea04b6d6f2084232651d0cc70362d31f4f805e7be94dbed6855e8f2
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: valkey-io/valkey, ref: 8.1.10 }
+    license: { spdx: BSD-3-Clause, file: COPYING, sha256: 1a53dca3aab7ce048e91e77b03c0342f3075366f9dede8ec4d19d0cf229e12a0 }
+
+  - name: seaweedfs
+    thirdParty: SeaweedFS
+    image: docker.io/chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: seaweedfs/seaweedfs, ref: "4.48" }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: d789d433cc11da163273d1e39be2e8fa67642f9a58ef220d3f258fa9c14ef613 }
+
+  # --- metrics -----------------------------------------------------------
+  - name: prometheus
+    thirdParty: Prometheus
+    image: docker.io/prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: prometheus/prometheus, ref: v3.15.0 }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4 }
+
+  - name: node-exporter
+    thirdParty: node_exporter
+    image: docker.io/prom/node-exporter:v1.12.1@sha256:1b4e4438faca4dd7e001dd445d161a4a2091b0fededa84093b3a8dfeae1f1be0
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: prometheus/node_exporter, ref: v1.12.1 }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4 }
+
+  # AGPL-3.0: unmodified image, iframe/HTTP API only (docs/licence-audit.md §3.4).
+  - name: grafana
+    thirdParty: Grafana
+    image: docker.io/grafana/grafana:13.2.4@sha256:dbbc38ea21103cefb50396340cd88afec779c7e070b0a7bf5a75b4ce46651d3f
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: grafana/grafana, ref: v13.2.4 }
+    license: { spdx: AGPL-3.0-only, file: LICENSE, sha256: 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0 }
+
+# Not pinned yet:
+# - dcgm-exporter: GB10 support unverified (M1 spike); its image also carries NVIDIA DCGM terms.

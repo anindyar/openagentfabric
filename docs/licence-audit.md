@@ -126,8 +126,8 @@ Where a licence is not clearly permissive, OAF does not accept or redistribute o
 It sends the user to the upstream licence or download page, and the user accepts it there.
 
 - **Allowlist** (no acceptance needed): Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC,
-  PostgreSQL, and GPL-2.0/GPL-3.0 (GPL artefacts may be bundled only with the corresponding-source
-  offer included, see §4).
+  PostgreSQL, and GPL-2.0/GPL-3.0/AGPL-3.0 (copyleft artefacts, such as the Grafana image, may be bundled only
+  with the corresponding-source offer included, see §4).
 - **Everything else needs acceptance:** gated models, custom model licences (Llama, Gemma, NVIDIA
   Open Model License, …), images containing NVIDIA CUDA/DCGM binaries, and any entry with no SPDX id.
 - The catalog (and later `bundle/versions.yaml`) records an `acceptUrl` for each such artefact.
@@ -148,8 +148,9 @@ review is still advisable before M5 for the wording of the acceptance screen and
    extracted from each pinned image or repo. Build step: `oaf bundle licenses`.
 2. **THIRD_PARTY.md must stay current.** CI fails when `bundle/versions.yaml` names a component
    that has no row in THIRD_PARTY.md.
-3. **Licence drift check.** For each pinned upstream, CI records the SHA-256 of its LICENSE file
-   at the pinned tag and fails on change. A human then re-audits.
+3. **Licence drift check.** `bundle/versions.yaml` records the SHA-256 of each upstream's licence
+   file at the pinned tag. `make license-drift` (run in CI) re-fetches and compares them, and fails on
+   any change. A human then re-audits. Implemented in `tools/licensedrift`.
 4. **No vendored AGPL code** (Grafana, MinIO, Garage) and **no `ee/` code**. A CI grep guard runs
    on `ui/` and `go.mod` / `package.json`.
 5. **Go and npm dependency licences.** `go-licenses` / `license-checker` run in CI, with an allowlist of

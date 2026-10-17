@@ -10,8 +10,10 @@ var FS embed.FS
 
 // Schema file names and their canonical $id URLs.
 const (
-	ClusterFile = "cluster.schema.json"
-	CatalogFile = "catalog.schema.json"
-	ClusterID   = "https://openagentfabric.dev/schema/v1alpha1/cluster.schema.json"
-	CatalogID   = "https://openagentfabric.dev/schema/v1alpha1/catalog.schema.json"
+	ClusterFile  = "cluster.schema.json"
+	CatalogFile  = "catalog.schema.json"
+	VersionsFile = "versions.schema.json"
+	ClusterID    = "https://openagentfabric.dev/schema/v1alpha1/cluster.schema.json"
+	CatalogID    = "https://openagentfabric.dev/schema/v1alpha1/catalog.schema.json"
+	VersionsID   = "https://openagentfabric.dev/schema/v1alpha1/versions.schema.json"
 )

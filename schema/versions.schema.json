@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openagentfabric.dev/schema/v1alpha1/versions.schema.json",
+  "title": "OAF bundle/versions.yaml",
+  "description": "The pinned set of upstream components in one OAF release.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "version", "components"],
+  "properties": {
+    "apiVersion": { "const": "oaf/v1alpha1" },
+    "kind": { "const": "BundleVersions" },
+    "version": { "type": "string", "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$" },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/component" }
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "thirdParty", "image", "platforms", "upstream", "license"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+        "thirdParty": {
+          "description": "Exact name of the component's row in THIRD_PARTY.md.",
+          "type": "string",
+          "minLength": 1
+        },
+        "image": {
+          "description": "registry/repo:tag@sha256:digest. The digest is mandatory (CLAUDE.md rule 6).",
+          "type": "string",
+          "pattern": "^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$"
+        },
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "contains": { "const": "linux/arm64" },
+          "items": { "enum": ["linux/arm64", "linux/amd64"] }
+        },
+        "upstream": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repo", "ref"],
+          "properties": {
+            "repo": { "description": "GitHub owner/name.", "type": "string", "pattern": "^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$" },
+            "ref": { "description": "Git tag matching the image.", "type": "string", "minLength": 1 }
+          }
+        },
+        "license": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["spdx", "file", "sha256"],
+          "properties": {
+            "spdx": { "type": "string" },
+            "file": { "description": "Licence file path in the upstream repo.", "type": "string" },
+            "sha256": {
+              "description": "SHA-256 of the licence file at upstream.ref. `make license-drift` fails if it changes.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "includedTerms": {
+              "description": "Third-party terms that ship inside the image (e.g. NVIDIA CUDA). Their presence means the image needs user acceptance.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "url"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "url": { "type": "string", "format": "uri" }
+                }
+              }
+            },
+            "acceptUrl": { "type": "string", "format": "uri" }
+          }
+        }
+      }
+    }
+  }
+}

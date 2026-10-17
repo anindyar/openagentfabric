@@ -13,7 +13,7 @@ GO_LICENSES_VERSION   := v2.0.1
 # Licence allowlist for linked Go code (docs/licence-audit.md §4).
 ALLOWED_LICENSES := Apache-2.0,MIT,BSD-2-Clause,BSD-3-Clause,ISC,MPL-2.0
 
-.PHONY: all build build-arm64 build-amd64 build-native test lint fmt-check vet licenses guard ci clean
+.PHONY: all build build-arm64 build-amd64 build-native test lint fmt-check vet licenses license-drift guard ci clean
 
 all: lint test build
 
@@ -43,10 +43,14 @@ lint: fmt-check vet
 licenses:
 	$(GO) run github.com/google/go-licenses/v2@$(GO_LICENSES_VERSION) check ./... --allowed_licenses=$(ALLOWED_LICENSES)
 
+# Network: re-hash each pinned upstream's licence file (docs/licence-audit.md §4.3).
+license-drift:
+	$(GO) run ./tools/licensedrift
+
 guard:
 	./scripts/guard-forbidden.sh
 
-ci: lint guard test licenses build-arm64 build-amd64
+ci: lint guard test licenses license-drift build-arm64 build-amd64
 
 clean:
 	rm -rf bin dist

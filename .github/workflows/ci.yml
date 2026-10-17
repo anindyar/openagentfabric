@@ -17,6 +17,7 @@ jobs:
       - run: make guard
       - run: make test
       - run: make licenses
+      - run: make license-drift
       - run: make build-amd64
   # arm64 is the target platform: build and test natively on arm64.
   arm64:

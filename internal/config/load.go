@@ -1,5 +1,5 @@
-// Package config loads, schema-validates and semantically validates
-// cluster.yaml and catalog/models.yaml.
+// Package config loads, schema-validates and semantically validates OAF's
+// declarative documents: cluster.yaml, catalog/models.yaml and bundle/versions.yaml.
 package config
 
 import (
@@ -21,19 +21,21 @@ import (
 
 var (
 	compileOnce sync.Once
-	clusterSch  *jsonschema.Schema
-	catalogSch  *jsonschema.Schema
+	compiled    map[string]*jsonschema.Schema // by schema $id
 	compileErr  error
 )
 
-func schemas() (cluster, catalog *jsonschema.Schema, err error) {
+// schemaFor returns the compiled schema with the given $id.
+func schemaFor(id string) (*jsonschema.Schema, error) {
 	compileOnce.Do(func() {
 		c := jsonschema.NewCompiler()
 		c.AssertFormat()
-		for file, id := range map[string]string{
-			schema.ClusterFile: schema.ClusterID,
-			schema.CatalogFile: schema.CatalogID,
-		} {
+		files := map[string]string{
+			schema.ClusterID:  schema.ClusterFile,
+			schema.CatalogID:  schema.CatalogFile,
+			schema.VersionsID: schema.VersionsFile,
+		}
+		for sid, file := range files {
 			raw, err := schema.FS.ReadFile(file)
 			if err != nil {
 				compileErr = err
@@ -44,17 +46,25 @@ func schemas() (cluster, catalog *jsonschema.Schema, err error) {
 				compileErr = fmt.Errorf("%s: %w", file, err)
 				return
 			}
-			if err := c.AddResource(id, doc); err != nil {
+			if err := c.AddResource(sid, doc); err != nil {
 				compileErr = err
 				return
 			}
 		}
-		if clusterSch, compileErr = c.Compile(schema.ClusterID); compileErr != nil {
-			return
+		compiled = map[string]*jsonschema.Schema{}
+		for sid := range files {
+			sch, err := c.Compile(sid)
+			if err != nil {
+				compileErr = err
+				return
+			}
+			compiled[sid] = sch
 		}
-		catalogSch, compileErr = c.Compile(schema.CatalogID)
 	})
-	return clusterSch, catalogSch, compileErr
+	if compileErr != nil {
+		return nil, compileErr
+	}
+	return compiled[id], nil
 }
 
 // SchemaError lists every schema violation in a document.
@@ -74,7 +84,7 @@ func (e *SchemaError) Error() string {
 
 // ParseCluster schema-validates and decodes cluster.yaml content.
 func ParseCluster(data []byte) (*Cluster, error) {
-	cs, _, err := schemas()
+	cs, err := schemaFor(schema.ClusterID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +97,7 @@ func ParseCluster(data []byte) (*Cluster, error) {
 
 // ParseCatalog schema-validates and decodes catalog/models.yaml content.
 func ParseCatalog(data []byte) (*Catalog, error) {
-	_, ks, err := schemas()
+	ks, err := schemaFor(schema.CatalogID)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +106,19 @@ func ParseCatalog(data []byte) (*Catalog, error) {
 		return nil, err
 	}
 	return &c, nil
+}
+
+// ParseVersions schema-validates and decodes bundle/versions.yaml content.
+func ParseVersions(data []byte) (*Versions, error) {
+	vs, err := schemaFor(schema.VersionsID)
+	if err != nil {
+		return nil, err
+	}
+	var v Versions
+	if err := parse(data, "versions.yaml", vs, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
 }
 
 // LoadCluster reads and parses a cluster.yaml file.
