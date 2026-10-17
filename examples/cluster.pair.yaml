@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=../schema/cluster.schema.json
+# Example: one 2-node GB10 pair (dual rail), the M1 target topology.
+apiVersion: oaf/v1alpha1
+kind: Cluster
+metadata:
+  name: lab-a
+spec:
+  bundle:
+    version: 0.1.0
+  nodes:
+    - name: spark-1
+      address: 192.168.1.11
+      roles: [control, gateway, observability, inference]
+    - name: spark-2
+      address: 192.168.1.12
+      roles: [inference]
+  fabric:
+    topology: pair
+    mtu: 9000
+    links:                         # interfaces omitted: discovered by `oaf install`, then written back
+      - { rail: 0, a: { node: spark-1 }, b: { node: spark-2 } }
+      - { rail: 1, a: { node: spark-1 }, b: { node: spark-2 } }
+    roce:
+      gidIndex: auto
+    nccl:
+      transport: auto              # → ib for a pair
+  groups:
+    - name: pair-a
+      nodes: [spark-1, spark-2]
+  models:
+    - name: fast
+      catalogRef: qwen3-30b-a3b-instruct-2507-fp8
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.30
+      maxModelLen: 32768
+    - name: think
+      catalogRef: gpt-oss-120b
+      profile: pair-tp2
+      placement: { group: pair-a }
+      gpuMemoryUtilization: 0.55
+  routing:
+    mode: observe
+    gateway:
+      port: 4000
+    keys:
+      - name: default
+        secretRef: gateway-key-default   # generated at install
+    defaults:
+      fast: fast
+      fallback: fast
+    rules:
+      - name: think
+        match:
+          signals:
+            - { type: reasoning, threshold: 0.6 }
+        target: think
+      - name: medical
+        match:
+          signals:
+            - { type: domain, domains: [health, medicine] }
+        target: ddx
+        requires: { entitlement: ddx }   # rule omitted from vSR config unless entitled AND ddx deployed
+  observability:
+    langfuse: { enabled: true }
+    metrics: { retention: 15d }

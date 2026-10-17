@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=../schema/catalog.schema.json
+# Example catalog. Revisions and sizes are real (HF API, 2026-10-17).
+# There are NO baselines yet. They are measured on hardware in M2. An entry with a baseline would look like:
+#   baseline: { tokPerSec: <measured>, ttftMsP50: <measured>, tolerance: 0.85,
+#               workload: { inputTokens: 1024, outputTokens: 256, concurrency: 8 },
+#               measured: { date: 2026-11-01, bundleVersion: 0.2.0 } }
+apiVersion: oaf/v1alpha1
+kind: ModelCatalog
+models:
+  - id: qwen3-30b-a3b-instruct-2507-fp8
+    displayName: Qwen3 30B-A3B Instruct 2507 (FP8)
+    source:
+      huggingface:
+        repo: Qwen/Qwen3-30B-A3B-Instruct-2507-FP8
+        revision: 5a5a776300a41aaa681dd7ff0106608ef2bc90db
+    license: { spdx: Apache-2.0, gated: false, redistributable: true }
+    sizeGiB: 29.1
+    classes: [fast]
+    profiles:
+      - name: single
+        nodes: 1
+        tensorParallel: 1
+        gpuMemoryUtilization: 0.30
+        maxModelLen: 32768
+
+  - id: gpt-oss-120b
+    displayName: gpt-oss-120b
+    source:
+      huggingface:
+        repo: openai/gpt-oss-120b
+        revision: b5c939de8f754692c1647ca79fbf85e8c1e70f8a
+        include: ["*.safetensors", "*.json", "*.jinja"]   # skip original/ and metal/
+    license: { spdx: Apache-2.0, gated: false, redistributable: true }
+    sizeGiB: 60.8
+    classes: [think]
+    profiles:
+      - name: single
+        nodes: 1
+        tensorParallel: 1
+        gpuMemoryUtilization: 0.70
+      - name: pair-tp2
+        nodes: 2
+        tensorParallel: 2
+        gpuMemoryUtilization: 0.55
+
+  - id: ddx
+    displayName: DDx (entitled)
+    source:
+      entitled:
+        sha256: "0000000000000000000000000000000000000000000000000000000000000000"   # PLACEHOLDER
+    license: { name: OAF DDx Commercial, url: "https://openagentfabric.dev/licenses/ddx", acceptUrl: "https://openagentfabric.dev/licenses/ddx", gated: true, redistributable: false }
+    entitlement: { feature: ddx }
+    sizeGiB: 1          # PLACEHOLDER
+    classes: [medical]
+    profiles:
+      - { name: single, nodes: 1, tensorParallel: 1, gpuMemoryUtilization: 0.4 }

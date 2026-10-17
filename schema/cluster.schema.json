@@ -1,0 +1,791 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openagentfabric.dev/schema/v1alpha1/cluster.schema.json",
+  "title": "OAF cluster.yaml",
+  "description": "Desired state of one OAF cluster. It is the single source of truth for topology, fabric, model deployments, routing, apps and agents. This schema checks structure only. Cross-reference and hardware rules are enforced by oafd semantic validation (see docs/PLAN.md §4.3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "oaf/v1alpha1"
+    },
+    "kind": {
+      "const": "Cluster"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "description": {
+          "type": "string"
+        },
+        "labels": {
+          "$ref": "#/$defs/stringMap"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bundle",
+        "nodes",
+        "fabric"
+      ],
+      "properties": {
+        "bundle": {
+          "$ref": "#/$defs/bundle"
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "fabric": {
+          "$ref": "#/$defs/fabric"
+        },
+        "groups": {
+          "description": "Placement groups for multi-node (TP/PP) deployments. Each group must be fully connected by direct links: one pair, or the whole triangle.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/group"
+          },
+          "default": []
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/modelDeployment"
+          },
+          "default": []
+        },
+        "routing": {
+          "$ref": "#/$defs/routing"
+        },
+        "observability": {
+          "$ref": "#/$defs/observability"
+        },
+        "entitlements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entitlementRef"
+          },
+          "default": []
+        },
+        "licenseAcceptances": {
+          "description": "Licences the user accepted through the upstream page (docs/licence-audit.md §3.7). OAF will not fetch or deploy an artefact that needs acceptance unless it has an entry here.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/licenseAcceptance"
+          },
+          "default": []
+        },
+        "apps": {
+          "description": "Experimental (M6). App profiles such as hms or vibecomputing.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/experimentalUnit"
+          },
+          "default": []
+        },
+        "agents": {
+          "description": "Experimental (M6). Agents such as the local buzz relay and the memory system.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/experimentalUnit"
+          },
+          "default": []
+        }
+      }
+    }
+  },
+  "$defs": {
+    "name": {
+      "description": "DNS-label style identifier.",
+      "type": "string",
+      "pattern": "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$"
+    },
+    "servedModelName": {
+      "description": "Name a client sends as `model`. Lowercase letters, digits, '-', '.', '_' and '/'. The value 'auto' is reserved for vSR routing.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._/-]{0,127}$",
+      "not": {
+        "const": "auto"
+      }
+    },
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "secretRef": {
+      "description": "Name of a secret in /etc/oaf/secrets/. The installer generates it. Secret values never appear in cluster.yaml.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+    },
+    "cidr": {
+      "type": "string",
+      "pattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$"
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version"
+      ],
+      "properties": {
+        "version": {
+          "description": "OAF bundle version. It selects bundle/versions.yaml, which pins every component image by digest.",
+          "type": "string",
+          "pattern": "^v?[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$"
+        },
+        "channel": {
+          "enum": [
+            "stable",
+            "candidate",
+            "offline"
+          ],
+          "default": "stable"
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "address",
+        "roles"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "address": {
+          "description": "Management-network address (not a fabric address). oafd reaches oaf-node here.",
+          "type": "string",
+          "anyOf": [
+            {
+              "format": "ipv4"
+            },
+            {
+              "format": "hostname"
+            }
+          ]
+        },
+        "serial": {
+          "description": "Optional expected hardware serial. Preflight fails if the discovered serial differs. Entitlements bind to serials.",
+          "type": "string"
+        },
+        "roles": {
+          "description": "control: runs oafd (exactly one node). gateway: agentgateway + vSR. observability: Langfuse stack, Prometheus, Grafana (exactly one node in v1). inference: may host vLLM.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "control",
+              "gateway",
+              "observability",
+              "inference"
+            ]
+          }
+        },
+        "ssh": {
+          "description": "Used only by `oaf install` to bootstrap oaf-node on peers.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "user": {
+              "type": "string",
+              "default": "root"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 22
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "modelsPath": {
+              "type": "string",
+              "default": "/var/lib/oaf/models"
+            },
+            "dataPath": {
+              "type": "string",
+              "default": "/var/lib/oaf/data"
+            },
+            "minFreeGiB": {
+              "description": "Headroom that must remain after any model pull.",
+              "type": "number",
+              "minimum": 0,
+              "default": 50
+            }
+          }
+        },
+        "labels": {
+          "$ref": "#/$defs/stringMap"
+        }
+      }
+    },
+    "fabric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topology"
+      ],
+      "properties": {
+        "topology": {
+          "description": "Switchless topologies only. single = 1 node. pair = 2 nodes, dual rail. triangle = 3 nodes, point-to-point mesh. pairs = 4 nodes as two independent pairs (NO 4-node ring: NCCL tree channels need non-adjacent links and RDMA cannot be forwarded).",
+          "enum": [
+            "single",
+            "pair",
+            "triangle",
+            "pairs"
+          ]
+        },
+        "mtu": {
+          "type": "integer",
+          "minimum": 1500,
+          "maximum": 9216,
+          "default": 9000
+        },
+        "links": {
+          "description": "Physical QSFP cables. In a pair, the two links form rail 0 and rail 1. Leave empty for topology=single. Interface names can be left to discovery: `oaf install` proposes the cabling and writes it back here.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/link"
+          },
+          "default": []
+        },
+        "roce": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "gidIndex": {
+              "description": "Detected on every bring-up when set to 'auto' (it has changed from 3 to 4 before). An integer pins it and is checked against what is detected.",
+              "oneOf": [
+                {
+                  "const": "auto"
+                },
+                {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              ],
+              "default": "auto"
+            }
+          }
+        },
+        "nccl": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "transport": {
+              "description": "auto = ib for pair/pairs, socket (NCCL_IB_DISABLE=1) for triangle.",
+              "enum": [
+                "auto",
+                "ib",
+                "socket"
+              ],
+              "default": "auto"
+            },
+            "ldPreload": {
+              "description": "System libnccl preloaded into vLLM containers (required on GB10).",
+              "type": "string",
+              "default": "/usr/lib/aarch64-linux-gnu/libnccl.so.2"
+            },
+            "env": {
+              "$ref": "#/$defs/stringMap"
+            }
+          }
+        },
+        "acceptance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "minGbpsPerRail": {
+              "type": "number",
+              "minimum": 0,
+              "default": 85
+            },
+            "minGbpsDualRail": {
+              "type": "number",
+              "minimum": 0,
+              "default": 170
+            }
+          }
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "a",
+        "b"
+      ],
+      "properties": {
+        "a": {
+          "$ref": "#/$defs/linkEnd"
+        },
+        "b": {
+          "$ref": "#/$defs/linkEnd"
+        },
+        "rail": {
+          "type": "integer",
+          "enum": [
+            0,
+            1
+          ]
+        },
+        "subnet": {
+          "description": "Point-to-point subnet, /30 or /31. Allocated automatically if omitted.",
+          "$ref": "#/$defs/cidr"
+        }
+      }
+    },
+    "linkEnd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node"
+      ],
+      "properties": {
+        "node": {
+          "$ref": "#/$defs/name"
+        },
+        "interface": {
+          "description": "Netdev name, e.g. enp1s0f0np0. Omit to discover it.",
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9._-]{1,15}$"
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "nodes"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        }
+      }
+    },
+    "modelDeployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "catalogRef",
+        "placement",
+        "gpuMemoryUtilization"
+      ],
+      "properties": {
+        "name": {
+          "description": "Served model name. Routing rules and clients refer to this.",
+          "$ref": "#/$defs/servedModelName"
+        },
+        "catalogRef": {
+          "description": "`id` of an entry in catalog/models.yaml.",
+          "type": "string"
+        },
+        "profile": {
+          "description": "Name of a serving profile in the catalog entry. Defaults to the first profile whose node count matches the placement.",
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "placement": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "maxProperties": 1,
+          "properties": {
+            "node": {
+              "$ref": "#/$defs/name"
+            },
+            "group": {
+              "$ref": "#/$defs/name"
+            }
+          }
+        },
+        "gpuMemoryUtilization": {
+          "description": "Always set explicitly. vLLM otherwise takes about 90% of unified memory. The sum across co-located deployments must leave OS headroom (checked semantically).",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.95
+        },
+        "maxModelLen": {
+          "type": "integer",
+          "minimum": 256
+        },
+        "port": {
+          "description": "Host port for the vLLM OpenAI server. Allocated if omitted.",
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 65535
+        },
+        "args": {
+          "description": "Extra vLLM CLI args, appended after the catalog profile args.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "$ref": "#/$defs/stringMap"
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "description": "observe: vSR classifies and records its decision, but requests go to the default model. active: vSR decisions are applied.",
+          "enum": [
+            "observe",
+            "active"
+          ],
+          "default": "observe"
+        },
+        "gateway": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "default": 4000
+            },
+            "tls": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "certSecretRef": {
+                  "$ref": "#/$defs/secretRef"
+                }
+              }
+            }
+          }
+        },
+        "keys": {
+          "description": "API keys accepted by agentgateway. The key material lives in the referenced secret.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "secretRef"
+            ],
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "secretRef": {
+                "$ref": "#/$defs/secretRef"
+              },
+              "models": {
+                "description": "Allowlist of served model names (and/or 'auto'). Empty = all.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "requestsPerMinute": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "default": []
+        },
+        "defaults": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fast"
+          ],
+          "properties": {
+            "fast": {
+              "description": "Target for `model: auto` when no rule matches.",
+              "$ref": "#/$defs/servedModelName"
+            },
+            "fallback": {
+              "description": "Target when the selected backend is unhealthy. Defaults to `fast`.",
+              "$ref": "#/$defs/servedModelName"
+            }
+          }
+        },
+        "rules": {
+          "description": "Ordered. The first match wins. Rendered into vSR config, using only deployed and healthy targets. Clients that name an explicit model always bypass vSR.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/routingRule"
+          },
+          "default": []
+        }
+      }
+    },
+    "routingRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "match",
+        "target"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "signals": {
+              "description": "Matches if ANY listed signal fires.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/signal"
+              }
+            }
+          }
+        },
+        "target": {
+          "$ref": "#/$defs/servedModelName"
+        },
+        "requires": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "entitlement": {
+              "description": "The rule is rendered only if a valid entitlement grants this feature (e.g. ddx).",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "signal": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "reasoning"
+            },
+            "threshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "domains"
+          ],
+          "properties": {
+            "type": {
+              "const": "domain"
+            },
+            "domains": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "threshold": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "keywords"
+          ],
+          "properties": {
+            "type": {
+              "const": "keyword"
+            },
+            "keywords": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "caseSensitive": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      ]
+    },
+    "observability": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "langfuse": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            },
+            "sampleRate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "default": 1
+            },
+            "captureContent": {
+              "description": "Store prompts and completions in traces. Disable for sensitive workloads.",
+              "type": "boolean",
+              "default": true
+            }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "retention": {
+              "type": "string",
+              "pattern": "^[0-9]+[hdw]$",
+              "default": "15d"
+            },
+            "scrapeInterval": {
+              "type": "string",
+              "pattern": "^[0-9]+[sm]$",
+              "default": "15s"
+            }
+          }
+        }
+      }
+    },
+    "entitlementRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file"
+      ],
+      "properties": {
+        "file": {
+          "description": "Path to an ed25519-signed entitlement file (offline, bound to customer, node serials, expiry).",
+          "type": "string"
+        }
+      }
+    },
+    "experimentalUnit": {
+      "type": "object",
+      "required": [
+        "name",
+        "profile"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "licenseAcceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "subject",
+        "url",
+        "acceptedBy",
+        "acceptedAt"
+      ],
+      "properties": {
+        "subject": {
+          "description": "What was accepted: `model/<catalog id>` or `image/<component>`.",
+          "type": "string",
+          "pattern": "^(model|image)/[a-z0-9][a-z0-9.-]{0,127}$"
+        },
+        "url": {
+          "description": "The acceptUrl that was shown to the user.",
+          "type": "string",
+          "format": "uri"
+        },
+        "acceptedBy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acceptedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

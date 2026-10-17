@@ -1,0 +1,331 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openagentfabric.dev/schema/v1alpha1/catalog.schema.json",
+  "title": "OAF catalog/models.yaml",
+  "description": "The models OAF knows how to fetch, serve and verify. Each entry pins an immutable source revision, records the licence facts the bundler needs, defines vLLM serving profiles for GB10 topologies, and gives the throughput baseline used by the acceptance test.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "apiVersion",
+    "kind",
+    "models"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "oaf/v1alpha1"
+    },
+    "kind": {
+      "const": "ModelCatalog"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/model"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9.-]{0,127}$"
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "license",
+        "sizeGiB",
+        "classes",
+        "profiles"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "license": {
+          "$ref": "#/$defs/license"
+        },
+        "entitlement": {
+          "description": "If set, the model can be deployed only with a valid entitlement that grants this feature.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "feature"
+          ],
+          "properties": {
+            "feature": {
+              "type": "string"
+            }
+          }
+        },
+        "sizeGiB": {
+          "description": "On-disk size of the weights. Checked against free space before every pull and fan-out.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "classes": {
+          "description": "Routing classes. They drive default routing: fast → `model: auto`, think → reasoning signals, medical → medical signals.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "fast",
+              "think",
+              "medical",
+              "code",
+              "vision",
+              "embedding"
+            ]
+          }
+        },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/profile"
+          }
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "huggingface": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "repo",
+            "revision"
+          ],
+          "properties": {
+            "repo": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"
+            },
+            "revision": {
+              "description": "Full commit SHA. Branch names are not allowed, because pulls must be reproducible.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "include": {
+              "description": "Allow-patterns of files to download. Default: everything.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "entitled": {
+          "description": "Weights delivered with an entitlement, never from public sources or the public bundle.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256"
+          ],
+          "properties": {
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gated",
+        "redistributable"
+      ],
+      "anyOf": [
+        {
+          "required": [
+            "spdx"
+          ]
+        },
+        {
+          "required": [
+            "name",
+            "url"
+          ]
+        }
+      ],
+      "properties": {
+        "spdx": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "gated": {
+          "description": "Requires accepting terms on the hub (needs the customer's own HF token).",
+          "type": "boolean"
+        },
+        "redistributable": {
+          "description": "May OAF include these weights in an offline bundle? If false, `oaf bundle build` refuses the model.",
+          "type": "boolean"
+        },
+        "acceptUrl": {
+          "description": "Upstream page where the user reads and accepts the licence. Required (semantic check) when the licence needs acceptance: gated, no SPDX id, or SPDX id not on the allowlist (docs/licence-audit.md §3.7).",
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "profile": {
+      "description": "One way to serve the model on a given GB10 topology.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "nodes",
+        "tensorParallel",
+        "gpuMemoryUtilization"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+        },
+        "engine": {
+          "const": "vllm",
+          "default": "vllm"
+        },
+        "nodes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "tensorParallel": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pipelineParallel": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "gpuMemoryUtilization": {
+          "description": "Recommended value. The deployment in cluster.yaml must still set its own.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.95
+        },
+        "maxModelLen": {
+          "type": "integer",
+          "minimum": 256
+        },
+        "quantization": {
+          "type": "string"
+        },
+        "args": {
+          "description": "vLLM CLI args (excluding the ones OAF sets itself: model path, port, TP/PP, memory utilisation, served name).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "baseline": {
+          "$ref": "#/$defs/baseline"
+        }
+      }
+    },
+    "baseline": {
+      "description": "Reference performance for this profile on GB10. The acceptance test fails if a measurement falls below tokPerSec × tolerance. A profile without a baseline is reported as 'unmeasured' and fails under `oaf acceptance --strict`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tokPerSec",
+        "workload",
+        "measured"
+      ],
+      "properties": {
+        "tokPerSec": {
+          "description": "Aggregate output tokens per second for the workload.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "ttftMsP50": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "tolerance": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 0.85
+        },
+        "workload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inputTokens",
+            "outputTokens",
+            "concurrency"
+          ],
+          "properties": {
+            "inputTokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "outputTokens": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "measured": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "date",
+            "bundleVersion"
+          ],
+          "properties": {
+            "date": {
+              "type": "string",
+              "format": "date"
+            },
+            "bundleVersion": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
