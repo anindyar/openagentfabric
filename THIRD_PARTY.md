@@ -42,16 +42,20 @@ metadata plus the LICENSE file wherever the metadata said `NOASSERTION`).
 | rdma-core / iproute2 / ethtool | GPL-2.0 / BSD mix | host | Invoked as binaries. |
 | rsync | GPL-3.0 | host | Invoked as a binary to fan out weights. Not linked. |
 
-## Expected OAF libraries (finalised after ADR-0001 is approved)
+## OAF Go dependencies (linked into `oaf`)
 
-| Library | Licence | Purpose |
-|---|---|---|
-| Go standard library (incl. `crypto/ed25519`) | BSD-3-Clause | oafd, oaf-node, entitlement verification |
-| connectrpc/connect-go | Apache-2.0 | RPC (UI↔oafd, oafd↔oaf-node) |
-| go-git/go-git | Apache-2.0 | history of the desired-state repo |
-| santhosh-tekuri/jsonschema | Apache-2.0 | validating cluster.yaml and the catalog |
-| google/go-containerregistry | Apache-2.0 | offline bundle image save/load |
-| React, Vite, TanStack Router/Query | MIT | UI (same stack as the agentgateway UI) |
+`make licenses` enforces these in CI (allowlist: Apache-2.0, MIT, BSD-2/3, ISC, MPL-2.0).
+
+| Module | Version | Licence | Purpose |
+|---|---|---|---|
+| Go standard library | 1.27 | BSD-3-Clause | everything, incl. `crypto/ed25519` |
+| github.com/spf13/cobra | v1.10.2 | Apache-2.0 | CLI |
+| github.com/spf13/pflag | v1.0.9 | BSD-3-Clause | CLI flags (via cobra) |
+| github.com/inconshreveable/mousetrap | v1.1.0 | Apache-2.0 | via cobra (Windows only) |
+
+Planned (added with the PR that first uses them): connectrpc/connect-go (Apache-2.0),
+go-git/go-git (Apache-2.0), santhosh-tekuri/jsonschema (Apache-2.0), go.yaml.in/yaml (MIT + Apache-2.0),
+google/go-containerregistry (Apache-2.0); UI: React, Vite, TanStack (MIT).
 
 ## Not used (recorded so nobody adds them by accident)
 

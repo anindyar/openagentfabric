@@ -36,8 +36,8 @@ It covers:
 Gated models such as DDx use an offline ed25519-signed entitlement file, bound to the customer, node serials and an expiry date. It must work air-gapped.
 
 ## Repo layout (proposed)
-- `cmd/oafd` — control plane (API + reconciler)
-- `cmd/oaf-node` — node agent
+- `cmd/oaf` — the single binary (ADR-0001): CLI, `oafd` control plane (API + reconciler) and `oaf-node` agent as subcommands
+- `internal/` — Go packages
 - `ui/` — web UI
 - `bundle/` — installer, compose templates, catalog
 - `deploy/compose/` — compose files

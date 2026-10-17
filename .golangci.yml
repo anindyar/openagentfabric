@@ -1,0 +1,16 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - gocritic
+    - misspell
+    - revive
+    - unconvert
+  settings:
+    misspell:
+      locale: UK
+formatters:
+  enable:
+    - gofmt
+    - goimports
