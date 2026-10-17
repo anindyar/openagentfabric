@@ -58,9 +58,13 @@ metadata plus the LICENSE file wherever the metadata said `NOASSERTION`).
 | github.com/santhosh-tekuri/jsonschema/v6 | v6.0.3 | Apache-2.0 | schema validation of cluster.yaml and the catalog |
 | go.yaml.in/yaml/v3 | v3.0.5 | MIT + Apache-2.0 | YAML decoding |
 | golang.org/x/text | v0.43.0 | BSD-3-Clause | schema error messages (via jsonschema) |
+| connectrpc.com/connect/v2 | v2.0.1 | Apache-2.0 | RPC between oafd and oaf-node |
+| google.golang.org/protobuf | v1.36.12 | BSD-3-Clause | protobuf runtime |
 
-Planned (added with the PR that first uses them): connectrpc/connect-go (Apache-2.0),
-go-git/go-git (Apache-2.0),
+Build-time tools, not shipped: buf v1.74.0 (Apache-2.0), protoc-gen-go (BSD-3-Clause), protoc-gen-connect-go (Apache-2.0),
+golangci-lint (GPL-3.0, run in CI only), go-licenses (Apache-2.0).
+
+Planned (added with the PR that first uses them): go-git/go-git (Apache-2.0),
 google/go-containerregistry (Apache-2.0); UI: React, Vite, TanStack (MIT).
 
 ## Not used (recorded so nobody adds them by accident)

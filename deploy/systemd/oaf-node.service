@@ -1,0 +1,21 @@
+# Installed by `oaf install` on every node.
+[Unit]
+Description=openagentfabric node agent
+Documentation=https://github.com/anindyar/openagentfabric
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/local/bin/oaf node serve --pki-dir /etc/oaf/pki --state-dir /var/lib/oaf
+Restart=on-failure
+RestartSec=5
+# Runs as root: it drives docker and (later) configures the QSFP fabric.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/var/lib/oaf /etc/oaf
+
+[Install]
+WantedBy=multi-user.target

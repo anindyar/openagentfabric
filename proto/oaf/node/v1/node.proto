@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+// The node agent API: oafd drives each node through oaf-node over mTLS.
+package oaf.node.v1;
+
+service NodeService {
+  // Info identifies the node and agent build.
+  rpc Info(InfoRequest) returns (InfoResponse);
+  // Preflight runs the read-only node inspection.
+  rpc Preflight(PreflightRequest) returns (PreflightResponse);
+  // ApplyProject writes a compose project's files and brings it up. It is
+  // idempotent: unchanged files report changed=false.
+  rpc ApplyProject(ApplyProjectRequest) returns (ApplyProjectResponse);
+  // RemoveProject brings a project down and deletes its files.
+  rpc RemoveProject(RemoveProjectRequest) returns (RemoveProjectResponse);
+  // ProjectStatus reports a project's containers.
+  rpc ProjectStatus(ProjectStatusRequest) returns (ProjectStatusResponse);
+}
+
+message InfoRequest {}
+
+message InfoResponse {
+  string hostname = 1;
+  string version = 2;
+  string arch = 3;
+}
+
+message PreflightRequest {
+  // Where OAF will keep models and data. Empty means the agent default.
+  string data_path = 1;
+}
+
+message PreflightResponse {
+  string host = 1;
+  repeated CheckResult results = 2;
+  // Worst status: pass, info, warn or fail.
+  string worst = 3;
+}
+
+message CheckResult {
+  string id = 1;
+  string status = 2;
+  string summary = 3;
+  repeated string details = 4;
+}
+
+// A project name is a DNS label. The compose project is "oaf-<name>", so the
+// agent can never touch containers it did not create.
+message ApplyProjectRequest {
+  string name = 1;
+  // Must include compose.yaml. Paths are relative to the project directory.
+  repeated File files = 2;
+}
+
+message File {
+  string path = 1;
+  bytes content = 2;
+  // Unix permission bits. 0 means 0644.
+  uint32 mode = 3;
+}
+
+message ApplyProjectResponse {
+  bool changed = 1;
+  repeated Service services = 2;
+}
+
+message RemoveProjectRequest {
+  string name = 1;
+  bool remove_volumes = 2;
+}
+
+message RemoveProjectResponse {
+  bool existed = 1;
+}
+
+message ProjectStatusRequest {
+  string name = 1;
+}
+
+message ProjectStatusResponse {
+  bool exists = 1;
+  repeated Service services = 2;
+}
+
+message Service {
+  string name = 1;
+  string state = 2;
+  string health = 3;
+  string image = 4;
+}

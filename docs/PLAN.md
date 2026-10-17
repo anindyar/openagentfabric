@@ -149,7 +149,7 @@ Each PR is small and has tests. **Exit criteria** are what I will demonstrate at
 1. Repo scaffold: Go module, `make`, CI (lint, test, arm64 build, licence allowlist, THIRD_PARTY guard).
 2. Schema + semantic validation package. Tests use the `examples/` files and negative cases.
 3. `bundle/versions.yaml` format, plus pinning digests for agentgateway, vSR, vLLM and the observability stack.
-4. `oaf-node`: systemd unit, mTLS Connect server, `compose up/down/status` for a project.
+4. `oaf-node`: systemd unit, mTLS Connect server, `compose up/down/status` for a project. ✅ `oaf node serve`, `oaf pki init`. The agent only touches `oaf-*` compose projects under `/var/lib/oaf/projects`. Applies are atomic and idempotent.
 5. Preflight checks (each check is a unit with fake command runners in tests). ✅ `oaf preflight [--ssh user@host]`. It is read-only by construction (an allowlisted runner), and its tests replay a real capture from a busy DGX Spark. Landed before item 4 because it needs no agent.
 6. Fabric: cabling discovery, MTU and IPs, GID detection, `ib_write_bw` runner.
 7. Renderers + golden tests: compose for each component.

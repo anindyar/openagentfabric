@@ -39,6 +39,7 @@ var hostPorts = map[int]string{
 	9090:  "Prometheus",
 	9100:  "node_exporter",
 	8443:  "oafd",
+	7701:  "oaf-node",
 }
 
 func trim(b []byte) string { return strings.TrimSpace(string(b)) }
