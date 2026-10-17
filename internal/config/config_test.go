@@ -48,7 +48,7 @@ func TestPairExampleDecodes(t *testing.T) {
 	if got := c.Spec.Fabric.RoCE.GIDIndex; got != "auto" {
 		t.Errorf("gidIndex = %q", got)
 	}
-	if len(c.Spec.Fabric.Links) != 2 || *c.Spec.Fabric.Links[1].Rail != 1 {
+	if len(c.Spec.Fabric.Links) != 1 || *c.Spec.Fabric.Links[0].B.Port != 0 {
 		t.Errorf("links decoded wrong: %+v", c.Spec.Fabric.Links)
 	}
 	if c.Spec.Models[1].Placement.Group != "pair-a" {

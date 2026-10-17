@@ -21,7 +21,8 @@ It covers:
 
 ## Hard-won hardware facts (GB10 / CX-7)
 - No switch: 2 nodes = 1 dual-rail pair, 3 nodes = triangle, 4 nodes = two separate pairs. A 4-node ring breaks NCCL, because tree channels need links between non-adjacent nodes and RDMA cannot be forwarded. A true 4-way cluster needs a QSFP switch.
-- Detect the RoCE GID index on every bring-up; it has changed from 3 to 4. Use MTU 9000 and check it with `ib_write_bw` on each rail (about 92 Gbps per rail, about 185 Gbps with both).
+- Each GB10 has **2 physical QSFP ports**. The OS shows each one as **two netdevs, one per PCIe domain** (port 0 = `enp1s0f0np0` + `enP2p1s0f0np0`, port 1 = `enp1s0f1np1` + `enP2p1s0f1np1`). Those two halves are the "dual rail": **one cable = 2 rails** (each needs its own IP/subnet). Verified with `devlink port` on DGX OS 2025-10 (kernel 6.17).
+- Detect the RoCE GID index on every bring-up; it has changed from 3 to 4. It depends on how many addresses the netdev has. On one netdev, RoCE v2 GIDs were seen at index 3 (first IP) and 5 (second IP). Choose the RoCE v2 GID whose address is the rail IP. Use MTU 9000 and check it with `ib_write_bw` on each rail (about 92 Gbps per rail, about 185 Gbps with both).
 - vLLM on GB10 needs `LD_PRELOAD` of the system libnccl (2.30.x). On a 3-node point-to-point mesh, use `NCCL_IB_DISABLE=1` (sockets).
 - Each vLLM grabs about 90% of unified memory by default, so always set `--gpu-memory-utilization` per model.
 - Weights must be present on every node in a TP/PP group. Pull them once and rsync them over the fabric. Check disk space before every pull.

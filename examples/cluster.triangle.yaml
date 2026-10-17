@@ -13,9 +13,9 @@ spec:
   fabric:
     topology: triangle
     links:
-      - { a: { node: gx-1, interface: enp1s0f0np0 }, b: { node: gx-2, interface: enp1s0f0np0 }, subnet: 10.200.0.0/31 }
-      - { a: { node: gx-2, interface: enp1s0f1np1 }, b: { node: gx-3, interface: enp1s0f0np0 }, subnet: 10.200.0.2/31 }
-      - { a: { node: gx-3, interface: enp1s0f1np1 }, b: { node: gx-1, interface: enp1s0f1np1 }, subnet: 10.200.0.4/31 }
+      - { a: { node: gx-1, port: 0 }, b: { node: gx-2, port: 0 }, subnets: [10.200.0.0/31, 10.200.0.2/31] }
+      - { a: { node: gx-2, port: 1 }, b: { node: gx-3, port: 0 }, subnets: [10.200.0.4/31, 10.200.0.6/31] }
+      - { a: { node: gx-3, port: 1 }, b: { node: gx-1, port: 1 }, subnets: [10.200.0.8/31, 10.200.0.10/31] }
     nccl: { transport: socket }
   groups:
     - { name: tri, nodes: [gx-1, gx-2, gx-3] }

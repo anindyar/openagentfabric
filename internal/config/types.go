@@ -128,18 +128,18 @@ type FabricAcceptance struct {
 	MinGbpsDualRail *float64 `yaml:"minGbpsDualRail,omitempty"`
 }
 
-// Link is one QSFP cable.
+// Link is one QSFP cable between physical ports. Each port is exposed as two
+// netdevs (one per PCIe domain), which are the link's two rails.
 type Link struct {
-	A      LinkEnd `yaml:"a"`
-	B      LinkEnd `yaml:"b"`
-	Rail   *int    `yaml:"rail,omitempty"`
-	Subnet string  `yaml:"subnet,omitempty"`
+	A       LinkEnd  `yaml:"a"`
+	B       LinkEnd  `yaml:"b"`
+	Subnets []string `yaml:"subnets,omitempty"`
 }
 
 // LinkEnd is one end of a cable.
 type LinkEnd struct {
-	Node      string `yaml:"node"`
-	Interface string `yaml:"interface,omitempty"`
+	Node string `yaml:"node"`
+	Port *int   `yaml:"port,omitempty"`
 }
 
 // Group is a placement group for multi-node deployments.

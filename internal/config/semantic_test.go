@@ -38,22 +38,19 @@ func TestSemanticRules(t *testing.T) {
 		{"self link", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Fabric.Links[0].B.Node = "spark-1"
 		}, Options{}, "spec.fabric.links[0]", "to itself"},
-		{"duplicate rail", pairExample, func(c *Cluster, _ *Catalog) {
-			c.Spec.Fabric.Links[1].Rail = intp(0)
-		}, Options{}, "spec.fabric.links[1].rail", "assigned twice"},
 		{"three links in a pair", pairExample, func(c *Cluster, _ *Catalog) {
-			c.Spec.Fabric.Links = append(c.Spec.Fabric.Links, c.Spec.Fabric.Links[0])
-			c.Spec.Fabric.Links[2].Rail = nil
-		}, Options{}, "spec.fabric.links", "only 2 ports"},
-		{"interface reused", triangleExample, func(c *Cluster, _ *Catalog) {
-			c.Spec.Fabric.Links[1].A.Interface = "enp1s0f0np0"
-		}, Options{}, "spec.fabric.links[1].a.interface", "already used"},
+			l := Link{A: LinkEnd{Node: "spark-1"}, B: LinkEnd{Node: "spark-2"}}
+			c.Spec.Fabric.Links = append(c.Spec.Fabric.Links, l, l)
+		}, Options{}, "spec.fabric.links", "only 2 QSFP ports"},
+		{"port reused", triangleExample, func(c *Cluster, _ *Catalog) {
+			c.Spec.Fabric.Links[1].A.Port = intp(0)
+		}, Options{}, "spec.fabric.links[1].a.port", "already used"},
 		{"triangle missing edge", triangleExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Fabric.Links = c.Spec.Fabric.Links[:2]
 		}, Options{}, "spec.fabric.links", "exactly one link between gx-1 and gx-3"},
 		{"duplicate subnet", triangleExample, func(c *Cluster, _ *Catalog) {
-			c.Spec.Fabric.Links[1].Subnet = c.Spec.Fabric.Links[0].Subnet
-		}, Options{}, "spec.fabric.links[1].subnet", "already used"},
+			c.Spec.Fabric.Links[1].Subnets[1] = c.Spec.Fabric.Links[0].Subnets[0]
+		}, Options{}, "spec.fabric.links[1].subnets[1]", "already used"},
 		{"group not linked", triangleExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Fabric.Links = c.Spec.Fabric.Links[:2]
 		}, Options{}, "spec.groups[0].nodes", "gx-1 and gx-3 are not directly linked"},
@@ -160,7 +157,7 @@ func TestFourNodeRingIsRejected(t *testing.T) {
 
 func TestTwoPairsAreAccepted(t *testing.T) {
 	c := fourNodePairs(t, [][2]string{
-		{"spark-1", "spark-2"}, {"spark-1", "spark-2"}, {"spark-3", "spark-4"}, {"spark-3", "spark-4"},
+		{"spark-1", "spark-2"}, {"spark-3", "spark-4"},
 	})
 	if r := Validate(c, mustCatalog(t), Options{}); !r.OK() {
 		t.Fatalf("unexpected errors: %v", r.Errors())
@@ -182,11 +179,6 @@ func TestGroupAcrossPairsIsRejected(t *testing.T) {
 }
 
 func TestWarnings(t *testing.T) {
-	t.Run("single rail", func(t *testing.T) {
-		c := mustCluster(t, pairExample)
-		c.Spec.Fabric.Links = c.Spec.Fabric.Links[:1]
-		assertWarning(t, Validate(c, mustCatalog(t), Options{}), "single rail")
-	})
 	t.Run("ib on triangle", func(t *testing.T) {
 		c := mustCluster(t, triangleExample)
 		c.Spec.Fabric.NCCL.Transport = TransportIB

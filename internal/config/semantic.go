@@ -187,10 +187,9 @@ func (k *checker) fabric() {
 	}
 
 	k.links = map[[2]string]int{}
-	ports := map[string]int{}      // links per node (CX-7 has 2 ports)
-	ifaces := map[string]string{}  // node/iface -> path of first use
+	cables := map[string]int{}     // links per node (a GB10 has 2 physical ports)
+	portUse := map[string]string{} // node/port -> path of first use
 	subnets := map[string]string{} // subnet -> path of first use
-	rails := map[int]bool{}
 	ok := true
 	for i, l := range f.Links {
 		p := fmt.Sprintf("spec.fabric.links[%d]", i)
@@ -203,13 +202,13 @@ func (k *checker) fabric() {
 				ok = false
 				continue
 			}
-			ports[end.e.Node]++
-			if end.e.Interface != "" {
-				key := end.e.Node + "/" + end.e.Interface
-				if first, dup := ifaces[key]; dup {
-					k.errorf(p+"."+end.side+".interface", "interface %s on %s is already used by %s", end.e.Interface, end.e.Node, first)
+			cables[end.e.Node]++
+			if end.e.Port != nil {
+				key := fmt.Sprintf("%s/%d", end.e.Node, *end.e.Port)
+				if first, dup := portUse[key]; dup {
+					k.errorf(p+"."+end.side+".port", "port %d on %s is already used by %s", *end.e.Port, end.e.Node, first)
 				}
-				ifaces[key] = p
+				portUse[key] = p
 			}
 		}
 		if l.A.Node == l.B.Node {
@@ -217,23 +216,17 @@ func (k *checker) fabric() {
 			ok = false
 			continue
 		}
-		if l.Subnet != "" {
-			if first, dup := subnets[l.Subnet]; dup {
-				k.errorf(p+".subnet", "subnet %s is already used by %s", l.Subnet, first)
+		for j, sn := range l.Subnets {
+			if first, dup := subnets[sn]; dup {
+				k.errorf(fmt.Sprintf("%s.subnets[%d]", p, j), "subnet %s is already used by %s", sn, first)
 			}
-			subnets[l.Subnet] = p
-		}
-		if l.Rail != nil {
-			if rails[*l.Rail] && f.Topology == TopologyPair {
-				k.errorf(p+".rail", "rail %d is assigned twice", *l.Rail)
-			}
-			rails[*l.Rail] = true
+			subnets[sn] = fmt.Sprintf("%s.subnets[%d]", p, j)
 		}
 		k.links[pairKey(l.A.Node, l.B.Node)]++
 	}
-	for _, n := range sortedKeys(ports) {
-		if ports[n] > 2 {
-			k.errorf("spec.fabric.links", "node %q has %d links, but a ConnectX-7 has only 2 ports", n, ports[n])
+	for _, n := range sortedKeys(cables) {
+		if cables[n] > 2 {
+			k.errorf("spec.fabric.links", "node %q has %d links, but a GB10 has only 2 QSFP ports", n, cables[n])
 			ok = false
 		}
 	}
@@ -275,11 +268,8 @@ func (k *checker) topologyShape() {
 }
 
 func (k *checker) checkPair(a, b string) {
-	switch n := k.links[pairKey(a, b)]; n {
-	case 2:
-	case 1:
-		k.warnf("spec.fabric.links", "pair %s–%s has a single rail; dual rail doubles bandwidth", a, b)
-	default:
+	// One cable is the normal dual-rail pair; a second cable is allowed.
+	if n := k.links[pairKey(a, b)]; n < 1 || n > 2 {
 		k.errorf("spec.fabric.links", "pair %s–%s needs 1 or 2 links (found %d)", a, b, n)
 	}
 }

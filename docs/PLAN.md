@@ -54,8 +54,10 @@ multi-cluster; non-NVIDIA hardware; Langfuse EE features; hard-forking any upstr
 `curl … | bash` → bootstrap verifies the signature → `oaf install` runs these steps:
 1. **Preflight on every node:** OS/driver/CUDA versions, docker + compose + nvidia-ctk, arch,
    disk space, clock sync, serials, hostnames, and the management network.
-2. **Cabling discovery:** find CX-7 ports with carrier, match peers by LLDP or link-local probe,
-   propose `fabric.links` and write them back to `cluster.yaml` once the user confirms.
+2. **Cabling discovery:** find physical ports with carrier (`devlink port` maps netdevs to physical
+   ports; each port is two netdevs, one per PCIe half). Match peers by LLDP or link-local probe,
+   propose `fabric.links` (one entry per cable) and write them back to `cluster.yaml` once the user
+   confirms. **Never reconfigure a port that already has addresses or traffic unless told to explicitly.**
    Reject topologies that are not allowed (a 4-node ring).
 3. **Fabric bring-up:** set MTU 9000, assign IPs, detect the **RoCE GID index**, run `ib_write_bw`
    on each rail and on both rails together, and check the results against `fabric.acceptance`.

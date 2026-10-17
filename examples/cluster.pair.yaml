@@ -17,9 +17,8 @@ spec:
   fabric:
     topology: pair
     mtu: 9000
-    links:                         # interfaces omitted: discovered by `oaf install`, then written back
-      - { rail: 0, a: { node: spark-1 }, b: { node: spark-2 } }
-      - { rail: 1, a: { node: spark-1 }, b: { node: spark-2 } }
+    links:                         # one cable = dual rail (the port's two PCIe halves)
+      - { a: { node: spark-1, port: 0 }, b: { node: spark-2, port: 0 } }
     roce:
       gidIndex: auto
     nccl:
