@@ -144,3 +144,19 @@ func TestInstallStopsOnPreflightFailure(t *testing.T) {
 		t.Fatal("install deployed despite a failed preflight")
 	}
 }
+
+func TestInstallStopsOnFabricFailure(t *testing.T) {
+	docker := fakeCluster(t)
+	args := []string{"install", "-f", "../../examples/cluster.pair.yaml", "--catalog", "../../examples/catalog.yaml", "--secrets-dir", filepath.Join(t.TempDir(), "s")}
+	// The fake agents cannot run ib_write_bw, so the bandwidth test fails.
+	out, err := runCLI(t, args...)
+	if err == nil || !strings.Contains(err.Error(), "fabric check failed") || !strings.Contains(out, "FAIL  spark-1:0 ↔ spark-2:0") {
+		t.Fatalf("install should stop on a failed fabric check: %v\n%s", err, out)
+	}
+	if docker.mutations() != 0 {
+		t.Fatal("install deployed despite a failed fabric check")
+	}
+	if out, err = runCLI(t, append(args, "--force")...); err != nil || docker.mutations() == 0 {
+		t.Fatalf("--force should deploy anyway: %v\n%s", err, out)
+	}
+}
