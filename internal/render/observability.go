@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"maps"
 	"net"
 	"strconv"
 
@@ -112,14 +113,13 @@ func (r *renderer) langfuse(n config.Node) (Project, error) {
 	deps := healthy("postgres", "clickhouse", "valkey", "seaweedfs")
 
 	worker := newService(img["langfuse-worker"])
-	worker.Environment = common
+	worker.Environment = maps.Clone(common)
+	worker.Environment["NODE_OPTIONS"] = nodeHeap("langfuse-worker")
 	worker.DependsOn = deps
 
 	web := newService(img["langfuse-web"])
-	web.Environment = map[string]string{}
-	for k, val := range common {
-		web.Environment[k] = val
-	}
+	web.Environment = maps.Clone(common)
+	web.Environment["NODE_OPTIONS"] = nodeHeap("langfuse-web")
 	name := r.Cluster.Metadata.Name
 	for k, val := range map[string]string{
 		"HOSTNAME":                         "0.0.0.0",
@@ -311,6 +311,13 @@ func finish(p Project, bundleVersion string, cf *composeFile, env *envFile) (Pro
 		p.Files = append(p.Files, e)
 	}
 	return p, nil
+}
+
+// nodeHeap sizes a Node.js service's V8 heap to 75% of its memory limit.
+// Left alone, Node takes about half the cgroup limit, and Langfuse web runs
+// out of heap at startup under 1 GiB; the rest is for buffers and code.
+func nodeHeap(service string) string {
+	return "--max-old-space-size=" + strconv.Itoa(memoryLimitsMiB[service]*3/4)
 }
 
 func volumes(names ...string) map[string]map[string]string {

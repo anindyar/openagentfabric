@@ -15,7 +15,10 @@ NoNewPrivileges=yes
 ProtectSystem=full
 ProtectHome=read-only
 PrivateTmp=yes
-ReadWritePaths=/var/lib/oaf /etc/oaf
+# systemd creates /var/lib/oaf; ReadWritePaths needs existing paths ("-" skips a missing one).
+StateDirectory=oaf
+StateDirectoryMode=0755
+ReadWritePaths=-/etc/oaf
 
 [Install]
 WantedBy=multi-user.target

@@ -170,6 +170,13 @@ Each PR is small and has tests. **Exit criteria** are what I will demonstrate at
    (`ApplyProject` dry run + `ListProjects`; a dropped model is removed), applies in dependency order, and reports status.
    `--dry-run` generates no secrets. `install` = preflight on every agent, then apply. Agents are placed by hand for now
    ([install.md](install.md)); agent bootstrap over SSH and fabric address assignment (item 6) are the remaining M1 work.
+   **On hardware (2026-10-18, one DGX Spark that also serves two production vLLMs):** the agent, then `oaf install` of the
+   control services by hand. Everything was healthy. Gateway auth worked (401 without a key), Langfuse init keys worked,
+   every Prometheus target was up, and a re-run was a no-op. `uninstall` left no containers or ports (volumes kept), and
+   a reinstall took 18 s and reused the existing secrets and data. The vLLMs were not touched. The run found two bugs, both
+   fixed: the systemd unit failed when `/var/lib/oaf` did not exist, and `langfuse-web` ran out of Node heap under its
+   memory limit. Every stack container is now capped (about 7 GiB in total) so that it cannot push the OOM killer toward
+   a vLLM.
 - **Exit:** on the real pair, a clean install brings up every pinned component healthy; a re-run is a no-op;
   uninstall leaves the hosts clean; rails measure ≥ 85 Gbps each.
 

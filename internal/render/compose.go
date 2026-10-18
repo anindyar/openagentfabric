@@ -74,14 +74,17 @@ func newService(image string) *service {
 // restarted. vLLM is sized by --gpu-memory-utilization instead and has no
 // entry. The sum stays under 8 GiB (TestMemoryLimits).
 var memoryLimitsMiB = map[string]int{
-	"postgres":        512,
-	"clickhouse":      2048, // ClickHouse sizes its caches to 90% of this
-	"valkey":          256,
-	"seaweedfs":       512,
-	"langfuse-web":    1024,
+	// Measured idle on a DGX Spark, 2026-10-18: web 645, worker 548,
+	// grafana 258, clickhouse 238, seaweedfs 93, postgres 86, prometheus
+	// 43, node-exporter 14, valkey 12, agentgateway 12 (MiB).
+	"langfuse-web":    2048, // Node heap 75% of this (nodeHeap)
 	"langfuse-worker": 1024,
-	"prometheus":      1024,
+	"clickhouse":      1536, // ClickHouse sizes its caches to 90% of this
+	"prometheus":      768,
 	"grafana":         512,
+	"postgres":        512,
+	"seaweedfs":       384,
+	"valkey":          256,
 	"agentgateway":    256,
 	"node-exporter":   64,
 }
