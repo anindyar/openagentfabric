@@ -2,7 +2,7 @@
 
 - **Status:** M0 approved 2026-10-17. M1 in progress
 - **Date:** 2026-10-17
-- **Related:** [ADR-0001 stack](adr/0001-stack.md), [licence audit](licence-audit.md), [THIRD_PARTY.md](../THIRD_PARTY.md), [`schema/`](../schema)
+- **Related:** [architecture](architecture.md), [user guide](user-guide.md), [ADR-0001 stack](adr/0001-stack.md), [licence audit](licence-audit.md), [THIRD_PARTY.md](../THIRD_PARTY.md), [`schema/`](../schema)
 
 ## 1. Goal
 
@@ -169,7 +169,7 @@ Each PR is small and has tests. **Exit criteria** are what I will demonstrate at
 8. `oaf install` / `oaf apply --dry-run` / `oaf status` / `oaf uninstall`. ✅ `internal/reconcile` plans through the agents
    (`ApplyProject` dry run + `ListProjects`; a dropped model is removed), applies in dependency order, and reports status.
    `--dry-run` generates no secrets. `install` = preflight on every agent, then apply. Agents are placed by hand for now
-   ([install.md](install.md)); agent bootstrap over SSH and fabric address assignment (item 6) are the remaining M1 work.
+   ([user guide](user-guide.md)); agent bootstrap over SSH and fabric address assignment (item 6) are the remaining M1 work.
    **On hardware (2026-10-18, one DGX Spark that also serves two production vLLMs):** the agent, then `oaf install` of the
    control services by hand. Everything was healthy. Gateway auth worked (401 without a key), Langfuse init keys worked,
    every Prometheus target was up, and a re-run was a no-op. `uninstall` left no containers or ports (volumes kept), and

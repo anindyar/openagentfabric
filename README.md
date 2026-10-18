@@ -4,7 +4,14 @@ A control plane and UI for running an agent/LLM platform on a small GB10 cluster
 (NVIDIA DGX Spark / Asus GX10). Installing OAF installs the whole stack: agentgateway, the vLLM
 Semantic Router, vLLM, Langfuse, Prometheus and Grafana, all pinned and unmodified.
 
-Status: early development (milestone M1). See [docs/PLAN.md](docs/PLAN.md).
+Status: early development (milestone M1: CLI install of the stack on one node or a pair).
+
+## Documentation
+
+- [User guide](docs/user-guide.md): requirements, step-by-step install, what to expect, operations, troubleshooting.
+- [Architecture](docs/architecture.md): how OAF works, and why it builds on pairs of nodes rather than a 4-node cluster.
+- [Plan](docs/PLAN.md): milestones, schemas, validation rules and progress.
+- [ADR-0001](docs/adr/0001-stack.md): implementation stack. [Licence audit](docs/licence-audit.md).
 
 ## Build
 
