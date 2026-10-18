@@ -39,6 +39,8 @@ const (
 	NodeServiceListProjectsProcedure = "/oaf.node.v1.NodeService/ListProjects"
 	// NodeServiceFabricProcedure is the procedure name of the NodeService's Fabric RPC.
 	NodeServiceFabricProcedure = "/oaf.node.v1.NodeService/Fabric"
+	// NodeServiceRailBandwidthProcedure is the procedure name of the NodeService's RailBandwidth RPC.
+	NodeServiceRailBandwidthProcedure = "/oaf.node.v1.NodeService/RailBandwidth"
 )
 
 var (
@@ -91,6 +93,13 @@ var (
 			Procedure:  NodeServiceFabricProcedure,
 		}
 	})
+	nodeServiceRailBandwidthSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("RailBandwidth"),
+			Procedure:  NodeServiceRailBandwidthProcedure,
+		}
+	})
 )
 
 // NodeServiceClient is a client for the oaf.node.v1.NodeService service.
@@ -110,6 +119,10 @@ type NodeServiceClient interface {
 	ListProjects(context.Context, *v1.ListProjectsRequest) (*v1.ListProjectsResponse, error)
 	// Fabric reports the QSFP ports (read-only discovery).
 	Fabric(context.Context, *v1.FabricRequest) (*v1.FabricResponse, error)
+	// RailBandwidth runs one side of an ib_write_bw test on a local rail. The
+	// server side waits for one client; the client retries until the server
+	// listens. Both block until the test ends.
+	RailBandwidth(context.Context, *v1.RailBandwidthRequest) (*v1.RailBandwidthResponse, error)
 }
 
 // NewNodeServiceClient constructs a client for the oaf.node.v1.NodeService service. Multiple
@@ -135,6 +148,10 @@ type NodeServiceHandler interface {
 	ListProjects(context.Context, *v1.ListProjectsRequest) (*v1.ListProjectsResponse, error)
 	// Fabric reports the QSFP ports (read-only discovery).
 	Fabric(context.Context, *v1.FabricRequest) (*v1.FabricResponse, error)
+	// RailBandwidth runs one side of an ib_write_bw test on a local rail. The
+	// server side waits for one client; the client retries until the server
+	// listens. Both block until the test ends.
+	RailBandwidth(context.Context, *v1.RailBandwidthRequest) (*v1.RailBandwidthResponse, error)
 }
 
 // RegisterNodeServiceHandler registers svc as the oaf.node.v1.NodeService implementation on server.
@@ -148,6 +165,7 @@ func RegisterNodeServiceHandler(server *connect.Server, svc NodeServiceHandler) 
 		connect.Method{Spec: nodeServiceProjectStatusSpec(), Handler: adapter.projectStatus},
 		connect.Method{Spec: nodeServiceListProjectsSpec(), Handler: adapter.listProjects},
 		connect.Method{Spec: nodeServiceFabricSpec(), Handler: adapter.fabric},
+		connect.Method{Spec: nodeServiceRailBandwidthSpec(), Handler: adapter.railBandwidth},
 	)
 }
 
@@ -180,6 +198,10 @@ func (UnimplementedNodeServiceHandler) ListProjects(context.Context, *v1.ListPro
 
 func (UnimplementedNodeServiceHandler) Fabric(context.Context, *v1.FabricRequest) (*v1.FabricResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.Fabric is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) RailBandwidth(context.Context, *v1.RailBandwidthRequest) (*v1.RailBandwidthResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.RailBandwidth is not implemented")
 }
 
 type nodeServiceClient struct {
@@ -237,6 +259,14 @@ func (c *nodeServiceClient) ListProjects(ctx context.Context, req *v1.ListProjec
 func (c *nodeServiceClient) Fabric(ctx context.Context, req *v1.FabricRequest) (*v1.FabricResponse, error) {
 	var res v1.FabricResponse
 	if err := c.client.CallUnary(ctx, nodeServiceFabricSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) RailBandwidth(ctx context.Context, req *v1.RailBandwidthRequest) (*v1.RailBandwidthResponse, error) {
+	var res v1.RailBandwidthResponse
+	if err := c.client.CallUnary(ctx, nodeServiceRailBandwidthSpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -322,6 +352,18 @@ func (h nodeServiceHandler) fabric(ctx context.Context, _ connect.Spec, stream c
 		return err
 	}
 	res, err := h.svc.Fabric(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) railBandwidth(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.RailBandwidthRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.RailBandwidth(ctx, &req)
 	if err != nil {
 		return err
 	}

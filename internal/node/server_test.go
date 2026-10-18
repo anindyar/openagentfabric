@@ -290,3 +290,54 @@ func TestParsePS(t *testing.T) {
 		t.Fatalf("empty: %v %v", none, err)
 	}
 }
+
+// fakeBench answers ib_write_bw with a real result and records the command.
+type fakeBench struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (f *fakeBench) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, hostexec.CmdLine(name, args...))
+	return os.ReadFile("../fabric/testdata/ib_write_bw_client.txt")
+}
+
+func TestRailBandwidth(t *testing.T) {
+	replay, err := hostexec.LoadReplay("../preflight/testdata/threeofnine.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bench := &fakeBench{}
+	s := &Server{StateDir: t.TempDir(), Inspect: replay, Bench: bench}
+	ctx := context.Background()
+	req := &nodev1.RailBandwidthRequest{RdmaDev: "rocep1s0f1", GidIndex: 3, TcpPort: 18515, DurationSeconds: 5, QueuePairs: 4, ServerAddr: "192.168.31.1"}
+	resp, err := s.RailBandwidth(ctx, req)
+	if err != nil || resp.GetGbps() != 111.61 {
+		t.Fatalf("got %v, %v", resp, err)
+	}
+	if bench.calls[0] != "ib_write_bw -d rocep1s0f1 -x 3 -p 18515 -q 4 -D 5 -F --report_gbits 192.168.31.1" {
+		t.Fatalf("command: %s", bench.calls[0])
+	}
+
+	for name, mut := range map[string]func(*nodev1.RailBandwidthRequest){
+		"device not on a QSFP port": func(r *nodev1.RailBandwidthRequest) { r.RdmaDev = "mlx5_9" },
+		"port out of range":         func(r *nodev1.RailBandwidthRequest) { r.TcpPort = 8443 },
+		"bad server address":        func(r *nodev1.RailBandwidthRequest) { r.ServerAddr = "spark-2; reboot" },
+		"too long":                  func(r *nodev1.RailBandwidthRequest) { r.DurationSeconds = 3600 },
+	} {
+		bad := &nodev1.RailBandwidthRequest{RdmaDev: req.RdmaDev, GidIndex: req.GidIndex, TcpPort: req.TcpPort, DurationSeconds: req.DurationSeconds, QueuePairs: req.QueuePairs, ServerAddr: req.ServerAddr}
+		mut(bad)
+		if _, err := s.RailBandwidth(ctx, bad); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if len(bench.calls) != 1 {
+		t.Fatalf("refused requests ran ib_write_bw: %v", bench.calls)
+	}
+	s.Bench = nil
+	if _, err := s.RailBandwidth(ctx, req); connect.CodeOf(err) != connect.CodeUnimplemented {
+		t.Fatalf("an agent without a bench runner must refuse: %v", err)
+	}
+}

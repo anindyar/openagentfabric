@@ -1114,6 +1114,138 @@ func (x *Gid) GetGid() string {
 	return ""
 }
 
+type RailBandwidthRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// A local RDMA device of a QSFP port, e.g. rocep1s0f1.
+	RdmaDev  string `protobuf:"bytes,1,opt,name=rdma_dev,json=rdmaDev,proto3" json:"rdma_dev,omitempty"`
+	GidIndex int32  `protobuf:"varint,2,opt,name=gid_index,json=gidIndex,proto3" json:"gid_index,omitempty"`
+	// ib_write_bw exchange port, 18515–18614.
+	TcpPort         int32 `protobuf:"varint,3,opt,name=tcp_port,json=tcpPort,proto3" json:"tcp_port,omitempty"`
+	DurationSeconds int32 `protobuf:"varint,4,opt,name=duration_seconds,json=durationSeconds,proto3" json:"duration_seconds,omitempty"`
+	QueuePairs      int32 `protobuf:"varint,5,opt,name=queue_pairs,json=queuePairs,proto3" json:"queue_pairs,omitempty"`
+	// The peer's rail IPv4 address for the client side; empty runs the server.
+	ServerAddr    string `protobuf:"bytes,6,opt,name=server_addr,json=serverAddr,proto3" json:"server_addr,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RailBandwidthRequest) Reset() {
+	*x = RailBandwidthRequest{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RailBandwidthRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RailBandwidthRequest) ProtoMessage() {}
+
+func (x *RailBandwidthRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RailBandwidthRequest.ProtoReflect.Descriptor instead.
+func (*RailBandwidthRequest) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *RailBandwidthRequest) GetRdmaDev() string {
+	if x != nil {
+		return x.RdmaDev
+	}
+	return ""
+}
+
+func (x *RailBandwidthRequest) GetGidIndex() int32 {
+	if x != nil {
+		return x.GidIndex
+	}
+	return 0
+}
+
+func (x *RailBandwidthRequest) GetTcpPort() int32 {
+	if x != nil {
+		return x.TcpPort
+	}
+	return 0
+}
+
+func (x *RailBandwidthRequest) GetDurationSeconds() int32 {
+	if x != nil {
+		return x.DurationSeconds
+	}
+	return 0
+}
+
+func (x *RailBandwidthRequest) GetQueuePairs() int32 {
+	if x != nil {
+		return x.QueuePairs
+	}
+	return 0
+}
+
+func (x *RailBandwidthRequest) GetServerAddr() string {
+	if x != nil {
+		return x.ServerAddr
+	}
+	return ""
+}
+
+type RailBandwidthResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Average Gb/s reported by ib_write_bw.
+	Gbps          float64 `protobuf:"fixed64,1,opt,name=gbps,proto3" json:"gbps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RailBandwidthResponse) Reset() {
+	*x = RailBandwidthResponse{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RailBandwidthResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RailBandwidthResponse) ProtoMessage() {}
+
+func (x *RailBandwidthResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RailBandwidthResponse.ProtoReflect.Descriptor instead.
+func (*RailBandwidthResponse) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *RailBandwidthResponse) GetGbps() float64 {
+	if x != nil {
+		return x.Gbps
+	}
+	return 0
+}
+
 var File_oaf_node_v1_node_proto protoreflect.FileDescriptor
 
 const file_oaf_node_v1_node_proto_rawDesc = "" +
@@ -1186,7 +1318,18 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\x03Gid\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x05R\x05index\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x10\n" +
-	"\x03gid\x18\x03 \x01(\tR\x03gid2\xb3\x04\n" +
+	"\x03gid\x18\x03 \x01(\tR\x03gid\"\xd6\x01\n" +
+	"\x14RailBandwidthRequest\x12\x19\n" +
+	"\brdma_dev\x18\x01 \x01(\tR\ardmaDev\x12\x1b\n" +
+	"\tgid_index\x18\x02 \x01(\x05R\bgidIndex\x12\x19\n" +
+	"\btcp_port\x18\x03 \x01(\x05R\atcpPort\x12)\n" +
+	"\x10duration_seconds\x18\x04 \x01(\x05R\x0fdurationSeconds\x12\x1f\n" +
+	"\vqueue_pairs\x18\x05 \x01(\x05R\n" +
+	"queuePairs\x12\x1f\n" +
+	"\vserver_addr\x18\x06 \x01(\tR\n" +
+	"serverAddr\"+\n" +
+	"\x15RailBandwidthResponse\x12\x12\n" +
+	"\x04gbps\x18\x01 \x01(\x01R\x04gbps2\x8b\x05\n" +
 	"\vNodeService\x12;\n" +
 	"\x04Info\x12\x18.oaf.node.v1.InfoRequest\x1a\x19.oaf.node.v1.InfoResponse\x12J\n" +
 	"\tPreflight\x12\x1d.oaf.node.v1.PreflightRequest\x1a\x1e.oaf.node.v1.PreflightResponse\x12S\n" +
@@ -1194,7 +1337,8 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\rRemoveProject\x12!.oaf.node.v1.RemoveProjectRequest\x1a\".oaf.node.v1.RemoveProjectResponse\x12V\n" +
 	"\rProjectStatus\x12!.oaf.node.v1.ProjectStatusRequest\x1a\".oaf.node.v1.ProjectStatusResponse\x12S\n" +
 	"\fListProjects\x12 .oaf.node.v1.ListProjectsRequest\x1a!.oaf.node.v1.ListProjectsResponse\x12A\n" +
-	"\x06Fabric\x12\x1a.oaf.node.v1.FabricRequest\x1a\x1b.oaf.node.v1.FabricResponseB\xa3\x01\n" +
+	"\x06Fabric\x12\x1a.oaf.node.v1.FabricRequest\x1a\x1b.oaf.node.v1.FabricResponse\x12V\n" +
+	"\rRailBandwidth\x12!.oaf.node.v1.RailBandwidthRequest\x1a\".oaf.node.v1.RailBandwidthResponseB\xa3\x01\n" +
 	"\x0fcom.oaf.node.v1B\tNodeProtoP\x01Z7openagentfabric.dev/oaf/internal/gen/oaf/node/v1;nodev1\xa2\x02\x03ONX\xaa\x02\vOaf.Node.V1\xca\x02\vOaf\\Node\\V1\xe2\x02\x17Oaf\\Node\\V1\\GPBMetadata\xea\x02\rOaf::Node::V1b\x06proto3"
 
 var (
@@ -1209,7 +1353,7 @@ func file_oaf_node_v1_node_proto_rawDescGZIP() []byte {
 	return file_oaf_node_v1_node_proto_rawDescData
 }
 
-var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
+var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_oaf_node_v1_node_proto_goTypes = []any{
 	(*InfoRequest)(nil),           // 0: oaf.node.v1.InfoRequest
 	(*InfoResponse)(nil),          // 1: oaf.node.v1.InfoResponse
@@ -1231,6 +1375,8 @@ var file_oaf_node_v1_node_proto_goTypes = []any{
 	(*FabricPort)(nil),            // 17: oaf.node.v1.FabricPort
 	(*FabricNetdev)(nil),          // 18: oaf.node.v1.FabricNetdev
 	(*Gid)(nil),                   // 19: oaf.node.v1.Gid
+	(*RailBandwidthRequest)(nil),  // 20: oaf.node.v1.RailBandwidthRequest
+	(*RailBandwidthResponse)(nil), // 21: oaf.node.v1.RailBandwidthResponse
 }
 var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	4,  // 0: oaf.node.v1.PreflightResponse.results:type_name -> oaf.node.v1.CheckResult
@@ -1247,15 +1393,17 @@ var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	10, // 11: oaf.node.v1.NodeService.ProjectStatus:input_type -> oaf.node.v1.ProjectStatusRequest
 	13, // 12: oaf.node.v1.NodeService.ListProjects:input_type -> oaf.node.v1.ListProjectsRequest
 	15, // 13: oaf.node.v1.NodeService.Fabric:input_type -> oaf.node.v1.FabricRequest
-	1,  // 14: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
-	3,  // 15: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
-	7,  // 16: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
-	9,  // 17: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
-	11, // 18: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
-	14, // 19: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
-	16, // 20: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
+	20, // 14: oaf.node.v1.NodeService.RailBandwidth:input_type -> oaf.node.v1.RailBandwidthRequest
+	1,  // 15: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
+	3,  // 16: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
+	7,  // 17: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
+	9,  // 18: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
+	11, // 19: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
+	14, // 20: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
+	16, // 21: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
+	21, // 22: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
+	15, // [15:23] is the sub-list for method output_type
+	7,  // [7:15] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1272,7 +1420,7 @@ func file_oaf_node_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_oaf_node_v1_node_proto_rawDesc), len(file_oaf_node_v1_node_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   20,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

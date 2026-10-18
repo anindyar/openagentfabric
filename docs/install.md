@@ -52,14 +52,26 @@ The agent listens on port 7701 and accepts only the `oafd` certificate of this c
 only compose projects named `oaf-*` under `/var/lib/oaf/projects`, so it never touches other
 containers.
 
-## 5. Install
+## 5. Check the fabric
+
+Each link in `fabric.links` must already have an address on every rail (both ends in one subnet, MTU 9000);
+OAF does not assign them yet. Check the links and measure them (each rail alone, then both together):
 
 ```sh
-sudo oaf install           # preflight on every node, then deploy everything
+oaf fabric check                     # through the agents
+oaf fabric check --ssh spark-1=user@192.168.1.11 --ssh spark-2=user@192.168.1.12   # before the agents
+```
+
+The run loads each link for a few seconds. `oaf install` runs it too.
+
+## 6. Install
+
+```sh
+sudo oaf install           # preflight and fabric check on every node, then deploy everything
 oaf status                 # per-project health; models can take many minutes to load
 ```
 
-`oaf install` stops if any node fails preflight. Afterwards, change `cluster.yaml` and run
+`oaf install` stops if any node fails preflight or any link fails the fabric check. Afterwards, change `cluster.yaml` and run
 `oaf apply --dry-run` to see the plan, then `oaf apply`. Re-running with no changes only converges.
 Secrets are generated on the first apply into `/etc/oaf/secrets` (0600) and reach containers only
 through each project's `.env`.

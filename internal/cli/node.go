@@ -54,6 +54,7 @@ func newNodeServeCmd() *cobra.Command {
 				StateDir:         stateDir,
 				Compose:          node.Compose{Runner: hostexec.Local{}},
 				Inspect:          hostexec.Local{},
+				Bench:            hostexec.Local{},
 				PreflightOptions: preflight.Defaults,
 			}
 			hs := node.NewHTTPServer(listen, srv, tlsCfg)

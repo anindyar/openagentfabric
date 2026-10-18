@@ -5,7 +5,6 @@ import (
 	"maps"
 	"net/netip"
 	"path"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -229,81 +228,29 @@ func (r *renderer) railsOf(node string, end config.LinkEnd, subnets []string) (r
 	if !ok {
 		return rankNet{}, fmt.Errorf("no fabric discovery for node %s", node)
 	}
-	i := slices.IndexFunc(ports, func(p fabric.Port) bool { return p.Index == *end.Port })
-	if i < 0 {
-		return rankNet{}, fmt.Errorf("node %s has no QSFP port %d", node, *end.Port)
+	e, err := fabric.ResolveEnd(node, ports, *end.Port, subnets, r.Cluster.Spec.Fabric.RoCE.GIDIndex)
+	if err != nil {
+		return rankNet{}, err
 	}
-	port := ports[i]
-	if !port.Up() {
-		return rankNet{}, fmt.Errorf("port %d on %s has no carrier", port.Index, node)
-	}
-	var rn rankNet
-	for h, nd := range port.Halves {
-		var subnet netip.Prefix
-		if h < len(subnets) {
-			var err error
-			if subnet, err = netip.ParsePrefix(subnets[h]); err != nil {
-				return rankNet{}, fmt.Errorf("fabric subnet %q: %w", subnets[h], err)
+	ib := r.transport() == config.TransportIB
+	rn := rankNet{ip: e.Rails[0].Addr.Addr()}
+	for h, rail := range e.Rails {
+		if ib {
+			if rail.RDMADev == "" {
+				return rankNet{}, fmt.Errorf("%s on %s has no RDMA device", rail.Netdev, node)
+			}
+			if rail.GID < 0 {
+				return rankNet{}, fmt.Errorf("%s on %s: no RoCE v2 GID for %s", rail.Netdev, node, rail.Addr.Addr())
+			}
+			if h == 0 {
+				rn.gid = rail.GID
+			} else if rail.GID != rn.gid {
+				// NCCL takes one GID index for all HCAs.
+				return rankNet{}, fmt.Errorf("the rails of port %d on %s have different RoCE v2 GID indexes (%d, %d); set fabric.roce.gidIndex", e.Port, node, rn.gid, rail.GID)
 			}
 		}
-		ip, ok := railIP(nd, subnet)
-		if !ok {
-			return rankNet{}, fmt.Errorf("%s on %s has no IPv4 address%s; run fabric bring-up", nd.Name, node, inSubnet(subnet))
-		}
-		gid, err := r.gidFor(nd, ip)
-		if err != nil {
-			return rankNet{}, fmt.Errorf("%s on %s: %w", nd.Name, node, err)
-		}
-		if h == 0 {
-			rn.ip, rn.gid = ip, gid
-		} else if gid != rn.gid {
-			// NCCL takes one GID index for all HCAs.
-			return rankNet{}, fmt.Errorf("the rails of port %d on %s have different RoCE v2 GID indexes (%d, %d); set fabric.roce.gidIndex", port.Index, node, rn.gid, gid)
-		}
-		rn.netdevs = append(rn.netdevs, nd.Name)
-		if nd.RDMADev == "" && r.transport() == config.TransportIB {
-			return rankNet{}, fmt.Errorf("%s on %s has no RDMA device", nd.Name, node)
-		}
-		rn.rdma = append(rn.rdma, nd.RDMADev)
+		rn.netdevs = append(rn.netdevs, rail.Netdev)
+		rn.rdma = append(rn.rdma, rail.RDMADev)
 	}
 	return rn, nil
-}
-
-// railIP is the netdev's IPv4 address in subnet, or its first IPv4 address
-// when no subnet is given.
-func railIP(nd fabric.Netdev, subnet netip.Prefix) (netip.Addr, bool) {
-	for _, a := range nd.Addrs {
-		if a.Addr().Is4() && (!subnet.IsValid() || subnet.Contains(a.Addr())) {
-			return a.Addr(), true
-		}
-	}
-	return netip.Addr{}, false
-}
-
-func inSubnet(p netip.Prefix) string {
-	if p.IsValid() {
-		return " in " + p.String()
-	}
-	return ""
-}
-
-// gidFor resolves fabric.roce.gidIndex. "auto" picks the RoCE v2 GID that
-// carries the rail address: the index moves as addresses are added.
-func (r *renderer) gidFor(nd fabric.Netdev, ip netip.Addr) (int, error) {
-	g := r.Cluster.Spec.Fabric.RoCE.GIDIndex
-	if g != "" && g != "auto" {
-		n, err := strconv.Atoi(g)
-		if err != nil {
-			return 0, fmt.Errorf("fabric.roce.gidIndex %q: %w", g, err)
-		}
-		return n, nil
-	}
-	if r.transport() == config.TransportSocket {
-		return 0, nil
-	}
-	idx, ok := nd.RoCEv2GIDFor(ip)
-	if !ok {
-		return 0, fmt.Errorf("no RoCE v2 GID for %s", ip)
-	}
-	return idx, nil
 }

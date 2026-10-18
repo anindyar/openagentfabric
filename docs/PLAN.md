@@ -151,7 +151,12 @@ Each PR is small and has tests. **Exit criteria** are what I will demonstrate at
 3. `bundle/versions.yaml` format, plus pinning digests for agentgateway, vSR, vLLM and the observability stack.
 4. `oaf-node`: systemd unit, mTLS Connect server, `compose up/down/status` for a project. ✅ `oaf node serve`, `oaf pki init`. The agent only touches `oaf-*` compose projects under `/var/lib/oaf/projects`. Applies are atomic and idempotent.
 5. Preflight checks (each check is a unit with fake command runners in tests). ✅ `oaf preflight [--ssh user@host]`. It is read-only by construction (an allowlisted runner), and its tests replay a real capture from a busy DGX Spark. Landed before item 4 because it needs no agent.
-6. Fabric: cabling discovery, MTU and IPs, GID detection, `ib_write_bw` runner.
+6. Fabric: cabling discovery, MTU and IPs, GID detection, `ib_write_bw` runner. ◐ `oaf fabric check [--ssh node=user@host]`
+   verifies each link (carrier, MTU, a shared subnet per rail, the RoCE v2 GID of each rail address) and runs `ib_write_bw`
+   through the agents (`RailBandwidth`: B serves, A connects, each rail alone and then both together) against
+   `fabric.acceptance`. `install` runs it after preflight. Rail resolution is shared with the vLLM renderer. Measured on
+   two DGX Sparks (port 1, a free link): 111.6 Gb/s per rail and 196.0 Gb/s together. Remaining: assigning MTU and IPs on
+   free ports (persisted through the OS network config) and proposing `fabric.links` from cabling discovery.
 7. Renderers + golden tests: compose for each component. ✅ `internal/render`: per-node projects `node-exporter`, `gateway`
    (agentgateway), `langfuse` (web, worker, Postgres, ClickHouse, Valkey, SeaweedFS `weed mini`), `metrics` (Prometheus,
    Grafana) and `model-<name>` (vLLM; pairs run TP across the link with `--nnodes`/`--headless`, NCCL rails and GID from
@@ -164,7 +169,7 @@ Each PR is small and has tests. **Exit criteria** are what I will demonstrate at
 8. `oaf install` / `oaf apply --dry-run` / `oaf status` / `oaf uninstall`. ✅ `internal/reconcile` plans through the agents
    (`ApplyProject` dry run + `ListProjects`; a dropped model is removed), applies in dependency order, and reports status.
    `--dry-run` generates no secrets. `install` = preflight on every agent, then apply. Agents are placed by hand for now
-   ([install.md](install.md)); agent bootstrap over SSH and fabric bring-up (item 6) are the remaining M1 work.
+   ([install.md](install.md)); agent bootstrap over SSH and fabric address assignment (item 6) are the remaining M1 work.
 - **Exit:** on the real pair, a clean install brings up every pinned component healthy; a re-run is a no-op;
   uninstall leaves the hosts clean; rails measure ≥ 85 Gbps each.
 

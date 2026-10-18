@@ -19,6 +19,10 @@ service NodeService {
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
   // Fabric reports the QSFP ports (read-only discovery).
   rpc Fabric(FabricRequest) returns (FabricResponse);
+  // RailBandwidth runs one side of an ib_write_bw test on a local rail. The
+  // server side waits for one client; the client retries until the server
+  // listens. Both block until the test ends.
+  rpc RailBandwidth(RailBandwidthRequest) returns (RailBandwidthResponse);
 }
 
 message InfoRequest {}
@@ -132,4 +136,21 @@ message Gid {
   int32 index = 1;
   string type = 2;
   string gid = 3;
+}
+
+message RailBandwidthRequest {
+  // A local RDMA device of a QSFP port, e.g. rocep1s0f1.
+  string rdma_dev = 1;
+  int32 gid_index = 2;
+  // ib_write_bw exchange port, 18515–18614.
+  int32 tcp_port = 3;
+  int32 duration_seconds = 4;
+  int32 queue_pairs = 5;
+  // The peer's rail IPv4 address for the client side; empty runs the server.
+  string server_addr = 6;
+}
+
+message RailBandwidthResponse {
+  // Average Gb/s reported by ib_write_bw.
+  double gbps = 1;
 }

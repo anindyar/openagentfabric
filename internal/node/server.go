@@ -7,10 +7,13 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
+	"time"
 
 	"connectrpc.com/connect/v2"
 
@@ -34,6 +37,8 @@ type Server struct {
 	Inspect hostexec.Runner
 	// Preflight defaults.
 	PreflightOptions preflight.Options
+	// Bench runs ib_write_bw for RailBandwidth; nil disables it.
+	Bench hostexec.Runner
 
 	mu sync.Mutex // serialises project changes
 }
@@ -181,4 +186,56 @@ func (s *Server) Fabric(ctx context.Context, _ *nodev1.FabricRequest) (*nodev1.F
 		return nil, connect.NewError(connect.CodeInternal, "fabric discovery: "+err.Error())
 	}
 	return &nodev1.FabricResponse{Ports: FabricToProto(ports)}, nil
+}
+
+// Bandwidth test timing: how long a client retries while its server starts,
+// and how long a server waits for its client beyond the test itself.
+const (
+	benchConnectWithin = 30 * time.Second
+	benchServerWait    = time.Minute
+)
+
+// RailBandwidth implements NodeService. Only RDMA devices of this node's
+// QSFP ports are accepted, and every argument is bounded.
+func (s *Server) RailBandwidth(ctx context.Context, req *nodev1.RailBandwidthRequest) (*nodev1.RailBandwidthResponse, error) {
+	if s.Bench == nil {
+		return nil, connect.NewError(connect.CodeUnimplemented, "this agent does not run bandwidth tests")
+	}
+	t := fabric.BandwidthTest{
+		RDMADev:       req.GetRdmaDev(),
+		GID:           int(req.GetGidIndex()),
+		Port:          int(req.GetTcpPort()),
+		Duration:      time.Duration(req.GetDurationSeconds()) * time.Second,
+		QPS:           int(req.GetQueuePairs()),
+		ConnectWithin: benchConnectWithin,
+	}
+	if a := req.GetServerAddr(); a != "" {
+		ip, err := netip.ParseAddr(a)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, "server_addr: "+err.Error())
+		}
+		t.Server = ip
+	}
+	if err := t.Validate(); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err.Error())
+	}
+	ports, err := fabric.Discover(ctx, hostexec.ReadOnly{Inner: s.Inspect})
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, "fabric discovery: "+err.Error())
+	}
+	if !slices.ContainsFunc(ports, func(p fabric.Port) bool {
+		return slices.ContainsFunc(p.Halves, func(n fabric.Netdev) bool { return n.RDMADev == t.RDMADev })
+	}) {
+		return nil, connect.NewError(connect.CodeInvalidArgument, t.RDMADev+" is not an RDMA device of a QSFP port on this node")
+	}
+	if !t.Server.IsValid() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, t.Duration+benchServerWait)
+		defer cancel()
+	}
+	gbps, err := fabric.RunBandwidth(ctx, s.Bench, t)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeUnavailable, err.Error())
+	}
+	return &nodev1.RailBandwidthResponse{Gbps: gbps}, nil
 }
