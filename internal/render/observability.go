@@ -67,7 +67,7 @@ func (r *renderer) langfuse(n config.Node) (Project, error) {
 
 	// noeviction: Langfuse keeps its queues in Valkey and must not lose jobs.
 	valkey := newService(img["valkey"])
-	valkey.Command = []string{"valkey-server", "--requirepass", vkPass, "--maxmemory-policy", "noeviction", "--appendonly", "yes"}
+	valkey.Command = []string{"valkey-server", "--requirepass", vkPass, "--maxmemory", strconv.Itoa(valkeyMaxMemoryMiB) + "mb", "--maxmemory-policy", "noeviction", "--appendonly", "yes"}
 	valkey.Environment = map[string]string{"REDISCLI_AUTH": vkPass}
 	valkey.Volumes = []string{"valkey-data:/data"}
 	valkey.Healthcheck = &healthcheck{Test: []string{"CMD-SHELL", "valkey-cli ping | grep -q PONG"}, Interval: "5s", Timeout: "5s", Retries: 20}
@@ -297,6 +297,7 @@ func (r *renderer) nodeExporter(n config.Node) (Project, error) {
 
 // finish adds compose.yaml and, if the project uses secrets, .env.
 func finish(p Project, bundleVersion string, cf *composeFile, env *envFile) (Project, error) {
+	limitMemory(cf.Services)
 	f, err := composeFileOf(bundleVersion, cf)
 	if err != nil {
 		return p, err

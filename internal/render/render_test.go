@@ -350,3 +350,33 @@ func fileOf(t *testing.T, in Input, node, project, path string) []byte {
 	t.Fatalf("no %s/%s/%s rendered", node, project, path)
 	return nil
 }
+
+// TestMemoryLimits: every stack container is capped, vLLM is not, and the
+// whole stack fits in 8 GiB.
+func TestMemoryLimits(t *testing.T) {
+	total := 0
+	for _, mib := range memoryLimitsMiB {
+		total += mib
+	}
+	if total > 8*1024 {
+		t.Fatalf("stack memory limits add up to %d MiB", total)
+	}
+	in := pairInput(t)
+	for _, p := range mustRender(t, in) {
+		var cf composeFile
+		if err := yaml.Unmarshal(fileOf(t, in, p.Node, p.Name, "compose.yaml"), &cf); err != nil {
+			t.Fatal(err)
+		}
+		for name, s := range cf.Services {
+			if name == "vllm" {
+				if s.MemLimit != "" {
+					t.Errorf("%s/%s: vLLM must not get a cgroup limit (unified memory is sized by --gpu-memory-utilization)", p.Node, p.Name)
+				}
+				continue
+			}
+			if s.MemLimit == "" || s.MemswapLimit != s.MemLimit {
+				t.Errorf("%s/%s/%s: no memory limit (add it to memoryLimitsMiB)", p.Node, p.Name, name)
+			}
+		}
+	}
+}

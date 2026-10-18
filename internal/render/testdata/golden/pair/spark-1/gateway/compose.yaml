@@ -16,6 +16,8 @@ services:
       - 15021:15021
     volumes:
       - ./config.yaml:/config/config.yaml:ro
+    mem_limit: 256m
+    memswap_limit: 256m
     logging:
       driver: json-file
       options:

@@ -24,6 +24,8 @@ services:
     depends_on:
       prometheus:
         condition: service_healthy
+    mem_limit: 512m
+    memswap_limit: 512m
     logging:
       driver: json-file
       options:
@@ -48,6 +50,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    mem_limit: 1024m
+    memswap_limit: 1024m
     logging:
       driver: json-file
       options:

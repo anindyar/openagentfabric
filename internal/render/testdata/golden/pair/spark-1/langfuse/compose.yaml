@@ -20,6 +20,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    mem_limit: 2048m
+    memswap_limit: 2048m
     logging:
       driver: json-file
       options:
@@ -87,6 +89,8 @@ services:
       timeout: 5s
       retries: 30
       start_period: 60s
+    mem_limit: 1024m
+    memswap_limit: 1024m
     logging:
       driver: json-file
       options:
@@ -132,6 +136,8 @@ services:
         condition: service_healthy
       valkey:
         condition: service_healthy
+    mem_limit: 1024m
+    memswap_limit: 1024m
     logging:
       driver: json-file
       options:
@@ -155,6 +161,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    mem_limit: 512m
+    memswap_limit: 512m
     logging:
       driver: json-file
       options:
@@ -180,6 +188,8 @@ services:
       timeout: 5s
       retries: 30
       start_period: 10s
+    mem_limit: 512m
+    memswap_limit: 512m
     logging:
       driver: json-file
       options:
@@ -192,6 +202,8 @@ services:
       - valkey-server
       - --requirepass
       - ${VALKEY_PASSWORD:?run oaf apply to regenerate .env}
+      - --maxmemory
+      - 192mb
       - --maxmemory-policy
       - noeviction
       - --appendonly
@@ -207,6 +219,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    mem_limit: 256m
+    memswap_limit: 256m
     logging:
       driver: json-file
       options:

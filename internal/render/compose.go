@@ -35,6 +35,8 @@ type service struct {
 	DependsOn       map[string]dependency `yaml:"depends_on,omitempty"`
 	Healthcheck     *healthcheck          `yaml:"healthcheck,omitempty"`
 	StopGracePeriod string                `yaml:"stop_grace_period,omitempty"`
+	MemLimit        string                `yaml:"mem_limit,omitempty"`
+	MemswapLimit    string                `yaml:"memswap_limit,omitempty"`
 	Logging         *logging              `yaml:"logging,omitempty"`
 }
 
@@ -62,6 +64,38 @@ func newService(image string) *service {
 		Image:   image,
 		Restart: "unless-stopped",
 		Logging: &logging{Driver: "json-file", Options: map[string]string{"max-size": "50m", "max-file": "3"}},
+	}
+}
+
+// memoryLimitsMiB caps every stack container. GB10 memory is unified, so
+// the stack lives in what the models leave free. Without a cgroup limit, a
+// runaway container would drive the kernel's OOM killer toward the largest
+// process, which is a vLLM; with one, only that container is killed and
+// restarted. vLLM is sized by --gpu-memory-utilization instead and has no
+// entry. The sum stays under 8 GiB (TestMemoryLimits).
+var memoryLimitsMiB = map[string]int{
+	"postgres":        512,
+	"clickhouse":      2048, // ClickHouse sizes its caches to 90% of this
+	"valkey":          256,
+	"seaweedfs":       512,
+	"langfuse-web":    1024,
+	"langfuse-worker": 1024,
+	"prometheus":      1024,
+	"grafana":         512,
+	"agentgateway":    256,
+	"node-exporter":   64,
+}
+
+// valkeyMaxMemoryMiB keeps Valkey's data under its container limit: with
+// noeviction, writes fail cleanly instead of the container being killed.
+const valkeyMaxMemoryMiB = 192
+
+func limitMemory(services map[string]*service) {
+	for name, s := range services {
+		if mib, ok := memoryLimitsMiB[name]; ok {
+			s.MemLimit = fmt.Sprintf("%dm", mib)
+			s.MemswapLimit = s.MemLimit // no swap on top
+		}
 	}
 }
 
