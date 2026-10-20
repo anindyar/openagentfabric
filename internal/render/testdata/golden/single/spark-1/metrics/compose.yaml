@@ -34,10 +34,17 @@ services:
   prometheus:
     image: docker.io/prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - umask 077 && printf %s "$$VLLM_API_KEY" > /prometheus/.vllm-api-key && exec /bin/prometheus "$$@"
+      - prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=15d
+    environment:
+      VLLM_API_KEY: ${VLLM_API_KEY:?run oaf apply to regenerate .env}
     ports:
       - 9090:9090
     volumes:

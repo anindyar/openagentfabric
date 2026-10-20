@@ -338,7 +338,7 @@ if $with_model; then
 	start=$(date +%s.%N)
 	resp=$(curl -fsS "http://127.0.0.1:4000/v1/chat/completions" -H "Authorization: Bearer $key" \
 		-H 'Content-Type: application/json' \
-		-d "{\"model\":\"$DEPLOYMENT\",\"max_tokens\":512,\"messages\":[{\"role\":\"user\",\"content\":\"Write a haiku about a small GPU cluster.\"}]}")
+		-d "{\"model\":\"$DEPLOYMENT\",\"max_tokens\":256,\"chat_template_kwargs\":{\"enable_thinking\":false},\"messages\":[{\"role\":\"user\",\"content\":\"Write a haiku about a small GPU cluster.\"}]}")
 	end=$(date +%s.%N)
 	python3 - "$resp" "$start" "$end" <<'PY'
 import json, sys
@@ -346,7 +346,7 @@ r = json.loads(sys.argv[1]); secs = float(sys.argv[3]) - float(sys.argv[2])
 n = r.get("usage", {}).get("completion_tokens", 0)
 print(f"    POST /v1/chat/completions: {n} tokens in {secs:.1f}s ({n/secs:.1f} tok/s end to end)")
 m = r["choices"][0]["message"]
-text = (m.get("content") or "").strip() or "(only reasoning within the token limit)"
+text = (m.get("content") or "").strip() or "(no text: the reply was all reasoning)"
 print("    " + text.replace("\n", "\n    "))
 PY
 fi

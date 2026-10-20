@@ -24,6 +24,9 @@ scrape_configs:
         labels:
           node: spark-1
   - job_name: vllm
+    authorization:
+      type: Bearer
+      credentials_file: /prometheus/.vllm-api-key
     static_configs:
       - targets:
           - 192.168.1.11:8000

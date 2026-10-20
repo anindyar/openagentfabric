@@ -29,6 +29,7 @@ type service struct {
 	Devices         []string              `yaml:"devices,omitempty"`
 	Ulimits         map[string]int        `yaml:"ulimits,omitempty"`
 	SecurityOpt     []string              `yaml:"security_opt,omitempty"`
+	Entrypoint      []string              `yaml:"entrypoint,omitempty"`
 	Command         []string              `yaml:"command,omitempty"`
 	Environment     map[string]string     `yaml:"environment,omitempty"`
 	Ports           []string              `yaml:"ports,omitempty"`

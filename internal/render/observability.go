@@ -188,6 +188,15 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 	}
 	prom.Ports = []string{portMap(config.PortPrometheus, 9090)}
 	prom.Volumes = []string{"./prometheus.yml:/etc/prometheus/prometheus.yml:ro", "prometheus-data:/prometheus"}
+	if r.hasModels() {
+		key, err := r.secret(SecretVLLMAPIKey)
+		if err != nil {
+			return p, err
+		}
+		prom.Environment = map[string]string{"VLLM_API_KEY": env.ref("VLLM_API_KEY", key)}
+		// $$ reaches the shell as $: compose must not interpolate these.
+		prom.Entrypoint = []string{"/bin/sh", "-c", `umask 077 && printf %s "$$VLLM_API_KEY" > ` + vllmKeyFile + ` && exec /bin/prometheus "$$@"`, "prometheus"}
+	}
 	prom.Healthcheck = &healthcheck{Test: []string{"CMD-SHELL", "wget -q --spider http://127.0.0.1:9090/-/healthy || exit 1"}, Interval: "10s", Timeout: "5s", Retries: 10}
 
 	graf := newService(grafImg)
@@ -235,8 +244,20 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 type scrapeConfig struct {
 	JobName       string         `yaml:"job_name"`
 	MetricsPath   string         `yaml:"metrics_path,omitempty"`
+	Authorization *authorization `yaml:"authorization,omitempty"`
 	StaticConfigs []staticConfig `yaml:"static_configs"`
 }
+
+type authorization struct {
+	Type            string `yaml:"type"`
+	CredentialsFile string `yaml:"credentials_file"`
+}
+
+// vllmKeyFile is where Prometheus finds the vLLM API key, which also guards
+// vLLM's /metrics. The entrypoint writes it from the environment (.env), so
+// the key is in no rendered file. /prometheus is the one path the image's
+// user can write.
+const vllmKeyFile = "/prometheus/.vllm-api-key"
 
 type staticConfig struct {
 	Targets []string          `yaml:"targets"`
@@ -254,7 +275,7 @@ func (r *renderer) prometheusConfig(interval string) map[string]any {
 			gw.StaticConfigs = append(gw.StaticConfigs, staticConfig{Targets: []string{hostPort(n.Address, config.PortGatewayStats)}, Labels: map[string]string{"node": n.Name}})
 		}
 	}
-	vllm := scrapeConfig{JobName: "vllm"}
+	vllm := scrapeConfig{JobName: "vllm", Authorization: &authorization{Type: "Bearer", CredentialsFile: vllmKeyFile}}
 	for i, d := range r.Cluster.Spec.Models {
 		if !d.IsEnabled() {
 			continue
@@ -277,6 +298,15 @@ func (r *renderer) prometheusConfig(interval string) map[string]any {
 		"global":         map[string]string{"scrape_interval": interval, "evaluation_interval": interval},
 		"scrape_configs": jobs,
 	}
+}
+
+func (r *renderer) hasModels() bool {
+	for _, d := range r.Cluster.Spec.Models {
+		if d.IsEnabled() {
+			return true
+		}
+	}
+	return false
 }
 
 // nodeExporter runs on every node, on the host network, reading the host's
