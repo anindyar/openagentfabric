@@ -1,10 +1,13 @@
 package render
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"maps"
 	"net"
 	"strconv"
+	"strings"
 
 	"openagentfabric.dev/oaf/internal/config"
 )
@@ -236,9 +239,7 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 	if err != nil {
 		return p, err
 	}
-	p, err = finish(p, v, cf, env)
-	p.Files = append(p.Files, promCfg, ds)
-	return p, err
+	return finish(p, v, cf, env, promCfg, ds)
 }
 
 type scrapeConfig struct {
@@ -325,9 +326,11 @@ func (r *renderer) nodeExporter(n config.Node) (Project, error) {
 	return finish(p, r.Versions.Version, &composeFile{Services: map[string]*service{"node-exporter": s}}, newEnvFile())
 }
 
-// finish adds compose.yaml and, if the project uses secrets, .env.
-func finish(p Project, bundleVersion string, cf *composeFile, env *envFile) (Project, error) {
+// finish adds compose.yaml, the config files the services mount and, if the
+// project uses secrets, .env.
+func finish(p Project, bundleVersion string, cf *composeFile, env *envFile, configs ...File) (Project, error) {
 	limitMemory(cf.Services)
+	labelConfigHash(cf.Services, configs)
 	f, err := composeFileOf(bundleVersion, cf)
 	if err != nil {
 		return p, err
@@ -340,7 +343,37 @@ func finish(p Project, bundleVersion string, cf *composeFile, env *envFile) (Pro
 		}
 		p.Files = append(p.Files, e)
 	}
+	p.Files = append(p.Files, configs...)
 	return p, nil
+}
+
+// ConfigHashLabel carries a hash of the config files a container mounts.
+// compose recreates a container only when its own definition changes, and
+// a changed mounted file is not one. agentgateway hot-reloads its config but
+// keeps the tracing exporter it started with, and Prometheus reloads only on
+// SIGHUP, so a changed file must restart the container: the label does that.
+const ConfigHashLabel = "dev.openagentfabric.config-hash"
+
+func labelConfigHash(services map[string]*service, configs []File) {
+	for _, s := range services {
+		h := sha256.New()
+		n := 0
+		for _, f := range configs {
+			for _, v := range s.Volumes {
+				if strings.HasPrefix(v, "./"+f.Path+":") {
+					fmt.Fprintf(h, "%s\x00%d\x00", f.Path, len(f.Content))
+					h.Write(f.Content)
+					n++
+				}
+			}
+		}
+		if n > 0 {
+			if s.Labels == nil {
+				s.Labels = map[string]string{}
+			}
+			s.Labels[ConfigHashLabel] = hex.EncodeToString(h.Sum(nil))[:16]
+		}
+	}
 }
 
 // nodeHeap sizes a Node.js service's V8 heap to 75% of its memory limit.

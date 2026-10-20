@@ -3,6 +3,8 @@ services:
   grafana:
     image: docker.io/grafana/grafana:13.2.4@sha256:dbbc38ea21103cefb50396340cd88afec779c7e070b0a7bf5a75b4ce46651d3f
     restart: unless-stopped
+    labels:
+      dev.openagentfabric.config-hash: ed1ce824c8a6becc
     environment:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: "false"
@@ -34,6 +36,8 @@ services:
   prometheus:
     image: docker.io/prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     restart: unless-stopped
+    labels:
+      dev.openagentfabric.config-hash: af7aab609fc9bc0d
     entrypoint:
       - /bin/sh
       - -c

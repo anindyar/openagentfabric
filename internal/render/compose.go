@@ -20,6 +20,7 @@ type composeFile struct {
 type service struct {
 	Image           string                `yaml:"image"`
 	Restart         string                `yaml:"restart,omitempty"`
+	Labels          map[string]string     `yaml:"labels,omitempty"`
 	User            string                `yaml:"user,omitempty"`
 	NetworkMode     string                `yaml:"network_mode,omitempty"`
 	PID             string                `yaml:"pid,omitempty"`

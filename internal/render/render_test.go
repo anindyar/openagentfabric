@@ -438,3 +438,34 @@ func TestMemoryLimits(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigChangeRecreatesContainer: a change to a mounted config file must
+// change the compose file, or compose leaves the old container running.
+func TestConfigChangeRecreatesContainer(t *testing.T) {
+	label := func(in Input, project, service string) string {
+		for _, p := range mustRender(t, in) {
+			if p.Name == project {
+				var cf composeFile
+				if err := yaml.Unmarshal(p.Files[0].Content, &cf); err != nil {
+					t.Fatal(err)
+				}
+				return cf.Services[service].Labels[ConfigHashLabel]
+			}
+		}
+		t.Fatalf("no project %s", project)
+		return ""
+	}
+	in := singleInput(t)
+	gw, prom, graf := label(in, "gateway", "agentgateway"), label(in, "metrics", "prometheus"), label(in, "metrics", "grafana")
+	if gw == "" || prom == "" || graf == "" {
+		t.Fatalf("config hash labels missing: gateway %q prometheus %q grafana %q", gw, prom, graf)
+	}
+	in.Cluster.Spec.Routing.Gateway.Port = 4100 // changes config.yaml only
+	in.Cluster.Spec.Observability.Metrics.ScrapeInterval = "30s"
+	if label(in, "gateway", "agentgateway") == gw || label(in, "metrics", "prometheus") == prom {
+		t.Fatal("a config file change did not change the config hash label")
+	}
+	if label(in, "metrics", "grafana") != graf {
+		t.Fatal("grafana's label changed though its files did not")
+	}
+}

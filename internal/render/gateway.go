@@ -88,8 +88,7 @@ func (r *renderer) gateway(n config.Node) (Project, error) {
 	if err != nil {
 		return p, err
 	}
-	p, err = finish(p, v, &composeFile{Services: map[string]*service{"agentgateway": s}}, env)
-	p.Files = append(p.Files, cfgFile)
+	p, err = finish(p, v, &composeFile{Services: map[string]*service{"agentgateway": s}}, env, cfgFile)
 	return p, err
 }
 
