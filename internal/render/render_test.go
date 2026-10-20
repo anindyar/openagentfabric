@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"flag"
 	"io/fs"
 	"net/netip"
@@ -467,5 +468,48 @@ func TestConfigChangeRecreatesContainer(t *testing.T) {
 	}
 	if label(in, "metrics", "grafana") != graf {
 		t.Fatal("grafana's label changed though its files did not")
+	}
+}
+
+func TestDashboards(t *testing.T) {
+	files, err := dashboardFiles("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uids := map[string]bool{}
+	for _, f := range files[1:] {
+		var d struct {
+			UID    string `json:"uid"`
+			Panels []struct {
+				Type    string         `json:"type"`
+				GridPos map[string]int `json:"gridPos"`
+				Targets []struct {
+					Expr string `json:"expr"`
+				} `json:"targets"`
+			} `json:"panels"`
+		}
+		if err := json.Unmarshal(f.Content, &d); err != nil {
+			t.Fatalf("%s: %v", f.Path, err)
+		}
+		if uids[d.UID] || f.Path != "grafana/dashboards/"+d.UID+".json" {
+			t.Errorf("%s: uid %q duplicated or not matching the file name", f.Path, d.UID)
+		}
+		uids[d.UID] = true
+		for _, p := range d.Panels {
+			if p.GridPos["x"]+p.GridPos["w"] > 24 {
+				t.Errorf("%s: panel overflows the grid: %v", f.Path, p.GridPos)
+			}
+			if p.Type != "row" && len(p.Targets) == 0 {
+				t.Errorf("%s: panel without a query", f.Path)
+			}
+			for _, tg := range p.Targets {
+				if strings.Count(tg.Expr, "(") != strings.Count(tg.Expr, ")") || strings.Count(tg.Expr, "{") != strings.Count(tg.Expr, "}") {
+					t.Errorf("%s: unbalanced query %s", f.Path, tg.Expr)
+				}
+			}
+		}
+	}
+	if !uids[strings.TrimSuffix(homeDashboard, ".json")] {
+		t.Errorf("home dashboard %s is not rendered", homeDashboard)
 	}
 }

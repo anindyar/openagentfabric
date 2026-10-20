@@ -371,7 +371,7 @@ has a memory limit and bounded logs (3 × 50 MB), and restarts automatically aft
 |---|---|---|
 | OpenAI-compatible API | `http://<gateway>:4000/v1` | `Authorization: Bearer <gateway key>` |
 | Langfuse | `http://<observability>:3000` | `admin@oaf.local` / `langfuse-admin-password` |
-| Grafana | `http://<observability>:3001` | `admin` / `grafana-admin-password` |
+| Grafana | `http://<observability>:3001`: opens on the **OAF overview** dashboard; folder **OAF** also has models (vLLM), gateway and nodes | `admin` / `grafana-admin-password` |
 | Prometheus | `http://<observability>:9090` | none (keep it on a trusted network) |
 | agentgateway admin UI | `http://127.0.0.1:15000` on the gateway node only | none (SSH tunnel: `ssh -L 15000:127.0.0.1:15000 <gateway>`) |
 

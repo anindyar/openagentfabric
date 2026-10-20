@@ -204,21 +204,28 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 
 	graf := newService(grafImg)
 	graf.Environment = map[string]string{
-		"GF_SECURITY_ADMIN_USER":              "admin",
-		"GF_SECURITY_ADMIN_PASSWORD":          env.ref("GRAFANA_ADMIN_PASSWORD", gpass),
-		"GF_SECURITY_ALLOW_EMBEDDING":         "true", // the OAF UI embeds dashboards (M4)
-		"GF_USERS_ALLOW_SIGN_UP":              "false",
-		"GF_ANALYTICS_REPORTING_ENABLED":      "false",
-		"GF_ANALYTICS_CHECK_FOR_UPDATES":      "false",
-		"GF_PLUGINS_PREINSTALL_DISABLED":      "true", // works air-gapped
-		"GF_SERVER_ROOT_URL":                  "http://" + hostPort(n.Address, config.PortGrafana) + "/",
-		"GF_AUTH_ANONYMOUS_ENABLED":           "false",
-		"GF_SECURITY_DISABLE_GRAVATAR":        "true",
-		"GF_NEWS_NEWS_FEED_ENABLED":           "false",
-		"GF_ANALYTICS_FEEDBACK_LINKS_ENABLED": "false",
+		"GF_SECURITY_ADMIN_USER":                    "admin",
+		"GF_SECURITY_ADMIN_PASSWORD":                env.ref("GRAFANA_ADMIN_PASSWORD", gpass),
+		"GF_SECURITY_ALLOW_EMBEDDING":               "true", // the OAF UI embeds dashboards (M4)
+		"GF_USERS_ALLOW_SIGN_UP":                    "false",
+		"GF_ANALYTICS_REPORTING_ENABLED":            "false",
+		"GF_ANALYTICS_CHECK_FOR_UPDATES":            "false",
+		"GF_PLUGINS_PREINSTALL_DISABLED":            "true", // works air-gapped
+		"GF_SERVER_ROOT_URL":                        "http://" + hostPort(n.Address, config.PortGrafana) + "/",
+		"GF_AUTH_ANONYMOUS_ENABLED":                 "false",
+		"GF_SECURITY_DISABLE_GRAVATAR":              "true",
+		"GF_NEWS_NEWS_FEED_ENABLED":                 "false",
+		"GF_ANALYTICS_FEEDBACK_LINKS_ENABLED":       "false",
+		"GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH": dashboardsDir + "/" + homeDashboard,
 	}
 	graf.Ports = []string{portMap(config.PortGrafana, 3000)}
-	graf.Volumes = []string{"grafana-data:/var/lib/grafana", "./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/oaf.yaml:ro"}
+	graf.Volumes = []string{
+		"grafana-data:/var/lib/grafana",
+		"./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/oaf.yaml:ro",
+		"./grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/oaf.yaml:ro",
+		// Grafana rescans this directory, so dashboard edits need no restart.
+		"./grafana/dashboards:" + dashboardsDir + ":ro",
+	}
 	graf.DependsOn = healthy("prometheus")
 
 	cf := &composeFile{
@@ -239,7 +246,11 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 	if err != nil {
 		return p, err
 	}
-	return finish(p, v, cf, env, promCfg, ds)
+	dash, err := dashboardFiles(v)
+	if err != nil {
+		return p, err
+	}
+	return finish(p, v, cf, env, append([]File{promCfg, ds}, dash...)...)
 }
 
 type scrapeConfig struct {
