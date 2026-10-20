@@ -291,13 +291,31 @@ func preflightAll(ctx context.Context, out io.Writer, s *stack) error {
 			failed++
 			continue
 		}
-		_, _ = fmt.Fprintf(out, "%-5s %s (%s)\n", strings.ToUpper(resp.GetWorst()), n.Name, resp.GetHost())
+		// A single node uses no fabric: DGX OS powers the ConnectX ports down
+		// when no cable is plugged in, so their absence is not a failure.
+		single := s.cluster.Spec.Fabric.Topology == config.TopologySingle
+		worst := "pass"
+		var lines []string
 		for _, r := range resp.GetResults() {
-			if r.GetStatus() == "warn" || r.GetStatus() == "fail" {
-				_, _ = fmt.Fprintf(out, "      %-5s %-14s %s\n", strings.ToUpper(r.GetStatus()), r.GetId(), r.GetSummary())
+			st := r.GetStatus()
+			if single && r.GetId() == "fabric" && st != "pass" {
+				st = "skip"
+			}
+			switch {
+			case st == "fail":
+				worst = "fail"
+			case st == "warn" && worst == "pass":
+				worst = "warn"
+			}
+			if st != "pass" {
+				lines = append(lines, fmt.Sprintf("      %-5s %-14s %s", strings.ToUpper(st), r.GetId(), r.GetSummary()))
 			}
 		}
-		if resp.GetWorst() == "fail" {
+		_, _ = fmt.Fprintf(out, "%-5s %s (%s)\n", strings.ToUpper(worst), n.Name, resp.GetHost())
+		for _, l := range lines {
+			_, _ = fmt.Fprintln(out, l)
+		}
+		if worst == "fail" {
 			failed++
 		}
 	}

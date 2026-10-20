@@ -315,7 +315,7 @@ func checkFabric(ctx context.Context, e *env) Result {
 	}
 	e.ports = ports
 	if len(ports) == 0 {
-		return Result{Status: Fail, Summary: "no ConnectX (mlx5) QSFP ports found"}
+		return Result{Status: Fail, Summary: "no ConnectX (mlx5) QSFP ports found (DGX OS powers them down when no cable is plugged in at boot; a single-node cluster needs none)"}
 	}
 	res := Result{Status: Pass}
 	free := 0

@@ -229,10 +229,6 @@ fi
 oaf validate -f "$ETC/cluster.yaml" --catalog "$ETC/catalog/models.yaml"
 
 # ---------------------------------------------------------------------------
-step "Preflight (read-only)"
-sudo oaf preflight || die "preflight failed; fix the FAIL lines above and re-run"
-
-# ---------------------------------------------------------------------------
 step "Certificates ($PKI)"
 if sudo test -f "$PKI/ca.crt"; then
 	info "CA exists; keeping it"
@@ -309,7 +305,9 @@ PY
 fi
 
 # ---------------------------------------------------------------------------
-step "Install"
+step "Install (preflight, then deploy)"
+# Preflight runs inside install, through the agent, and knows the topology:
+# on a single node the absent QSFP fabric is skipped, not a failure.
 sudo oaf install -f "$ETC/cluster.yaml" --catalog "$ETC/catalog/models.yaml" --timeout 30m
 
 step "Waiting for every project to be healthy (up to $health_timeout min)"

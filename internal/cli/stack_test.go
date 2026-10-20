@@ -160,3 +160,44 @@ func TestInstallStopsOnFabricFailure(t *testing.T) {
 		t.Fatalf("--force should deploy anyway: %v\n%s", err, out)
 	}
 }
+
+// noQSFP replays the DGX Spark capture with the ConnectX ports gone, as on a
+// box that booted without QSFP cables (DGX OS powers the NIC down).
+type noQSFP struct{ hostexec.Replay }
+
+func (n noQSFP) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	if hostexec.CmdLine(name, args...) == "ls -1 /sys/class/net" {
+		return []byte("lo\n"), nil
+	}
+	return n.Replay.Run(ctx, name, args...)
+}
+
+func TestInstallSingleNodeWithoutQSFP(t *testing.T) {
+	docker := fakeCluster(t)
+	replay, err := hostexec.LoadReplay("../preflight/testdata/threeofnine.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent := &node.Server{StateDir: t.TempDir(), Compose: node.Compose{Runner: docker}, Inspect: noQSFP{replay}, PreflightOptions: preflight.Defaults}
+	dialNodes = func(*config.Cluster, string) (reconcile.Nodes, error) {
+		return reconcile.Nodes{"spark-1": agent, "spark-2": agent}, nil
+	}
+	dir := t.TempDir()
+	args := func(cluster string) []string {
+		return []string{"install", "-f", cluster, "--catalog", "../../examples/catalog.yaml", "--secrets-dir", filepath.Join(dir, "s")}
+	}
+
+	// A pair needs its ports: preflight fails.
+	out, err := runCLI(t, args("../../examples/cluster.pair.yaml")...)
+	if err == nil || !strings.Contains(err.Error(), "preflight failed") {
+		t.Fatalf("a pair without QSFP ports must fail preflight: %v\n%s", err, out)
+	}
+	// A single node does not: the fabric result is shown as skipped.
+	out, err = runCLI(t, args("../../examples/cluster.single.yaml")...)
+	if err != nil {
+		t.Fatalf("single-node install: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "SKIP  fabric") || strings.Contains(out, "FAIL") || docker.mutations() == 0 {
+		t.Fatalf("single-node install output:\n%s", out)
+	}
+}
