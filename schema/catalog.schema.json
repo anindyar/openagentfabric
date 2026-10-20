@@ -209,7 +209,9 @@
           "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
         },
         "engine": {
-          "const": "vllm",
+          "description": "The bundle component (bundle/versions.yaml) whose image serves this profile: `vllm` (upstream) or a pinned vLLM build such as `vllm-spark-b12x`.",
+          "type": "string",
+          "pattern": "^vllm(-[a-z0-9-]+)?$",
           "default": "vllm"
         },
         "nodes": {
@@ -252,8 +254,33 @@
             "type": "string"
           }
         },
+        "container": {
+          "$ref": "#/$defs/container"
+        },
         "baseline": {
           "$ref": "#/$defs/baseline"
+        }
+      }
+    },
+    "container": {
+      "description": "Container settings the engine image needs beyond OAF's defaults, taken from the image's documented run command.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ipc": { "enum": ["host"] },
+        "shmSize": { "type": "string", "pattern": "^[0-9]+[kmg]?b?$" },
+        "ulimits": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "securityOpt": {
+          "type": "array",
+          "items": { "enum": ["seccomp=unconfined", "apparmor=unconfined", "label=disable"] }
+        },
+        "caches": {
+          "description": "Absolute container paths kept in named volumes, so JIT and compile caches survive restarts and upgrades.",
+          "type": "array",
+          "items": { "type": "string", "pattern": "^/[A-Za-z0-9._/-]+$" }
         }
       }
     },

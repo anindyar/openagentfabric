@@ -346,7 +346,25 @@ type ServingProf struct {
 	Quantization         string            `yaml:"quantization,omitempty"`
 	Args                 []string          `yaml:"args,omitempty"`
 	Env                  map[string]string `yaml:"env,omitempty"`
+	Container            *Container        `yaml:"container,omitempty"`
 	Baseline             *Baseline         `yaml:"baseline,omitempty"`
+}
+
+// EngineComponent is the bundle component whose image serves the profile.
+func (p ServingProf) EngineComponent() string {
+	if p.Engine == "" {
+		return "vllm"
+	}
+	return p.Engine
+}
+
+// Container is what an engine image needs beyond OAF's container defaults.
+type Container struct {
+	IPC         string         `yaml:"ipc,omitempty"`
+	ShmSize     string         `yaml:"shmSize,omitempty"`
+	Ulimits     map[string]int `yaml:"ulimits,omitempty"`
+	SecurityOpt []string       `yaml:"securityOpt,omitempty"`
+	Caches      []string       `yaml:"caches,omitempty"`
 }
 
 // PP applies the schema default (1).

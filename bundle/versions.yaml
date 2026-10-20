@@ -45,6 +45,25 @@ components:
         - { name: NVIDIA CUDA Toolkit EULA, url: "https://docs.nvidia.com/cuda/eula/index.html" }
       acceptUrl: "https://docs.nvidia.com/cuda/eula/index.html"
 
+  # Community GB10 build of vLLM (b12x kernels, NVFP4 compressed scales). Models
+  # whose checkpoints upstream vLLM cannot load yet name it as their catalog
+  # engine, e.g. nvidia/Qwen3.8-Flash-Next-FP4-Local. The publisher tags only
+  # `latest`, so the pin is the digest; it is a single arm64 manifest, not an
+  # index. Same NVIDIA CUDA terms as the upstream image.
+  - name: vllm-spark-b12x
+    thirdParty: vLLM Spark build (eugr/spark-vllm-docker)
+    image: docker.io/eugr/spark-vllm-b12x:latest@sha256:03a956544e9f9b4b7ba91690469fbe7848bdbef29a7d2e0f5788368467bb3595
+    platforms: [linux/arm64]
+    upstream: { repo: eugr/spark-vllm-docker, ref: 303b4a29a6bd390428d363358964ad298dc20625 }
+    license:
+      spdx: MIT
+      file: LICENSE
+      sha256: 2bbd5f7fe8719e5de6b8376f277f9f6db7f9b9582fd9d364cc94178f81b6d279
+      includedTerms:
+        - { name: vLLM (Apache-2.0), url: "https://github.com/vllm-project/vllm/blob/main/LICENSE" }
+        - { name: NVIDIA CUDA Toolkit EULA, url: "https://docs.nvidia.com/cuda/eula/index.html" }
+      acceptUrl: "https://docs.nvidia.com/cuda/eula/index.html"
+
   # --- observability: Langfuse and its stores ----------------------------
   - name: langfuse-web
     thirdParty: Langfuse (web + worker)

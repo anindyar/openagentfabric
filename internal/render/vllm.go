@@ -33,16 +33,16 @@ func (r *renderer) models() ([]Project, error) {
 
 func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 	v := r.Versions.Version
-	img, err := r.image("vllm")
-	if err != nil {
-		return nil, err
-	}
 	m, ok := r.Catalog.Lookup(d.CatalogRef)
 	if !ok {
 		return nil, fmt.Errorf("no catalog entry %q", d.CatalogRef)
 	}
 	nodes := r.Cluster.PlacementNodes(d.Placement)
 	prof, err := config.Profile(d, m, len(nodes))
+	if err != nil {
+		return nil, err
+	}
+	img, err := r.image(prof.EngineComponent())
 	if err != nil {
 		return nil, err
 	}
@@ -134,13 +134,52 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 			s.Healthcheck = &healthcheck{Test: []string{"CMD", "python3", "-c", probe}, Interval: "30s", Timeout: "10s", Retries: 3, StartPeriod: "30m"}
 		}
 
-		p, err := finish(Project{Node: nodeName, Name: modelProjectName(d.Name)}, v, &composeFile{Services: map[string]*service{"vllm": s}}, env)
+		cf := &composeFile{Services: map[string]*service{"vllm": s}}
+		applyContainer(cf, s, prof.Container)
+		p, err := finish(Project{Node: nodeName, Name: modelProjectName(d.Name)}, v, cf, env)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// applyContainer adds what the engine image needs on top of OAF's defaults.
+// Caches become named volumes, so JIT and compile results survive restarts
+// (a cold b12x start autotunes for about ten minutes).
+func applyContainer(cf *composeFile, s *service, c *config.Container) {
+	if c == nil {
+		return
+	}
+	s.IPC = c.IPC
+	if c.ShmSize != "" {
+		s.ShmSize = c.ShmSize
+	}
+	if len(c.Ulimits) > 0 {
+		if s.Ulimits == nil {
+			s.Ulimits = map[string]int{}
+		}
+		maps.Copy(s.Ulimits, c.Ulimits)
+	}
+	s.SecurityOpt = c.SecurityOpt
+	for _, dir := range c.Caches {
+		name := cacheVolume(dir)
+		if cf.Volumes == nil {
+			cf.Volumes = map[string]map[string]string{}
+		}
+		cf.Volumes[name] = map[string]string{}
+		s.Volumes = append(s.Volumes, name+":"+dir)
+	}
+}
+
+// cacheVolume names the volume for a container path: /root/.cache/b12x →
+// cache-root-cache-b12x.
+func cacheVolume(dir string) string {
+	f := strings.FieldsFunc(dir, func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	})
+	return "cache-" + strings.Join(f, "-")
 }
 
 func modelsPath(n config.Node) string {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -87,9 +88,63 @@ func mustRender(t *testing.T, in Input) []Project {
 	return ps
 }
 
-func TestGoldenPair(t *testing.T) {
-	ps := mustRender(t, pairInput(t))
-	root := filepath.Join("testdata", "golden", "pair")
+func TestGoldenPair(t *testing.T) { checkGolden(t, "pair", mustRender(t, pairInput(t))) }
+
+func TestGoldenSingle(t *testing.T) { checkGolden(t, "single", mustRender(t, singleInput(t))) }
+
+func singleInput(t *testing.T) Input {
+	t.Helper()
+	in := pairInput(t)
+	c, err := config.LoadCluster("../../examples/cluster.single.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Cluster, in.Fabric = c, nil
+	return in
+}
+
+// TestSparkEngine checks that a catalog profile's engine and container
+// settings reach the model's compose file, and that the image's terms must be
+// accepted like the upstream vLLM image's.
+func TestSparkEngine(t *testing.T) {
+	in := singleInput(t)
+	var cf composeFile
+	for _, p := range mustRender(t, in) {
+		if p.Name == "model-qwen-flash" {
+			if err := yaml.Unmarshal(p.Files[0].Content, &cf); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	s := cf.Services["vllm"]
+	if s == nil {
+		t.Fatal("no model-qwen-flash project")
+	}
+	if !strings.HasPrefix(s.Image, "docker.io/eugr/spark-vllm-b12x:latest@sha256:") {
+		t.Errorf("image = %s", s.Image)
+	}
+	if s.IPC != "host" || s.ShmSize != "16g" || s.Ulimits["stack"] != 67108864 || s.Ulimits["memlock"] != -1 {
+		t.Errorf("container settings not applied: ipc=%q shm=%q ulimits=%v", s.IPC, s.ShmSize, s.Ulimits)
+	}
+	if strings.Join(s.SecurityOpt, ",") != "seccomp=unconfined,apparmor=unconfined" {
+		t.Errorf("security_opt = %v", s.SecurityOpt)
+	}
+	if !slices.Contains(s.Volumes, "cache-root-cache-b12x:/root/.cache/b12x") || cf.Volumes["cache-root-triton"] == nil {
+		t.Errorf("cache volumes missing: %v / %v", s.Volumes, cf.Volumes)
+	}
+	if !slices.Contains(s.Command, "--load-format") || s.Environment["B12X_DISK_BACKEND"] != "io_uring" {
+		t.Errorf("profile args/env missing")
+	}
+
+	in.Cluster.Spec.LicenseAcceptances = in.Cluster.Spec.LicenseAcceptances[1:]
+	if _, err := Render(in); err == nil || !strings.Contains(err.Error(), "image/vllm-spark-b12x") {
+		t.Fatalf("want an acceptance error for image/vllm-spark-b12x, got %v", err)
+	}
+}
+
+func checkGolden(t *testing.T, name string, ps []Project) {
+	t.Helper()
+	root := filepath.Join("testdata", "golden", name)
 	got := map[string][]byte{}
 	for _, p := range ps {
 		for _, f := range p.Files {

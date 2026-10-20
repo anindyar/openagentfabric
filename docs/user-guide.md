@@ -119,6 +119,40 @@ OAF never reconfigures a port that has addresses.
 Run the steps on the **control node** unless a step says otherwise. Commands that change the
 system need `sudo`.
 
+### One box: `scripts/spark-bootstrap.sh`
+For a single GB10 running the whole stack and one model, one script does every step below. On the
+new box:
+
+```sh
+git clone https://github.com/anindyar/openagentfabric && cd openagentfabric
+scripts/spark-bootstrap.sh --email you@example.com
+```
+
+It checks the host (aarch64, docker, compose, the NVIDIA CDI spec, disk), asks you to accept the
+licences, builds `oaf` (in a pinned Go container if the box has no Go), writes
+`/etc/oaf/cluster.yaml` with `topology: single`, runs preflight, creates the certificates, starts the
+node agent, pulls the engine image (~18 GB), downloads the weights (~95 GiB) to
+`/var/lib/oaf/models/qwen3.8-flash-next-fp4/`, runs `oaf install`, waits until `oaf status` is healthy
+and sends a test request through the gateway. A first run takes about 30–60 minutes, mostly the
+download and the model's first start (it autotunes kernels for about 10 minutes; the results are kept
+in volumes, so later starts are faster). Every step checks before it acts, so re-run it after a failure.
+
+| Option | Default | Use |
+|---|---|---|
+| `--util` | `0.75` | vLLM's share of unified memory. 0.75 keeps the full 262K context with ~800K tokens of KV cache and leaves about 22 GiB for other apps |
+| `--weights-from user@host:/path/` | Hugging Face | copy the weights from another box over SSH instead of downloading |
+| `--no-model` | | the stack only |
+| `--name`, `--address` | hostname, default-route address | the node name (a DNS label) and management address |
+| `--rewrite-config` | keep | replace an existing `/etc/oaf/cluster.yaml` |
+| `--accept-licences` | prompt | accept without the prompt (re-runs, automation) |
+
+The model is Qwen3.8 Flash-Next (NVIDIA NVFP4). Upstream vLLM cannot load its checkpoint yet, so the
+catalog serves it with the community GB10 build `eugr/spark-vllm-b12x`, pinned by digest in
+`bundle/versions.yaml` (`engine: vllm-spark-b12x` in the catalog profile). Other workloads on the same
+box should get compose `mem_limit` caps so they cannot push vLLM into the OOM killer.
+
+For pairs and triangles, follow the steps below.
+
 ### Step 1: get the binary
 Build it on any machine with Go 1.27 (the result is one static arm64 file):
 
@@ -397,6 +431,11 @@ Each entry under `spec.models` is one served model:
       acceptedAt: 2026-10-17T12:00:00Z
   ```
 
+- **Engines:** a catalog profile's `engine` names the bundle component whose image serves it: `vllm`
+  (upstream, the default) or a pinned GB10 build such as `vllm-spark-b12x`. Its `container` block
+  carries what that image's documented run command needs (`ipc: host`, `shmSize`, `ulimits`,
+  `securityOpt`) and the cache paths kept in named volumes. Each engine image with NVIDIA terms needs
+  its own `image/<component>` acceptance.
 - **Disabling** a model (`enabled: false`) and running `oaf apply` stops and removes it on every node.
   Its weights stay on disk.
 
