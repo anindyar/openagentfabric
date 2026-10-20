@@ -360,11 +360,12 @@ func (p ServingProf) EngineComponent() string {
 
 // Container is what an engine image needs beyond OAF's container defaults.
 type Container struct {
-	IPC         string         `yaml:"ipc,omitempty"`
-	ShmSize     string         `yaml:"shmSize,omitempty"`
-	Ulimits     map[string]int `yaml:"ulimits,omitempty"`
-	SecurityOpt []string       `yaml:"securityOpt,omitempty"`
-	Caches      []string       `yaml:"caches,omitempty"`
+	CommandPrefix []string       `yaml:"commandPrefix,omitempty"`
+	IPC           string         `yaml:"ipc,omitempty"`
+	ShmSize       string         `yaml:"shmSize,omitempty"`
+	Ulimits       map[string]int `yaml:"ulimits,omitempty"`
+	SecurityOpt   []string       `yaml:"securityOpt,omitempty"`
+	Caches        []string       `yaml:"caches,omitempty"`
 }
 
 // PP applies the schema default (1).

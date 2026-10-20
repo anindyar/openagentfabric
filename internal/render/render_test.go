@@ -132,6 +132,9 @@ func TestSparkEngine(t *testing.T) {
 	if !slices.Contains(s.Volumes, "cache-root-cache-b12x:/root/.cache/b12x") || cf.Volumes["cache-root-triton"] == nil {
 		t.Errorf("cache volumes missing: %v / %v", s.Volumes, cf.Volumes)
 	}
+	if len(s.Command) < 3 || s.Command[0] != "vllm" || s.Command[1] != "serve" || s.Command[2] != "/models/qwen3.8-flash-next-fp4" {
+		t.Errorf("command must start with vllm serve <weights>: %v", s.Command[:min(3, len(s.Command))])
+	}
 	if !slices.Contains(s.Command, "--load-format") || s.Environment["B12X_DISK_BACKEND"] != "io_uring" {
 		t.Errorf("profile args/env missing")
 	}

@@ -105,6 +105,7 @@ models:
           VLLM_B12X_MOE_FP4_FORCE_A16: "1"
           B12X_W4A16_A4_PREFILL: "1"
         container:
+          commandPrefix: [vllm, serve]   # the image's entrypoint is NVIDIA's wrapper, with no default command
           ipc: host
           shmSize: 16g
           ulimits: { memlock: -1, stack: 67108864 }

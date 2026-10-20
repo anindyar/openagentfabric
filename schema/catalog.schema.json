@@ -267,6 +267,11 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "commandPrefix": {
+          "description": "Arguments before vLLM's own, for images whose entrypoint is not `vllm serve` (e.g. [vllm, serve] behind NVIDIA's entrypoint wrapper).",
+          "type": "array",
+          "items": { "type": "string" }
+        },
         "ipc": { "enum": ["host"] },
         "shmSize": { "type": "string", "pattern": "^[0-9]+[kmg]?b?$" },
         "ulimits": {

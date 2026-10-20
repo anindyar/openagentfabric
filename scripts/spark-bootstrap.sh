@@ -318,6 +318,11 @@ until st=$(sudo oaf status -f "$ETC/cluster.yaml" --catalog "$ETC/catalog/models
 		die "not healthy after $health_timeout min; see docs/user-guide.md §9 (model logs: docker logs oaf-model-$DEPLOYMENT-vllm-1)"
 	fi
 	if $with_model; then
+		restarts=$($DOCKER inspect -f '{{.RestartCount}}' "oaf-model-$DEPLOYMENT-vllm-1" 2>/dev/null || echo 0)
+		if [ "$restarts" -ge 3 ]; then
+			$DOCKER logs --tail 30 "oaf-model-$DEPLOYMENT-vllm-1" 2>&1 || true
+			die "the model container is crash-looping ($restarts restarts); its last log lines are above"
+		fi
 		last=$($DOCKER logs --tail 1 "oaf-model-$DEPLOYMENT-vllm-1" 2>&1 | cut -c1-150 || true)
 		info "$(date +%H:%M:%S) model: ${last:-starting}"
 	fi

@@ -5,6 +5,7 @@ import (
 	"maps"
 	"net/netip"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -152,6 +153,7 @@ func applyContainer(cf *composeFile, s *service, c *config.Container) {
 	if c == nil {
 		return
 	}
+	s.Command = append(slices.Clone(c.CommandPrefix), s.Command...)
 	s.IPC = c.IPC
 	if c.ShmSize != "" {
 		s.ShmSize = c.ShmSize

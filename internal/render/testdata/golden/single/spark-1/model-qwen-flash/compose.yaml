@@ -14,6 +14,8 @@ services:
       - seccomp=unconfined
       - apparmor=unconfined
     command:
+      - vllm
+      - serve
       - /models/qwen3.8-flash-next-fp4
       - --served-model-name
       - qwen-flash
