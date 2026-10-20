@@ -138,7 +138,7 @@ cluster.yaml + catalog ──validate──▶ render (pure) ──▶ per-node 
 ```
 client ──Bearer key──▶ agentgateway :4000 ──▶ vLLM (by model name) ──▶ response
                            │  model: auto → vSR ⏳ (until M3: routing.defaults.fast)
-                           └─ OTLP span ──▶ Langfuse /api/public/otel (latency, tokens, model)
+                           └─ OTLP span ──▶ Langfuse /api/public/otel/v1/traces (latency, tokens, model)
 Prometheus scrapes: agentgateway :15020, vLLM /metrics, node-exporter :9100 → Grafana
 ```
 

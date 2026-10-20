@@ -118,7 +118,9 @@ func (r *renderer) tracing(obs config.Node) map[string]any {
 		fields["gen_ai.completion"] = `flattenRecursive(llm.completion.map(c, {"role":"assistant", "content": c}))`
 	}
 	return map[string]any{
-		"otlpEndpoint": "http://" + hostPort(obs.Address, config.PortLangfuse) + "/api/public/otel",
+		// agentgateway posts OTLP/HTTP to this URL as given, without
+		// appending /v1/traces; Langfuse's base path alone answers 404.
+		"otlpEndpoint": "http://" + hostPort(obs.Address, config.PortLangfuse) + "/api/public/otel/v1/traces",
 		"otlpProtocol": "http",
 		// Header values are CEL expressions: a quoted string literal. The
 		// variable is shell-expanded first; base64 never contains a quote.

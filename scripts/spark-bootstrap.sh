@@ -351,6 +351,19 @@ print("    " + text.replace("\n", "\n    "))
 PY
 fi
 
+# The gateway exports one OTLP span per request to Langfuse (batched, a few seconds).
+lf_env=/var/lib/oaf/projects/langfuse/.env
+lf_auth="pk-lf-$(sudo sed -n 's/^LANGFUSE_PUBLIC_KEY=//p' "$lf_env"):sk-lf-$(sudo sed -n 's/^LANGFUSE_SECRET_KEY=//p' "$lf_env")"
+traces=0
+for _ in $(seq 12); do
+	traces=$(curl -fsS -u "$lf_auth" "http://127.0.0.1:3000/api/public/v2/observations?limit=1" 2>/dev/null |
+		python3 -c 'import json,sys; print(len(json.load(sys.stdin).get("data", [])))' 2>/dev/null || echo 0)
+	[ "$traces" -gt 0 ] && break
+	sleep 5
+done
+[ "$traces" -gt 0 ] || die "no trace reached Langfuse; see the gateway logs: docker logs oaf-gateway-agentgateway-1"
+info "Langfuse: request traces arriving"
+
 cat <<EOF
 
 $(printf '\033[1m')Done.$(printf '\033[0m') Endpoints on $address:
