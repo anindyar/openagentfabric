@@ -248,7 +248,7 @@ Reopen this decision if any of these happen:
   (strict mode). Langfuse sign-up is disabled, and Grafana and Langfuse have generated admin passwords.
   Langfuse and Grafana telemetry, update checks and plugin downloads are off, so the stack works air-gapped.
 - **Co-tenancy.** OAF often shares machines with existing workloads. Preflight reports them and OAF never
-  touches them. Stack containers have memory limits (about 7 GiB in total, sized from measured usage),
+  touches them. Stack containers have memory limits (about 8 GiB in total, sized from measured usage),
   so an OAF container that misbehaves is killed and restarted on its own instead of starving a model.
 - **Licences.** Upstream images and models whose terms need acceptance (for example NVIDIA's CUDA EULA
   in the vLLM image) are refused until a `spec.licenseAcceptances` entry records who accepted which

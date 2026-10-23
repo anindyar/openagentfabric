@@ -10,8 +10,8 @@ services:
       - --web.listen-address=:9100
     volumes:
       - /:/host:ro,rslave
-    mem_limit: 64m
-    memswap_limit: 64m
+    mem_limit: 96m
+    memswap_limit: 96m
     logging:
       driver: json-file
       options:

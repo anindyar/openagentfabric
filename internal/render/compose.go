@@ -79,18 +79,20 @@ func newService(image string) *service {
 var memoryLimitsMiB = map[string]int{
 	// Measured idle on a DGX Spark, 2026-10-18: web 645, worker 548,
 	// grafana 258, clickhouse 238, seaweedfs 93, postgres 86, prometheus
-	// 43, node-exporter 14, valkey 12, agentgateway 12 (MiB).
+	// 43, node-exporter 14, valkey 12, agentgateway 12 (MiB). 2026-10-24,
+	// with an app embedding dashboards: grafana 372 and over 512 at peaks
+	// (OOM-killed in a loop at 512), loki 63, prometheus 76, node-exporter 51.
 	"langfuse-web":    2048, // Node heap 75% of this (nodeHeap)
 	"langfuse-worker": 1024,
 	"clickhouse":      1536, // ClickHouse sizes its caches to 90% of this
-	"prometheus":      768,
-	"grafana":         512,
-	"loki":            512,
+	"grafana":         1024,
+	"prometheus":      640,
 	"postgres":        512,
+	"loki":            384,
 	"seaweedfs":       384,
 	"valkey":          256,
 	"agentgateway":    256,
-	"node-exporter":   64,
+	"node-exporter":   96,
 }
 
 // valkeyMaxMemoryMiB keeps Valkey's data under its container limit: with

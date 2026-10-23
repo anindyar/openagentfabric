@@ -65,7 +65,7 @@ There is no QSFP switch. Without one, 4 machines are two separate pairs, not a r
 - **Disk:** at least 200 GiB free under `/var/lib/oaf`, plus the size of every model placed on the
   node. Preflight warns below 200 GiB.
 - **Memory:** GB10 memory is unified, so the CPU and the GPU share 128 GB. The OAF services on the
-  observability node are capped at about **7 GiB** in total and use about 2.5 GiB idle. Each model
+  observability node are capped at about **8 GiB** in total and use about 2.5 GiB idle. Each model
   takes the share you give it (`gpuMemoryUtilization`). The shares of all models on one node must
   add up to 0.90 or less.
 
@@ -566,7 +566,7 @@ sudo journalctl -u oaf-node -n 50          # the agent itself
 
 | Message | Meaning and fix |
 |---|---|
-| `memory: N GiB available` (WARN) | Other workloads hold unified memory. The OAF services need about 7 GiB at most. Lower the models' `gpuMemoryUtilization` if you also deploy models here |
+| `memory: N GiB available` (WARN) | Other workloads hold unified memory. The OAF services need about 8 GiB at most. Lower the models' `gpuMemoryUtilization` if you also deploy models here |
 | `workloads: N existing inference container(s)` (WARN) | Other containers use the GPU. OAF does not touch them, but they share memory with OAF's models |
 | `ports: N port(s) OAF uses are already taken` (WARN) | Something already listens on a port OAF needs (§10). A model port such as 8000 can be changed with `port:` on the deployment. The gateway port can be changed with `routing.gateway.port` |
 | `nccl: no system libnccl` (WARN) | Matters only for models across a pair. Install `libnccl2` from the DGX OS repositories |
