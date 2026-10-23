@@ -14,6 +14,11 @@ import (
 const (
 	dashboardsDir = "/etc/grafana/dashboards" // in the Grafana container
 	homeDashboard = "oaf-overview.json"
+
+	// AppDashboardsDir is where apps installed next to OAF drop their own
+	// Grafana dashboards, one subdirectory per app; each becomes a folder.
+	AppDashboardsDir   = "/var/lib/oaf/grafana/apps"
+	appDashboardsMount = "/etc/grafana/apps"
 )
 
 type dashboard struct {
@@ -221,6 +226,10 @@ func dashboardFiles(bundleVersion string) ([]File, error) {
 			"name": "oaf", "folder": "OAF", "type": "file", "disableDeletion": true,
 			"allowUiUpdates": false, "updateIntervalSeconds": 30,
 			"options": map[string]string{"path": dashboardsDir},
+		}, {
+			"name": "apps", "type": "file", "disableDeletion": false,
+			"allowUiUpdates": false, "updateIntervalSeconds": 30,
+			"options": map[string]any{"path": appDashboardsMount, "foldersFromFilesStructure": true},
 		}},
 	})
 	if err != nil {

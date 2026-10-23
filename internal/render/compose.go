@@ -85,6 +85,7 @@ var memoryLimitsMiB = map[string]int{
 	"clickhouse":      1536, // ClickHouse sizes its caches to 90% of this
 	"prometheus":      768,
 	"grafana":         512,
+	"loki":            512,
 	"postgres":        512,
 	"seaweedfs":       384,
 	"valkey":          256,

@@ -154,8 +154,9 @@ func (r *renderer) langfuse(n config.Node) (Project, error) {
 	return finish(p, v, cf, env)
 }
 
-// metrics renders Prometheus and Grafana. Grafana is AGPL-3.0: OAF runs the
-// unmodified image and only provisions it through files and its HTTP API.
+// metrics renders Prometheus, Grafana and, if enabled, Loki. Grafana and Loki
+// are AGPL-3.0: OAF runs the unmodified images and only configures them
+// through files and their HTTP APIs.
 func (r *renderer) metrics(n config.Node) (Project, error) {
 	p := Project{Node: n.Name, Name: ProjectMetrics}
 	v := r.Versions.Version
@@ -189,6 +190,9 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 		"--storage.tsdb.path=/prometheus",
 		"--storage.tsdb.retention.time=" + retention,
 	}
+	if m := r.Cluster.Spec.Observability.Metrics; m != nil && m.RemoteWrite {
+		prom.Command = append(prom.Command, "--web.enable-remote-write-receiver")
+	}
 	prom.Ports = []string{portMap(config.PortPrometheus, 9090)}
 	prom.Volumes = []string{"./prometheus.yml:/etc/prometheus/prometheus.yml:ro", "prometheus-data:/prometheus"}
 	if r.hasModels() {
@@ -218,13 +222,18 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 		"GF_ANALYTICS_FEEDBACK_LINKS_ENABLED":       "false",
 		"GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH": dashboardsDir + "/" + homeDashboard,
 	}
+	if g := r.Cluster.Spec.Observability.Grafana; g != nil && g.AnonymousViewer {
+		graf.Environment["GF_AUTH_ANONYMOUS_ENABLED"] = "true"
+		graf.Environment["GF_AUTH_ANONYMOUS_ORG_ROLE"] = "Viewer"
+	}
 	graf.Ports = []string{portMap(config.PortGrafana, 3000)}
 	graf.Volumes = []string{
 		"grafana-data:/var/lib/grafana",
 		"./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/oaf.yaml:ro",
 		"./grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/oaf.yaml:ro",
-		// Grafana rescans this directory, so dashboard edits need no restart.
+		// Grafana rescans these directories, so dashboard edits need no restart.
 		"./grafana/dashboards:" + dashboardsDir + ":ro",
+		AppDashboardsDir + ":" + appDashboardsMount + ":ro",
 	}
 	graf.DependsOn = healthy("prometheus")
 
@@ -232,16 +241,43 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 		Services: map[string]*service{"prometheus": prom, "grafana": graf},
 		Volumes:  volumes("prometheus-data", "grafana-data"),
 	}
+	datasources := []map[string]any{{
+		"name": "Prometheus", "uid": "oaf-prometheus", "type": "prometheus", "access": "proxy",
+		"url": "http://prometheus:9090", "isDefault": true, "editable": false,
+	}}
+	var extra []File
+	if r.Cluster.Spec.Observability.LogsEnabled() {
+		lokiImg, err := r.image("loki")
+		if err != nil {
+			return p, err
+		}
+		retention := "7d"
+		if l := r.Cluster.Spec.Observability.Logs; l.Retention != "" {
+			retention = l.Retention
+		}
+		loki := newService(lokiImg)
+		loki.Command = []string{"-config.file=/etc/loki/config.yaml"}
+		loki.Ports = []string{portMap(config.PortLoki, 3100)}
+		loki.Volumes = []string{"./loki.yaml:/etc/loki/config.yaml:ro", "loki-data:/loki"}
+		cf.Services["loki"] = loki
+		cf.Volumes["loki-data"] = map[string]string{}
+		lokiCfg, err := yamlFile(v, "loki.yaml", lokiConfig(retention))
+		if err != nil {
+			return p, err
+		}
+		extra = append(extra, lokiCfg)
+		datasources = append(datasources, map[string]any{
+			"name": "Loki", "uid": "oaf-loki", "type": "loki", "access": "proxy",
+			"url": "http://loki:3100", "editable": false,
+		})
+	}
 	promCfg, err := yamlFile(v, "prometheus.yml", r.prometheusConfig(interval))
 	if err != nil {
 		return p, err
 	}
 	ds, err := yamlFile(v, "grafana/datasources.yaml", map[string]any{
-		"apiVersion": 1,
-		"datasources": []map[string]any{{
-			"name": "Prometheus", "uid": "oaf-prometheus", "type": "prometheus", "access": "proxy",
-			"url": "http://prometheus:9090", "isDefault": true, "editable": false,
-		}},
+		"apiVersion":  1,
+		"datasources": datasources,
 	})
 	if err != nil {
 		return p, err
@@ -250,7 +286,40 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 	if err != nil {
 		return p, err
 	}
-	return finish(p, v, cf, env, append([]File{promCfg, ds}, dash...)...)
+	files := append([]File{promCfg, ds}, dash...)
+	return finish(p, v, cf, env, append(files, extra...)...)
+}
+
+// lokiConfig is single-binary Loki on the filesystem, with the compactor
+// deleting logs older than retention.
+func lokiConfig(retention string) map[string]any {
+	return map[string]any{
+		"auth_enabled": false,
+		"server":       map[string]any{"http_listen_port": 3100, "log_level": "warn"},
+		"common": map[string]any{
+			"path_prefix":        "/loki",
+			"replication_factor": 1,
+			"ring":               map[string]any{"kvstore": map[string]string{"store": "inmemory"}},
+			"storage": map[string]any{"filesystem": map[string]string{
+				"chunks_directory": "/loki/chunks", "rules_directory": "/loki/rules",
+			}},
+		},
+		"schema_config": map[string]any{"configs": []map[string]any{{
+			"from": "2024-01-01", "store": "tsdb", "object_store": "filesystem", "schema": "v13",
+			"index": map[string]any{"prefix": "index_", "period": "24h"},
+		}}},
+		"compactor": map[string]any{
+			"working_directory":    "/loki/compactor",
+			"retention_enabled":    true,
+			"delete_request_store": "filesystem",
+		},
+		"limits_config": map[string]any{
+			"retention_period":          retention,
+			"allow_structured_metadata": true,
+			"volume_enabled":            true,
+		},
+		"analytics": map[string]bool{"reporting_enabled": false},
+	}
 }
 
 type scrapeConfig struct {

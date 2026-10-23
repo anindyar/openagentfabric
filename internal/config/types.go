@@ -243,6 +243,8 @@ type RuleRequires struct {
 type Observability struct {
 	Langfuse *LangfuseSettings `yaml:"langfuse,omitempty"`
 	Metrics  *MetricsSettings  `yaml:"metrics,omitempty"`
+	Logs     *LogsSettings     `yaml:"logs,omitempty"`
+	Grafana  *GrafanaSettings  `yaml:"grafana,omitempty"`
 }
 
 // LangfuseSettings control tracing.
@@ -256,6 +258,25 @@ type LangfuseSettings struct {
 type MetricsSettings struct {
 	Retention      string `yaml:"retention,omitempty"`
 	ScrapeInterval string `yaml:"scrapeInterval,omitempty"`
+	// RemoteWrite lets agents on other hosts push metrics to Prometheus
+	// (/api/v1/write), e.g. an app's endpoint collectors.
+	RemoteWrite bool `yaml:"remoteWrite,omitempty"`
+}
+
+// LogsSettings control Loki, the log store. It is off unless enabled.
+type LogsSettings struct {
+	Enabled   bool   `yaml:"enabled,omitempty"`
+	Retention string `yaml:"retention,omitempty"`
+}
+
+// LogsEnabled reports whether Loki is part of the stack.
+func (o Observability) LogsEnabled() bool { return o.Logs != nil && o.Logs.Enabled }
+
+// GrafanaSettings control Grafana.
+type GrafanaSettings struct {
+	// AnonymousViewer lets anyone who reaches Grafana view dashboards
+	// without signing in, so an app can embed them.
+	AnonymousViewer bool `yaml:"anonymousViewer,omitempty"`
 }
 
 // EntitlementRef points to a signed entitlement file.

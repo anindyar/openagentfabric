@@ -377,6 +377,7 @@ has a memory limit and bounded logs (3 × 50 MB), and restarts automatically aft
 | Langfuse | `http://<observability>:3000` | `admin@oaf.local` / `langfuse-admin-password` |
 | Grafana | `http://<observability>:3001`: opens on the **OAF overview** dashboard; folder **OAF** also has models (vLLM), gateway and nodes | `admin` / `grafana-admin-password` |
 | Prometheus | `http://<observability>:9090` | none (keep it on a trusted network) |
+| Loki (if `observability.logs.enabled`) | `http://<observability>:3100` | none (keep it on a trusted network) |
 | agentgateway admin UI | `http://127.0.0.1:15000` on the gateway node only | none (SSH tunnel: `ssh -L 15000:127.0.0.1:15000 <gateway>`) |
 
 Read a credential on the control node with `sudo cat /etc/oaf/secrets/<name>`.
@@ -396,6 +397,24 @@ a few seconds, with latency and token counts. Prompt and response text are recor
 `observability.langfuse.captureContent: true`.
 
 Any OpenAI SDK works: set the base URL to `http://<gateway>:4000/v1` and the API key to the gateway key.
+
+### Metrics and logs for apps
+
+Apps installed next to OAF use its Prometheus, Grafana and (optionally) Loki instead of running
+their own. Three settings, all off by default:
+
+```yaml
+spec:
+  observability:
+    metrics: { remoteWrite: true }      # Prometheus accepts pushes on /api/v1/write
+    logs: { enabled: true, retention: 7d }  # Loki on :3100, with a Grafana datasource
+    grafana: { anonymousViewer: true }  # view dashboards without signing in, for embedding
+```
+
+An app adds dashboards by writing JSON files to `/var/lib/oaf/grafana/apps/<app>/`; Grafana shows
+each subdirectory as a folder and picks up changes within 30 seconds. Prometheus and Loki have no
+authentication, so keep them on a trusted network, or put an authenticating proxy in front (Garrison
+does: its endpoint collectors push through its own TLS endpoint).
 
 ### Apps: their own key, rotated by the app
 
@@ -606,6 +625,7 @@ the failing project's logs, and open an issue at <https://github.com/anindyar/op
 | 3000 | Langfuse | all interfaces |
 | 3001 | Grafana | all interfaces |
 | 9090 | Prometheus | all interfaces |
+| 3100 | Loki (only with `observability.logs.enabled`) | all interfaces |
 | 9100 | node-exporter | all interfaces (host network) |
 | 15000 | agentgateway admin UI | 127.0.0.1 only |
 | 15020 / 15021 | agentgateway metrics / readiness | all interfaces |

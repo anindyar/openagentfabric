@@ -9,3 +9,11 @@ providers:
       path: /etc/grafana/dashboards
     type: file
     updateIntervalSeconds: 30
+  - allowUiUpdates: false
+    disableDeletion: false
+    name: apps
+    options:
+      foldersFromFilesStructure: true
+      path: /etc/grafana/apps
+    type: file
+    updateIntervalSeconds: 30

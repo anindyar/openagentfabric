@@ -4,7 +4,7 @@ services:
     image: docker.io/grafana/grafana:13.2.4@sha256:dbbc38ea21103cefb50396340cd88afec779c7e070b0a7bf5a75b4ce46651d3f
     restart: unless-stopped
     labels:
-      dev.openagentfabric.config-hash: 7bad942c2dd8281f
+      dev.openagentfabric.config-hash: 201c591f0493dbcd
     environment:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_FEEDBACK_LINKS_ENABLED: "false"
@@ -26,6 +26,7 @@ services:
       - ./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/oaf.yaml:ro
       - ./grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/oaf.yaml:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
+      - /var/lib/oaf/grafana/apps:/etc/grafana/apps:ro
     depends_on:
       prometheus:
         condition: service_healthy

@@ -33,6 +33,7 @@ metadata plus the LICENSE file wherever the metadata said `NOASSERTION`).
 | node_exporter | github.com/prometheus/node_exporter | Apache-2.0 | image | OK. |
 | dcgm-exporter | github.com/NVIDIA/dcgm-exporter | Apache-2.0 (exporter) | image | **Not pinned yet.** Exporter is OK. The DCGM libraries in the image are under NVIDIA terms. Support on GB10 is unverified (spike in M1). |
 | Grafana | github.com/grafana/grafana | AGPL-3.0 | image | OK **only** as an unmodified image, embedded through iframe or its HTTP API. Never vendor or patch it. See audit §3.4. |
+| Grafana Loki | github.com/grafana/loki | AGPL-3.0 | image | Same terms as Grafana: OK **only** as an unmodified image, configured by file and used through its HTTP API. Off unless `spec.observability.logs.enabled`. |
 
 ## Host-level dependencies (installed or checked by preflight)
 
@@ -76,4 +77,3 @@ google/go-containerregistry (Apache-2.0); UI: React, Vite, TanStack (MIT).
 | Redis ≥ 8 | RSALv2 / SSPLv1 / AGPLv3 | Valkey is used instead. |
 | MinIO | AGPL-3.0, archived | Unmaintained. SeaweedFS is used instead. |
 | MinIO AIStor Free | Proprietary (free licence) | Not open source, and redistribution in an offline bundle is not granted. |
-| Grafana Loki | AGPL-3.0 | Out of scope for v1. Would be acceptable as an unmodified image if needed. |

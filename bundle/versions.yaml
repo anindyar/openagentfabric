@@ -133,5 +133,14 @@ components:
     upstream: { repo: grafana/grafana, ref: v13.2.4 }
     license: { spdx: AGPL-3.0-only, file: LICENSE, sha256: 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0 }
 
+  # AGPL-3.0: unmodified image, configured by file only, like Grafana. Off
+  # unless spec.observability.logs.enabled.
+  - name: loki
+    thirdParty: Grafana Loki
+    image: docker.io/grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: grafana/loki, ref: v3.7.8 }
+    license: { spdx: AGPL-3.0-only, file: LICENSE, sha256: 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0 }
+
 # Not pinned yet:
 # - dcgm-exporter: GB10 support unverified (M1 spike); its image also carries NVIDIA DCGM terms.

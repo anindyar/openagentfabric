@@ -722,6 +722,38 @@
               "type": "string",
               "pattern": "^[0-9]+[sm]$",
               "default": "15s"
+            },
+            "remoteWrite": {
+              "description": "Accept metrics pushed to Prometheus's /api/v1/write, e.g. from an app's endpoint collectors.",
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "logs": {
+          "description": "Loki, the log store, with a Grafana datasource. Off unless enabled.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": false
+            },
+            "retention": {
+              "type": "string",
+              "pattern": "^[0-9]+[hdw]$",
+              "default": "7d"
+            }
+          }
+        },
+        "grafana": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "anonymousViewer": {
+              "description": "Let anyone who reaches Grafana view dashboards without signing in, so an app can embed them.",
+              "type": "boolean",
+              "default": false
             }
           }
         }

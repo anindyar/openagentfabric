@@ -8,6 +8,7 @@ const (
 	PortLangfuse         = 3000
 	PortGrafana          = 3001
 	PortPrometheus       = 9090
+	PortLoki             = 3100
 	PortNodeExporter     = 9100
 	PortGatewayAdmin     = 15000 // bound to 127.0.0.1 only
 	PortGatewayStats     = 15020
@@ -62,6 +63,7 @@ func ServicePorts(n Node) map[int]string {
 		p[PortLangfuse] = "Langfuse"
 		p[PortGrafana] = "Grafana"
 		p[PortPrometheus] = "Prometheus"
+		p[PortLoki] = "Loki"
 	}
 	return p
 }

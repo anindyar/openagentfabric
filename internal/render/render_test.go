@@ -513,3 +513,58 @@ func TestDashboards(t *testing.T) {
 		t.Errorf("home dashboard %s is not rendered", homeDashboard)
 	}
 }
+
+// TestObservabilityOptions: logs, remote write and anonymous viewing are off
+// by default and each turns on exactly its piece.
+func TestObservabilityOptions(t *testing.T) {
+	compose := func(in Input) (composeFile, Project) {
+		t.Helper()
+		for _, p := range mustRender(t, in) {
+			if p.Name == ProjectMetrics {
+				var cf composeFile
+				if err := yaml.Unmarshal(fileOf(t, in, p.Node, p.Name, "compose.yaml"), &cf); err != nil {
+					t.Fatal(err)
+				}
+				return cf, p
+			}
+		}
+		t.Fatal("no metrics project")
+		return composeFile{}, Project{}
+	}
+	in := pairInput(t)
+	cf, p := compose(in)
+	if _, ok := cf.Services["loki"]; ok {
+		t.Fatal("loki rendered without spec.observability.logs.enabled")
+	}
+	if slices.Contains(cf.Services["prometheus"].Command, "--web.enable-remote-write-receiver") {
+		t.Fatal("remote write on by default")
+	}
+	if cf.Services["grafana"].Environment["GF_AUTH_ANONYMOUS_ENABLED"] != "false" {
+		t.Fatal("anonymous Grafana on by default")
+	}
+	if strings.Contains(string(fileOf(t, in, p.Node, p.Name, "grafana/datasources.yaml")), "loki") {
+		t.Fatal("Loki datasource without Loki")
+	}
+
+	in = pairInput(t)
+	in.Cluster.Spec.Observability.Logs = &config.LogsSettings{Enabled: true, Retention: "14d"}
+	in.Cluster.Spec.Observability.Metrics = &config.MetricsSettings{RemoteWrite: true}
+	in.Cluster.Spec.Observability.Grafana = &config.GrafanaSettings{AnonymousViewer: true}
+	cf, p = compose(in)
+	loki, ok := cf.Services["loki"]
+	if !ok || loki.MemLimit == "" || !slices.Contains(loki.Ports, "3100:3100") {
+		t.Fatalf("loki service: %+v", loki)
+	}
+	if !strings.Contains(string(fileOf(t, in, p.Node, p.Name, "loki.yaml")), "retention_period: 14d") {
+		t.Fatal("loki retention not rendered")
+	}
+	if !strings.Contains(string(fileOf(t, in, p.Node, p.Name, "grafana/datasources.yaml")), "http://loki:3100") {
+		t.Fatal("no Loki datasource")
+	}
+	if !slices.Contains(cf.Services["prometheus"].Command, "--web.enable-remote-write-receiver") {
+		t.Fatal("remote write not enabled")
+	}
+	if cf.Services["grafana"].Environment["GF_AUTH_ANONYMOUS_ORG_ROLE"] != "Viewer" {
+		t.Fatal("anonymous viewer not enabled")
+	}
+}
