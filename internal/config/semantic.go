@@ -92,7 +92,24 @@ func Validate(c *Cluster, cat *Catalog, opts Options) Report {
 	k.groupsCheck()
 	k.models()
 	k.routing()
+	k.observability()
 	return Report{Issues: k.out}
+}
+
+// observability: app scrape targets become Prometheus jobs, whose names
+// must be unique.
+func (k *checker) observability() {
+	m := k.c.Spec.Observability.Metrics
+	if m == nil {
+		return
+	}
+	seen := map[string]bool{}
+	for i, s := range m.Scrape {
+		if seen[s.Name] {
+			k.errorf(fmt.Sprintf("spec.observability.metrics.scrape[%d].name", i), "duplicate scrape target %q", s.Name)
+		}
+		seen[s.Name] = true
+	}
 }
 
 // --- catalog ---------------------------------------------------------------

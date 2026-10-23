@@ -261,6 +261,16 @@ type MetricsSettings struct {
 	// RemoteWrite lets agents on other hosts push metrics to Prometheus
 	// (/api/v1/write), e.g. an app's endpoint collectors.
 	RemoteWrite bool `yaml:"remoteWrite,omitempty"`
+	// Scrape adds metrics endpoints of apps running next to OAF.
+	Scrape []ScrapeTarget `yaml:"scrape,omitempty"`
+}
+
+// ScrapeTarget is an app's /metrics endpoint for Prometheus to scrape.
+type ScrapeTarget struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+	// InsecureSkipVerify accepts a self-signed certificate (an appliance's own CA).
+	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty"`
 }
 
 // LogsSettings control Loki, the log store. It is off unless enabled.

@@ -43,6 +43,21 @@ func TestObservabilityEnable(t *testing.T) {
 	if c, _ = config.LoadCluster(cluster); c.Spec.Observability.Grafana.AnonymousViewer {
 		t.Fatal("anonymous viewer still on")
 	}
+	for i := 0; i < 2; i++ {
+		if out, err = runCLI(t, "observability", "scrape", "garrison", "https://10.0.0.5:8080/metrics", "--insecure", "-f", cluster); err != nil {
+			t.Fatalf("scrape: %v\n%s", err, out)
+		}
+	}
+	if !strings.Contains(out, "already scrapes") {
+		t.Fatalf("second scrape must be a no-op:\n%s", out)
+	}
+	if out, err = runCLI(t, "observability", "scrape", "garrison", "https://10.0.0.6:8080/metrics", "-f", cluster); err != nil {
+		t.Fatalf("scrape replace: %v\n%s", err, out)
+	}
+	c, _ = config.LoadCluster(cluster)
+	if s := c.Spec.Observability.Metrics.Scrape; len(s) != 1 || s[0].URL != "https://10.0.0.6:8080/metrics" || s[0].InsecureSkipVerify {
+		t.Fatalf("scrape = %+v", s)
+	}
 	if _, err = runCLI(t, "observability", "enable", "tracing", "-f", cluster); err == nil {
 		t.Fatal("unknown feature accepted")
 	}

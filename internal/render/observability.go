@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -323,10 +324,12 @@ func lokiConfig(retention string) map[string]any {
 }
 
 type scrapeConfig struct {
-	JobName       string         `yaml:"job_name"`
-	MetricsPath   string         `yaml:"metrics_path,omitempty"`
-	Authorization *authorization `yaml:"authorization,omitempty"`
-	StaticConfigs []staticConfig `yaml:"static_configs"`
+	JobName       string          `yaml:"job_name"`
+	Scheme        string          `yaml:"scheme,omitempty"`
+	MetricsPath   string          `yaml:"metrics_path,omitempty"`
+	TLSConfig     map[string]bool `yaml:"tls_config,omitempty"`
+	Authorization *authorization  `yaml:"authorization,omitempty"`
+	StaticConfigs []staticConfig  `yaml:"static_configs"`
 }
 
 type authorization struct {
@@ -374,6 +377,20 @@ func (r *renderer) prometheusConfig(interval string) map[string]any {
 	}
 	if len(vllm.StaticConfigs) > 0 {
 		jobs = append(jobs, vllm)
+	}
+	if m := r.Cluster.Spec.Observability.Metrics; m != nil {
+		for _, s := range m.Scrape {
+			u, err := url.Parse(s.URL)
+			if err != nil {
+				continue // validation rejects it first
+			}
+			job := scrapeConfig{JobName: "app-" + s.Name, Scheme: u.Scheme, MetricsPath: u.Path,
+				StaticConfigs: []staticConfig{{Targets: []string{u.Host}, Labels: map[string]string{"app": s.Name}}}}
+			if s.InsecureSkipVerify {
+				job.TLSConfig = map[string]bool{"insecure_skip_verify": true}
+			}
+			jobs = append(jobs, job)
+		}
 	}
 	return map[string]any{
 		"global":         map[string]string{"scrape_interval": interval, "evaluation_interval": interval},

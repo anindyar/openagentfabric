@@ -727,6 +727,20 @@
               "description": "Accept metrics pushed to Prometheus's /api/v1/write, e.g. from an app's endpoint collectors.",
               "type": "boolean",
               "default": false
+            },
+            "scrape": {
+              "description": "Metrics endpoints of apps running next to OAF.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "url"],
+                "properties": {
+                  "name": { "$ref": "#/$defs/name" },
+                  "url": { "type": "string", "pattern": "^https?://[^/]+(/.*)?$" },
+                  "insecureSkipVerify": { "type": "boolean", "default": false }
+                }
+              }
             }
           }
         },

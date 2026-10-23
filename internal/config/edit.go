@@ -152,6 +152,50 @@ func SetSpecBool(data []byte, value bool, path ...string) ([]byte, bool, error) 
 	return out, true, nil
 }
 
+// SetScrapeTarget adds or replaces the app scrape target with t's name under
+// spec.observability.metrics.scrape, keeping comments and order.
+func SetScrapeTarget(data []byte, t ScrapeTarget) ([]byte, bool, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, false, err
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, false, fmt.Errorf("cluster.yaml is not a mapping")
+	}
+	spec := mappingChild(doc.Content[0], "spec")
+	if spec == nil {
+		return nil, false, fmt.Errorf("cluster.yaml has no spec")
+	}
+	list := sequenceChild(mappingChildOrCreate(mappingChildOrCreate(spec, "observability"), "metrics"), "scrape")
+	entry := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	entry.Content = append(entry.Content, scalar("name"), scalar(t.Name), scalar("url"), scalar(t.URL))
+	if t.InsecureSkipVerify {
+		entry.Content = append(entry.Content, scalar("insecureSkipVerify"), &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
+	}
+	replaced := false
+	for i, item := range list.Content {
+		if n := mappingChild(item, "name"); n != nil && n.Value == t.Name {
+			u := mappingChild(item, "url")
+			ins := mappingChild(item, "insecureSkipVerify")
+			if u != nil && u.Value == t.URL && (ins != nil && ins.Value == "true") == t.InsecureSkipVerify {
+				return data, false, nil
+			}
+			list.Content[i], replaced = entry, true
+		}
+	}
+	if !replaced {
+		list.Content = append(list.Content, entry)
+	}
+	out, err := encode(&doc)
+	if err != nil {
+		return nil, false, err
+	}
+	if _, err := ParseCluster(out); err != nil {
+		return nil, false, fmt.Errorf("adding scrape target %q: %w", t.Name, err)
+	}
+	return out, true, nil
+}
+
 // WriteFileAtomic replaces path with data, keeping its permissions, so a
 // reader never sees a half-written cluster.yaml.
 func WriteFileAtomic(path string, data []byte) error {

@@ -19,7 +19,39 @@ var observabilityFeatures = map[string][]string{
 
 func newObservabilityCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "observability", Short: "Turn optional observability features on or off in cluster.yaml"}
-	cmd.AddCommand(newObservabilitySetCmd("enable", true), newObservabilitySetCmd("disable", false))
+	cmd.AddCommand(newObservabilitySetCmd("enable", true), newObservabilitySetCmd("disable", false), newObservabilityScrapeCmd())
+	return cmd
+}
+
+func newObservabilityScrapeCmd() *cobra.Command {
+	var clusterPath string
+	var insecure bool
+	cmd := &cobra.Command{
+		Use:   "scrape <name> <url>",
+		Short: "Have Prometheus scrape an app's metrics endpoint (idempotent; replaces <name>'s url)",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := os.ReadFile(clusterPath)
+			if err != nil {
+				return err
+			}
+			out, changed, err := config.SetScrapeTarget(data, config.ScrapeTarget{Name: args[0], URL: args[1], InsecureSkipVerify: insecure})
+			if err != nil {
+				return err
+			}
+			if !changed {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s already scrapes %s\n", clusterPath, args[1])
+				return err
+			}
+			if err := config.WriteFileAtomic(clusterPath, out); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "scraping %s as app-%s; run `oaf apply` to deploy\n", args[1], args[0])
+			return err
+		},
+	}
+	cmd.Flags().StringVarP(&clusterPath, "file", "f", DefaultClusterPath, "path to cluster.yaml")
+	cmd.Flags().BoolVar(&insecure, "insecure", false, "accept a self-signed certificate")
 	return cmd
 }
 

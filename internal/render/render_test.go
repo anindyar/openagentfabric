@@ -548,7 +548,8 @@ func TestObservabilityOptions(t *testing.T) {
 
 	in = pairInput(t)
 	in.Cluster.Spec.Observability.Logs = &config.LogsSettings{Enabled: true, Retention: "14d"}
-	in.Cluster.Spec.Observability.Metrics = &config.MetricsSettings{RemoteWrite: true}
+	in.Cluster.Spec.Observability.Metrics = &config.MetricsSettings{RemoteWrite: true,
+		Scrape: []config.ScrapeTarget{{Name: "garrison", URL: "https://10.0.0.5:8080/metrics", InsecureSkipVerify: true}}}
 	in.Cluster.Spec.Observability.Grafana = &config.GrafanaSettings{AnonymousViewer: true}
 	cf, p = compose(in)
 	loki, ok := cf.Services["loki"]
@@ -563,6 +564,12 @@ func TestObservabilityOptions(t *testing.T) {
 	}
 	if !slices.Contains(cf.Services["prometheus"].Command, "--web.enable-remote-write-receiver") {
 		t.Fatal("remote write not enabled")
+	}
+	prom := string(fileOf(t, in, p.Node, p.Name, "prometheus.yml"))
+	for _, want := range []string{"job_name: app-garrison", "scheme: https", "metrics_path: /metrics", "insecure_skip_verify: true", "10.0.0.5:8080"} {
+		if !strings.Contains(prom, want) {
+			t.Fatalf("prometheus.yml lacks %q:\n%s", want, prom)
+		}
 	}
 	if cf.Services["grafana"].Environment["GF_AUTH_ANONYMOUS_ORG_ROLE"] != "Viewer" {
 		t.Fatal("anonymous viewer not enabled")
