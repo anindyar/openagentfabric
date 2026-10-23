@@ -9,7 +9,9 @@ config:
         gen_ai.system: llm.provider
         gen_ai.usage.completion_tokens: llm.outputTokens
         gen_ai.usage.prompt_tokens: llm.inputTokens
+        session.id: request.headers["x-oaf-session"]
         span.name: '"openai.chat"'
+        user.id: request.headers["x-oaf-user"]
     headers:
       Authorization: '"Basic $LANGFUSE_OTLP_AUTH"'
     otlpEndpoint: http://192.168.1.11:3000/api/public/otel/v1/traces

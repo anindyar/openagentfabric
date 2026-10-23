@@ -393,6 +393,47 @@ a few seconds, with latency and token counts. Prompt and response text are recor
 
 Any OpenAI SDK works: set the base URL to `http://<gateway>:4000/v1` and the API key to the gateway key.
 
+### Apps: their own key, rotated by the app
+
+Give each app that calls models its own key rather than sharing `default`, so its traffic is
+labelled in Langfuse and its key can be rotated or revoked on its own:
+
+```sh
+sudo oaf keys issue vclocal --host host.docker.internal --env-out /tmp/vclocal-gateway.env
+```
+
+`issue` adds `{name: vclocal, secretRef: gateway-key-vclocal}` to `routing.keys` in cluster.yaml
+(comments are kept), generates the key, applies the gateway, and writes the app's settings:
+
+```sh
+AGENT_GATEWAY_URL=http://host.docker.internal:4000/v1
+AGENT_GATEWAY_API_KEY=<64 hex>
+AGENT_GATEWAY_ROTATE_URL=http://host.docker.internal:7702/v1/keys/rotate
+AGENT_GATEWAY_MODEL=auto
+AGENT_GATEWAY_CONTEXT_WINDOW=<smallest maxModelLen of the enabled models>
+```
+
+It is idempotent: an installer can run it every time and gets the same key back. `--host` is the
+gateway as the app sees it (`host.docker.internal` for a container on the gateway node; the default
+is the gateway node's address). `--models a,b` limits the key to those models.
+
+The app rotates its key itself by posting to the key service (`oaf-keys.service`, port 7702) with
+its current key; the answer carries the new key, and the old one stops working:
+
+```sh
+curl -X POST http://<control>:7702/v1/keys/rotate -H "Authorization: Bearer $CURRENT_KEY"
+# {"name":"vclocal","key":"<new key>"}
+```
+
+An admin can do the same with `sudo oaf keys rotate <name>`; `sudo oaf keys list` shows the keys
+(never their values). Rotating re-renders the gateway, which restarts to pick the key up: requests
+in flight at that moment fail and should be retried. A key can be rotated at most every 30 seconds.
+If the gateway cannot be applied, the old key is put back and stays valid.
+
+**Who made a request.** An app can name the end user and conversation behind each call with the
+`X-OAF-User` and `X-OAF-Session` headers. Langfuse then lists the trace under that user and session.
+The headers only label traces; they grant nothing, and requests without them are traced as before.
+
 ## 7. Models
 
 Each entry under `spec.models` is one served model:
@@ -550,6 +591,7 @@ the failing project's logs, and open an issue at <https://github.com/anindyar/op
 | 15000 | agentgateway admin UI | 127.0.0.1 only |
 | 15020 / 15021 | agentgateway metrics / readiness | all interfaces |
 | 7701 | oaf-node agent (mTLS) | all interfaces |
+| 7702 | key service: apps rotate their gateway key (control node) | all interfaces |
 | 8000 + n | model n's OpenAI API (rank 0 node), unless `port:` is set | host network |
 | 29500 + n | model n's rendezvous between the nodes of a pair | host network |
 | 18515–18614 | `ib_write_bw` exchange, only during a fabric check | rail addresses |
@@ -574,6 +616,7 @@ vLLM has no container limit: its share is set by `gpuMemoryUtilization`.
 
 ### Commands
 `oaf validate`, `oaf preflight [--ssh]`, `oaf pki init`, `oaf node serve`, `oaf fabric check`,
-`oaf install`, `oaf apply [--dry-run]`, `oaf status`, `oaf uninstall --yes [--purge]`, `oaf version`.
+`oaf install`, `oaf apply [--dry-run]`, `oaf status`, `oaf uninstall --yes [--purge]`,
+`oaf keys issue|rotate|list|serve`, `oaf version`.
 Every command has `--help`. Commands that act on the cluster take `-f` (cluster.yaml),
 `--catalog`, `--pki-dir`, `--secrets-dir` and `--timeout`.

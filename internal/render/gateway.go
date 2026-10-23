@@ -10,6 +10,13 @@ import (
 	"openagentfabric.dev/oaf/internal/config"
 )
 
+// Attribution headers an app sets on a model call (lower case, as the
+// gateway's CEL sees them). Advisory: they label traces, they grant nothing.
+const (
+	HeaderUser    = "x-oaf-user"
+	HeaderSession = "x-oaf-session"
+)
+
 // AutoModel is the model name that vSR routes. Until the vSR renderer lands
 // (M3) the gateway maps it to routing.defaults.fast.
 const AutoModel = "auto"
@@ -111,6 +118,11 @@ func (r *renderer) tracing(obs config.Node) map[string]any {
 		"gen_ai.system":                  "llm.provider",
 		"gen_ai.usage.prompt_tokens":     "llm.inputTokens",
 		"gen_ai.usage.completion_tokens": "llm.outputTokens",
+		// Apps name the end user and conversation behind each call in these
+		// headers; Langfuse files the trace under that user and session. A
+		// request without them is still traced, with the fields left out.
+		"user.id":    `request.headers["` + HeaderUser + `"]`,
+		"session.id": `request.headers["` + HeaderSession + `"]`,
 	}
 	if capture {
 		fields["gen_ai.prompt"] = "flattenRecursive(llm.prompt)"

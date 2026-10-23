@@ -331,6 +331,28 @@ done
 echo "$st"
 
 # ---------------------------------------------------------------------------
+step "Key service"
+# Apps installed next to OAF get a key with `oaf keys issue <app>` and rotate
+# it themselves through this service (port 7702).
+unit=/etc/systemd/system/oaf-keys.service
+if ! cmp -s "$REPO_ROOT/deploy/systemd/oaf-keys.service" "$unit"; then
+	sudo install -m 0644 "$REPO_ROOT/deploy/systemd/oaf-keys.service" "$unit"
+	sudo systemctl daemon-reload
+	keys_changed=true
+else
+	keys_changed=false
+fi
+sudo systemctl enable --quiet oaf-keys
+# The binary may be new even when the unit is not.
+if $keys_changed || $agent_changed; then sudo systemctl restart oaf-keys; else sudo systemctl start oaf-keys; fi
+for _ in $(seq 15); do
+	curl -fsS -o /dev/null http://127.0.0.1:7702/healthz 2>/dev/null && break
+	sleep 1
+done
+curl -fsS -o /dev/null http://127.0.0.1:7702/healthz || die "oaf-keys is not answering: journalctl -u oaf-keys -n 50"
+info "oaf-keys active on :7702"
+
+# ---------------------------------------------------------------------------
 step "Smoke test through the gateway"
 key=$(sudo cat "$ETC/secrets/gateway-key-default")
 curl -fsS "http://127.0.0.1:4000/v1/models" -H "Authorization: Bearer $key" >/dev/null && info "GET /v1/models: ok"
@@ -371,6 +393,8 @@ $(printf '\033[1m')Done.$(printf '\033[0m') Endpoints on $address:
     Langfuse     http://$address:3000       admin@oaf.local / sudo cat $ETC/secrets/langfuse-admin-password
     Grafana      http://$address:3001       admin / sudo cat $ETC/secrets/grafana-admin-password
     Prometheus   http://$address:9090
+    Key service  http://$address:7702       apps rotate their own key here
+Give an app its own key: sudo oaf keys issue <app> --host host.docker.internal
 Status: sudo oaf status     Change: sudoedit $ETC/cluster.yaml && sudo oaf apply
 Memory left for other apps: about $(awk -v u="$util" -v m="$mem_gib" 'BEGIN {printf "%d", m*(1-u) - 4.6 - 3.1}') GiB (give them compose mem_limit caps).
 EOF

@@ -138,7 +138,8 @@ cluster.yaml + catalog ──validate──▶ render (pure) ──▶ per-node 
 ```
 client ──Bearer key──▶ agentgateway :4000 ──▶ vLLM (by model name) ──▶ response
                            │  model: auto → vSR ⏳ (until M3: routing.defaults.fast)
-                           └─ OTLP span ──▶ Langfuse /api/public/otel/v1/traces (latency, tokens, model)
+                           └─ OTLP span ──▶ Langfuse /api/public/otel/v1/traces (latency, tokens, model,
+                                            user/session from X-OAF-User / X-OAF-Session)
 Prometheus scrapes: agentgateway :15020, vLLM /metrics, node-exporter :9100 → Grafana
 ```
 
@@ -236,8 +237,13 @@ Reopen this decision if any of these happen:
 - **Transport.** All control traffic is Connect RPC over mTLS with a per-cluster CA. The agent checks
   that the client is `oafd`, and the client checks the node's name. The CA key stays on the control node.
 - **Secrets** are generated per install (32 random bytes, hex), stored one per file at 0600, never
-  overwritten, never in `cluster.yaml`, never in git, and passed to containers only through 0600 `.env`
-  files. The repository and fixtures contain none.
+  overwritten (except a gateway key being rotated, which is replaced atomically), never in
+  `cluster.yaml`, never in git, and passed to containers only through 0600 `.env` files. The
+  repository and fixtures contain none.
+- **App keys.** Each app gets its own `routing.keys` entry (`oaf keys issue`). The key service on :7702
+  rotates a key for whoever presents it, and nothing else: the presented key is the credential, compared
+  by digest in constant time, failures are slowed, and a key rotates at most once per 30 seconds.
+  It is plain HTTP like the gateway, so both belong on a trusted network.
 - **Least exposure.** The agentgateway admin UI is bound to 127.0.0.1. The gateway requires a Bearer key
   (strict mode). Langfuse sign-up is disabled, and Grafana and Langfuse have generated admin passwords.
   Langfuse and Grafana telemetry, update checks and plugin downloads are off, so the stack works air-gapped.

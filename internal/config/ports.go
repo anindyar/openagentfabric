@@ -14,6 +14,7 @@ const (
 	PortGatewayReadiness = 15021
 	PortOAFD             = 8443
 	PortNodeAgent        = 7701
+	PortKeyService       = 7702 // oaf keys serve, on the control node
 
 	// DefaultModelPortBase + index in spec.models is a deployment's port when it
 	// sets none.
@@ -50,6 +51,7 @@ func ServicePorts(n Node) map[int]string {
 	}
 	if n.HasRole(RoleControl) {
 		p[PortOAFD] = "oafd"
+		p[PortKeyService] = "oaf key service"
 	}
 	if n.HasRole(RoleGateway) {
 		p[PortGatewayAdmin] = "agentgateway admin"

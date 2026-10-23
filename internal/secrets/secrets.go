@@ -99,34 +99,85 @@ func generate() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-// write creates dir/name with value, without replacing an existing file.
-func write(dir, name, value string) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
+// Replace swaps in a newly generated value for name, returning the new and
+// the previous value ("" if there was none). The swap is atomic: a reader
+// sees either the old file or the new one. Used to rotate a gateway key.
+func (s Store) Replace(name string) (newValue, oldValue string, err error) {
+	if !validName.MatchString(name) {
+		return "", "", fmt.Errorf("invalid secret name %q", name)
 	}
-	tmp, err := os.CreateTemp(dir, "."+name+".tmp-*")
+	oldValue, _, err = s.read(name)
+	if err != nil {
+		return "", "", err
+	}
+	newValue, err = generate()
+	if err != nil {
+		return "", "", err
+	}
+	if err := s.Set(name, newValue); err != nil {
+		return "", "", err
+	}
+	return newValue, oldValue, nil
+}
+
+// Set atomically writes value as the secret name, replacing any existing
+// value. Replace uses it, and so does undoing a rotation that failed.
+func (s Store) Set(name, value string) error {
+	if !validName.MatchString(name) {
+		return fmt.Errorf("invalid secret name %q", name)
+	}
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("refusing to write an empty secret %s", name)
+	}
+	tmp, err := writeTemp(s.Dir, name, value)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.WriteString(value + "\n"); err != nil {
-		_ = tmp.Close()
+	defer func() { _ = os.Remove(tmp) }()
+	return os.Rename(tmp, filepath.Join(s.Dir, name))
+}
+
+// write creates dir/name with value, without replacing an existing file.
+func write(dir, name, value string) error {
+	tmp, err := writeTemp(dir, name, value)
+	if err != nil {
 		return err
 	}
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
+	defer func() { _ = os.Remove(tmp) }()
 	// Link fails if the name exists, so a secret is never overwritten.
-	if err := os.Link(tmp.Name(), filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrExist) {
+	if err := os.Link(tmp, filepath.Join(dir, name)); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 	return nil
+}
+
+// writeTemp writes value to a synced 0600 temporary file in dir and returns
+// its path; the caller links or renames it into place and removes it.
+func writeTemp(dir, name, value string) (string, error) {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	tmp, err := os.CreateTemp(dir, "."+name+".tmp-*")
+	if err != nil {
+		return "", err
+	}
+	fail := func(err error) (string, error) {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+		return "", err
+	}
+	if _, err := tmp.WriteString(value + "\n"); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fail(err)
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return "", err
+	}
+	return tmp.Name(), nil
 }

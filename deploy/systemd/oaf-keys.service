@@ -1,0 +1,21 @@
+# Installed on the control node. Apps call it to rotate their own gateway key.
+[Unit]
+Description=openagentfabric key service
+Documentation=https://github.com/anindyar/openagentfabric
+After=network-online.target oaf-node.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/oaf keys serve
+Restart=on-failure
+RestartSec=5
+# Runs as root: it rewrites /etc/oaf/secrets and drives the node agents with
+# the control-plane certificate in /etc/oaf/pki.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/etc/oaf
+
+[Install]
+WantedBy=multi-user.target
