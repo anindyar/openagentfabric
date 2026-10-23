@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -106,6 +107,47 @@ func AddModel(data []byte, d ModelDeployment) ([]byte, bool, error) {
 	}
 	if _, err := ParseCluster(out); err != nil {
 		return nil, false, fmt.Errorf("adding model %q: %w", d.Name, err)
+	}
+	return out, true, nil
+}
+
+// SetSpecBool sets the boolean at path under spec (e.g. observability,
+// logs, enabled), creating the mappings on the way and keeping comments and
+// order. It reports whether the document changed; the result is validated.
+func SetSpecBool(data []byte, value bool, path ...string) ([]byte, bool, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, false, err
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, false, fmt.Errorf("cluster.yaml is not a mapping")
+	}
+	m := mappingChild(doc.Content[0], "spec")
+	if m == nil {
+		return nil, false, fmt.Errorf("cluster.yaml has no spec")
+	}
+	if len(path) == 0 {
+		return nil, false, fmt.Errorf("empty path")
+	}
+	for _, k := range path[:len(path)-1] {
+		m = mappingChildOrCreate(m, k)
+	}
+	want := strconv.FormatBool(value)
+	leaf := path[len(path)-1]
+	if c := mappingChild(m, leaf); c != nil {
+		if c.Kind == yaml.ScalarNode && c.Value == want {
+			return data, false, nil
+		}
+		*c = yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: want}
+	} else {
+		m.Content = append(m.Content, scalar(leaf), &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: want})
+	}
+	out, err := encode(&doc)
+	if err != nil {
+		return nil, false, err
+	}
+	if _, err := ParseCluster(out); err != nil {
+		return nil, false, fmt.Errorf("setting spec.%s: %w", strings.Join(path, "."), err)
 	}
 	return out, true, nil
 }

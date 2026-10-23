@@ -411,6 +411,9 @@ spec:
     grafana: { anonymousViewer: true }  # view dashboards without signing in, for embedding
 ```
 
+Or, keeping the rest of the file as it is: `sudo oaf observability enable logs remote-write
+anonymous-grafana`, then `sudo oaf apply`.
+
 An app adds dashboards by writing JSON files to `/var/lib/oaf/grafana/apps/<app>/`; Grafana shows
 each subdirectory as a folder and picks up changes within 30 seconds. Prometheus and Loki have no
 authentication, so keep them on a trusted network, or put an authenticating proxy in front (Garrison
