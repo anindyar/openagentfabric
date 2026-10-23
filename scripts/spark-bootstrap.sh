@@ -7,9 +7,10 @@
 #   scripts/spark-bootstrap.sh --email you@example.com
 #
 # It installs the oaf binary and node agent, writes /etc/oaf/cluster.yaml
-# (topology single: the full OAF stack plus Qwen3.8 Flash-Next at 0.75 of
-# unified memory), fetches the weights, deploys, waits until everything is
-# healthy and sends a test request through the gateway. Every step checks
+# (topology single: the full OAF stack, Qwen3.8 Flash-Next at 0.75 of unified
+# memory, and the bge-m3 embedding model for the apps on the box), fetches the
+# weights, deploys, waits until everything is healthy and sends a chat and an
+# embedding request through the gateway. Every step checks
 # before it acts, so the script is safe to re-run after a failure.
 #
 # It never touches containers that are not OAF's (compose projects oaf-*).
@@ -19,6 +20,12 @@ set -euo pipefail
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 MODEL_ID=qwen3.8-flash-next-fp4
 DEPLOYMENT=qwen-flash
+# Embeddings are part of the appliance: apps (vclocal memory search) get them
+# from the gateway at /v1/embeddings. About 6.5 GiB in all on a GB10.
+EMBED_ID=bge-m3
+EMBED_UTIL=0.03
+EMBED_LEN=8192
+EMBED_GIB=6.5
 IMAGE_COMPONENT=vllm-spark-b12x
 MODEL_LICENCE_URL=https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-agreement/
 CUDA_EULA_URL=https://docs.nvidia.com/cuda/eula/index.html
@@ -37,6 +44,7 @@ max_len=262144
 accept=false
 weights_from=""
 with_model=true
+with_embeddings=true
 oaf_bin=""
 rewrite_config=false
 health_timeout=60 # minutes; a cold start autotunes b12x kernels for ~10 min
@@ -53,6 +61,7 @@ Usage: $0 --email you@example.com [options]
   --weights-from SRC    rsync source for the weights instead of Hugging Face,
                         e.g. user@other-spark:/var/lib/oaf/models/$MODEL_ID/
   --no-model            install the stack only, no model
+  --no-embeddings       do not serve the $EMBED_ID embedding model
   --oaf-bin PATH        use this oaf binary instead of building one
   --rewrite-config      overwrite an existing $ETC/cluster.yaml
   --accept-licences     accept the licences without the prompt (CI, re-runs)
@@ -71,6 +80,7 @@ while [ $# -gt 0 ]; do
 	--max-model-len) max_len=$2; shift 2 ;;
 	--weights-from) weights_from=$2; shift 2 ;;
 	--no-model) with_model=false; shift ;;
+	--no-embeddings) with_embeddings=false; shift ;;
 	--oaf-bin) oaf_bin=$2; shift 2 ;;
 	--rewrite-config) rewrite_config=true; shift ;;
 	--accept-licences | --accept-licenses) accept=true; shift ;;
@@ -85,6 +95,8 @@ info() { printf '    %s\n' "$*"; }
 die() { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 [ -n "$email" ] || { usage >&2; die "--email is required"; }
+# The embedding model runs on the same engine image, whose terms come with the model.
+$with_model || with_embeddings=false
 [[ $name =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "node name '$name' is not a DNS label; pass --name"
 [ -n "$address" ] || address=$(ip -4 route get 1.1.1.1 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p')
 [ -n "$address" ] || die "cannot find the management address; pass --address"
@@ -108,6 +120,7 @@ if $with_model; then
 	free_gib=$(df -BG --output=avail "$MODELS" | tail -1 | tr -dc 0-9)
 	need=100
 	[ -f "$MODELS/$MODEL_ID/.oaf-complete" ] && need=0
+	$with_embeddings && ! [ -f "$MODELS/$EMBED_ID/.oaf-complete" ] && need=$((need + 3))
 	$DOCKER image inspect "$image" >/dev/null 2>&1 || need=$((need + 20))
 	[ "$free_gib" -ge "$need" ] || die "$MODELS has ${free_gib} GiB free; the weights and image need about ${need} GiB"
 	info "${free_gib} GiB free under $MODELS"
@@ -187,6 +200,15 @@ EOF
       maxModelLen: $max_len
 EOF
 		fi
+		if $with_embeddings; then
+			cat <<EOF
+    - name: $EMBED_ID
+      catalogRef: $EMBED_ID
+      placement: { node: $name }
+      gpuMemoryUtilization: $EMBED_UTIL
+      maxModelLen: $EMBED_LEN
+EOF
+		fi
 		cat <<EOF
   routing:
     mode: observe
@@ -225,6 +247,18 @@ EOF
 	sudo install -m 0644 "$tmp" "$ETC/cluster.yaml"
 	rm -f "$tmp"
 	info "wrote $ETC/cluster.yaml"
+fi
+if $with_embeddings && ! sudo grep -q "catalogRef: $EMBED_ID" "$ETC/cluster.yaml"; then
+	# An older install: add the embedding model, but only if the memory is
+	# there now. MemAvailable already reflects the running chat model.
+	avail_gib=$(awk '/MemAvailable/ {printf "%d", $2/1048576}' /proc/meminfo)
+	min_gib=$(awk -v g="$EMBED_GIB" 'BEGIN {printf "%d", g + 2.5}')
+	if [ "$avail_gib" -lt "$min_gib" ]; then
+		die "adding $EMBED_ID needs about ${EMBED_GIB} GiB of memory plus headroom (${min_gib} GiB available wanted, ${avail_gib} GiB available now). Free memory or pass --no-embeddings."
+	fi
+	sudo oaf models add "$EMBED_ID" --catalog-ref "$EMBED_ID" --util "$EMBED_UTIL" --max-model-len "$EMBED_LEN" \
+		-f "$ETC/cluster.yaml" --catalog "$ETC/catalog/models.yaml"
+	info "${avail_gib} GiB available; $EMBED_ID will use about ${EMBED_GIB} GiB"
 fi
 oaf validate -f "$ETC/cluster.yaml" --catalog "$ETC/catalog/models.yaml"
 
@@ -266,41 +300,62 @@ if $with_model; then
 		$DOCKER pull "$image"
 	fi
 
-	step "Weights ($MODELS/$MODEL_ID)"
-	dest=$MODELS/$MODEL_ID
-	revision=$(awk -v id="$MODEL_ID" '$0 ~ "id: "id"$" {f=1} f && /revision:/ {print $2; exit}' "$ETC/catalog/models.yaml")
-	repo=$(awk -v id="$MODEL_ID" '$0 ~ "id: "id"$" {f=1} f && /repo:/ {print $2; exit}' "$ETC/catalog/models.yaml")
-	if sudo test -f "$dest/.oaf-complete" && [ "$(sudo cat "$dest/.oaf-complete")" = "$repo@$revision" ]; then
-		info "present: $repo@$revision"
-	else
+	# fetch_weights ID [RSYNC_SOURCE] puts catalog model ID under $MODELS/ID,
+	# pinned to the catalog's revision and file list, and checks it is whole.
+	fetch_weights() {
+		local id=$1 from=${2:-} dest=$MODELS/$1 want
+		want=$($DOCKER run --rm --entrypoint python3 -v "$ETC/catalog/models.yaml":/catalog.yaml:ro "$image" -c "
+import sys, yaml
+for m in yaml.safe_load(open('/catalog.yaml'))['models']:
+    if m['id'] == sys.argv[1]:
+        hf = m['source']['huggingface']
+        print(hf['repo'] + '@' + hf['revision'])
+" "$id")
+		[ -n "$want" ] || die "the catalog has no Hugging Face source for $id"
+		step "Weights ($dest)"
+		if sudo test -f "$dest/.oaf-complete" && [ "$(sudo cat "$dest/.oaf-complete")" = "$want" ]; then
+			info "present: $want"
+			return
+		fi
 		sudo install -d -m 0755 "$dest"
-		if [ -n "$weights_from" ]; then
-			info "copying from $weights_from"
+		if [ -n "$from" ]; then
+			info "copying from $from"
 			# rsync runs as you, so your SSH keys and known_hosts apply. The source
 			# may be an HF cache snapshot of symlinks: -L copies the files.
 			sudo chown "$(id -u):$(id -g)" "$dest"
-			rsync -aL --info=progress2 "${weights_from%/}/" "$dest/"
+			rsync -aL --info=progress2 "${from%/}/" "$dest/"
 		else
-			info "downloading $repo@$revision (~95 GiB; resumes if interrupted)"
+			info "downloading $want (resumes if interrupted)"
 			$DOCKER run --rm --network host -e HF_TOKEN="${HF_TOKEN:-}" -v "$dest":/out \
-				--entrypoint python3 "$image" -c "
-import sys
+				-v "$ETC/catalog/models.yaml":/catalog.yaml:ro --entrypoint python3 "$image" -c "
+import sys, yaml
 from huggingface_hub import snapshot_download
-snapshot_download(repo_id=sys.argv[1], revision=sys.argv[2], local_dir='/out', max_workers=8)
-" "$repo" "$revision"
+m = next(m for m in yaml.safe_load(open('/catalog.yaml'))['models'] if m['id'] == sys.argv[1])
+hf = m['source']['huggingface']
+snapshot_download(repo_id=hf['repo'], revision=hf['revision'], allow_patterns=hf.get('include'), local_dir='/out', max_workers=8)
+" "$id"
 		fi
-		# Every file the index names must be there before vLLM is pointed at it.
+		# Every weight file must be there before vLLM is pointed at it: the
+		# shards a safetensors index names, or a single-file checkpoint.
 		missing=$(sudo python3 - "$dest" <<'PY'
 import json, os, sys
 d = sys.argv[1]
-idx = json.load(open(os.path.join(d, "model.safetensors.index.json")))
-need = sorted(set(idx["weight_map"].values())) + ["config.json", "tokenizer.json"]
+need = ["config.json", "tokenizer.json"]
+idx = os.path.join(d, "model.safetensors.index.json")
+if os.path.isfile(idx):
+    need += sorted(set(json.load(open(idx))["weight_map"].values()))
+elif not any(os.path.isfile(os.path.join(d, f)) for f in ("model.safetensors", "pytorch_model.bin")):
+    need.append("model.safetensors or pytorch_model.bin")
 print(" ".join(f for f in need if not os.path.isfile(os.path.join(d, f))))
 PY
 )
-		[ -z "$missing" ] || die "the weights are incomplete, missing: $missing (re-run to resume)"
-		echo "$repo@$revision" | sudo tee "$dest/.oaf-complete" >/dev/null
+		[ -z "$missing" ] || die "the $id weights are incomplete, missing: $missing (re-run to resume)"
+		echo "$want" | sudo tee "$dest/.oaf-complete" >/dev/null
 		info "complete: $(sudo du -sh "$dest" | cut -f1)"
+	}
+	fetch_weights "$MODEL_ID" "$weights_from"
+	if $with_embeddings || sudo grep -q "catalogRef: $EMBED_ID" "$ETC/cluster.yaml"; then
+		fetch_weights "$EMBED_ID"
 	fi
 fi
 
@@ -373,6 +428,14 @@ print("    " + text.replace("\n", "\n    "))
 PY
 fi
 
+if sudo grep -q "catalogRef: $EMBED_ID" "$ETC/cluster.yaml"; then
+	dims=$(curl -fsS "http://127.0.0.1:4000/v1/embeddings" -H "Authorization: Bearer $key" -H 'Content-Type: application/json' \
+		-d "{\"model\":\"$EMBED_ID\",\"input\":\"firewall rule review\"}" |
+		python3 -c 'import json,sys; print(len(json.load(sys.stdin)["data"][0]["embedding"]))')
+	[ "${dims:-0}" -gt 0 ] || die "the gateway returned no embedding from $EMBED_ID"
+	info "POST /v1/embeddings ($EMBED_ID): $dims dimensions"
+fi
+
 # The gateway exports one OTLP span per request to Langfuse (batched, a few seconds).
 lf_env=/var/lib/oaf/projects/langfuse/.env
 lf_auth="pk-lf-$(sudo sed -n 's/^LANGFUSE_PUBLIC_KEY=//p' "$lf_env"):sk-lf-$(sudo sed -n 's/^LANGFUSE_SECRET_KEY=//p' "$lf_env")"
@@ -396,5 +459,5 @@ $(printf '\033[1m')Done.$(printf '\033[0m') Endpoints on $address:
     Key service  http://$address:7702       apps rotate their own key here
 Give an app its own key: sudo oaf keys issue <app> --host host.docker.internal
 Status: sudo oaf status     Change: sudoedit $ETC/cluster.yaml && sudo oaf apply
-Memory left for other apps: about $(awk -v u="$util" -v m="$mem_gib" 'BEGIN {printf "%d", m*(1-u) - 4.6 - 3.1}') GiB (give them compose mem_limit caps).
+Memory left for other apps: about $(awk -v u="$util" -v m="$mem_gib" -v e="$(sudo grep -q "catalogRef: $EMBED_ID" "$ETC/cluster.yaml" && echo "$EMBED_GIB" || echo 0)" 'BEGIN {printf "%d", m*(1-u) - 4.6 - 3.1 - e}') GiB (give them compose mem_limit caps).
 EOF

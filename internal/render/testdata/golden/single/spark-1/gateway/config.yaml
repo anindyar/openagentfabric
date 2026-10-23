@@ -25,6 +25,12 @@ llm:
         baseUrl: http://192.168.1.11:8000/v1
         model: qwen-flash
       provider: openAI
+    - name: bge-m3
+      params:
+        apiKey: $VLLM_API_KEY
+        baseUrl: http://192.168.1.11:8001/v1
+        model: bge-m3
+      provider: openAI
     - name: auto
       params:
         apiKey: $VLLM_API_KEY

@@ -111,3 +111,39 @@ models:
           ulimits: { memlock: -1, stack: 67108864 }
           securityOpt: [seccomp=unconfined, apparmor=unconfined]   # io_uring weight loading
           caches: [/root/.cache/b12x, /root/.cache/vllm, /root/.cache/flashinfer, /root/.triton]
+
+  # Embeddings for the appliance's apps (vclocal memory search), served through
+  # the gateway like every other model. Small: about 6.5 GiB on a GB10 in all,
+  # nearly all of it vLLM's own overhead; the weights are 2.2 GiB.
+  - id: bge-m3
+    displayName: BGE-M3 (embeddings, 1024 dimensions)
+    source:
+      huggingface:
+        repo: BAAI/bge-m3
+        revision: 5617a9f61b028005a4858fdac845db406aefb181
+        # The repo also carries ONNX and duplicate weight formats; only these are served.
+        include: [config.json, config_sentence_transformers.json, modules.json, sentence_bert_config.json,
+                  "1_Pooling/*", pytorch_model.bin, sentencepiece.bpe.model, special_tokens_map.json,
+                  tokenizer.json, tokenizer_config.json]
+    license:
+      spdx: MIT
+      name: MIT
+      url: "https://huggingface.co/BAAI/bge-m3"
+      gated: false
+      redistributable: true
+    sizeGiB: 2.3
+    classes: [embedding]
+    embeddingDimensions: 1024
+    profiles:
+      - name: single
+        engine: vllm-spark-b12x
+        nodes: 1
+        tensorParallel: 1
+        # Measured on a GB10: 0.03 and 0.05 use the same memory, because vLLM's
+        # fixed overhead dominates; 0.03 leaves the most for the chat model.
+        gpuMemoryUtilization: 0.03
+        maxModelLen: 8192
+        args: [--runner, pooling, --max-num-seqs, "16"]
+        container:
+          commandPrefix: [vllm, serve]
+          ipc: host

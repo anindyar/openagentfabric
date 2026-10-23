@@ -73,7 +73,7 @@ func TestSemanticRules(t *testing.T) {
 			c.Spec.Models[0].Placement = Placement{Group: "pair-a"}
 		}, Options{}, "spec.models[0].placement", "no serving profile for 2 node(s)"},
 		{"memory over budget", pairExample, func(c *Cluster, _ *Catalog) {
-			c.Spec.Models[0].GPUMemoryUtilization = 0.40 // + 0.55 on spark-1
+			c.Spec.Models[0].GPUMemoryUtilization = 0.45 // + 0.50 on spark-1
 		}, Options{}, "spec.models", `node "spark-1"`},
 		{"port collides with gateway", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Models[0].Port = DefaultGatewayPort

@@ -120,7 +120,8 @@ Run the steps on the **control node** unless a step says otherwise. Commands tha
 system need `sudo`.
 
 ### One box: `scripts/spark-bootstrap.sh`
-For a single GB10 running the whole stack and one model, one script does every step below. On the
+For a single GB10 running the whole stack, a chat model and the embedding model, one script does
+every step below. On the
 new box:
 
 ```sh
@@ -132,16 +133,19 @@ It checks the host (aarch64, docker, compose, the NVIDIA CDI spec, disk), asks y
 licences, builds `oaf` (in a pinned Go container if the box has no Go), writes
 `/etc/oaf/cluster.yaml` with `topology: single`, runs preflight, creates the certificates, starts the
 node agent, pulls the engine image (~18 GB), downloads the weights (~95 GiB) to
-`/var/lib/oaf/models/qwen3.8-flash-next-fp4/`, runs `oaf install`, waits until `oaf status` is healthy
-and sends a test request through the gateway. A first run takes about 30–60 minutes, mostly the
+`/var/lib/oaf/models/qwen3.8-flash-next-fp4/` and bge-m3's (~2.3 GiB) to `/var/lib/oaf/models/bge-m3/`,
+runs `oaf install`, waits until `oaf status` is healthy and sends a chat and an embedding request
+through the gateway. On a box installed before bge-m3 was a default, a re-run adds it to cluster.yaml,
+but only when at least 9 GiB of memory is available. A first run takes about 30–60 minutes, mostly the
 download and the model's first start (it autotunes kernels for about 10 minutes; the results are kept
 in volumes, so later starts are faster). Every step checks before it acts, so re-run it after a failure.
 
 | Option | Default | Use |
 |---|---|---|
-| `--util` | `0.75` | vLLM's share of unified memory. 0.75 keeps the full 262K context with ~800K tokens of KV cache and leaves about 22 GiB for other apps |
+| `--util` | `0.75` | vLLM's share of unified memory. 0.75 keeps the full 262K context with ~800K tokens of KV cache and, with bge-m3, leaves about 15 GiB for other apps |
 | `--weights-from user@host:/path/` | Hugging Face | copy the weights from another box over SSH instead of downloading |
 | `--no-model` | | the stack only |
+| `--no-embeddings` | | no bge-m3 embedding model (frees about 6.5 GiB) |
 | `--name`, `--address` | hostname, default-route address | the node name (a DNS label) and management address |
 | `--rewrite-config` | keep | replace an existing `/etc/oaf/cluster.yaml` |
 | `--accept-licences` | prompt | accept without the prompt (re-runs, automation) |
@@ -459,7 +463,22 @@ Each entry under `spec.models` is one served model:
   vLLM runs with `HF_HUB_OFFLINE=1` and never downloads anything itself.
 - **Memory shares:** vLLM takes about 90% of unified memory unless told otherwise, so every
   deployment states its share. The shares on one node must add up to 0.90 or less, which leaves room
-  for the OS and the OAF services.
+  for the OS and the OAF services. Each vLLM instance also uses about 4.6 GiB outside its share
+  (CUDA context and processes); `oaf validate` warns when the shares plus that overhead pass 0.90.
+- **Embeddings:** catalog models of class `embedding` serve `/v1/embeddings` through the gateway, by
+  deployment name, and are never a chat route (`routing.defaults` and rules refuse them). The
+  one-box appliance serves `bge-m3` (1024 dimensions) by default, at `gpuMemoryUtilization: 0.03`:
+  about 6.5 GiB in all, measured on a GB10, nearly all of it vLLM's fixed overhead.
+
+  ```sh
+  curl http://<gateway>:4000/v1/embeddings -H "Authorization: Bearer $KEY" \
+    -H 'Content-Type: application/json' -d '{"model":"bge-m3","input":"firewall rule review"}'
+  ```
+
+  `oaf keys issue` passes it to apps as `AGENT_GATEWAY_EMBEDDING_MODEL` and
+  `AGENT_GATEWAY_EMBEDDING_DIMENSIONS`. To add it to an existing cluster.yaml (comments kept,
+  validated before it is written): `sudo oaf models add bge-m3 --catalog-ref bge-m3`, then
+  `sudo oaf apply`; the bootstrap does this itself when enough memory is free.
 - **Licences:** components or models whose terms are not plain open source must be accepted first. Read
   the page that `oaf validate` names and record it under `spec.licenseAcceptances`. The vLLM image
   ships NVIDIA's CUDA libraries, so it needs `image/vllm`:
@@ -617,6 +636,6 @@ vLLM has no container limit: its share is set by `gpuMemoryUtilization`.
 ### Commands
 `oaf validate`, `oaf preflight [--ssh]`, `oaf pki init`, `oaf node serve`, `oaf fabric check`,
 `oaf install`, `oaf apply [--dry-run]`, `oaf status`, `oaf uninstall --yes [--purge]`,
-`oaf keys issue|rotate|list|serve`, `oaf version`.
+`oaf keys issue|rotate|list|serve`, `oaf models add`, `oaf version`.
 Every command has `--help`. Commands that act on the cluster take `-f` (cluster.yaml),
 `--catalog`, `--pki-dir`, `--secrets-dir` and `--timeout`.

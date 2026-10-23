@@ -132,8 +132,27 @@ func appEnv(f *stackFlags, creds keys.Credentials, host string) (string, error) 
 		if w := smallestContextWindow(c, cat); w > 0 {
 			fmt.Fprintf(&b, "AGENT_GATEWAY_CONTEXT_WINDOW=%d\n", w)
 		}
+		if name, dims := embeddingModel(c, cat); name != "" {
+			fmt.Fprintf(&b, "AGENT_GATEWAY_EMBEDDING_MODEL=%s\n", name)
+			if dims > 0 {
+				fmt.Fprintf(&b, "AGENT_GATEWAY_EMBEDDING_DIMENSIONS=%d\n", dims)
+			}
+		}
 	}
 	return b.String(), nil
+}
+
+// embeddingModel is the first enabled embedding deployment and its vector size.
+func embeddingModel(c *config.Cluster, cat *config.Catalog) (string, int) {
+	for _, d := range c.Spec.Models {
+		if !d.IsEnabled() {
+			continue
+		}
+		if m, ok := cat.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
+			return d.Name, m.EmbeddingDimensions
+		}
+	}
+	return "", 0
 }
 
 func joinHostPort(host string, port int) string {
@@ -153,21 +172,23 @@ func gatewayAddress(c *config.Cluster) string {
 	return "127.0.0.1"
 }
 
-// smallestContextWindow is the smallest served window among the enabled
+// smallestContextWindow is the smallest served window among the enabled chat
 // models: an app that does not know which model "auto" picks must fit the
-// smallest. 0 when no model states one.
+// smallest. Embedding models do not count. 0 when no model states one.
 func smallestContextWindow(c *config.Cluster, cat *config.Catalog) int {
 	smallest := 0
 	for _, d := range c.Spec.Models {
 		if !d.IsEnabled() {
 			continue
 		}
+		m, known := cat.Lookup(d.CatalogRef)
+		if known && m.IsEmbedding() {
+			continue
+		}
 		w := d.MaxModelLen
-		if w == 0 {
-			if m, ok := cat.Lookup(d.CatalogRef); ok {
-				if p, err := config.Profile(d, m, len(c.PlacementNodes(d.Placement))); err == nil {
-					w = p.MaxModelLen
-				}
+		if w == 0 && known {
+			if p, err := config.Profile(d, m, len(c.PlacementNodes(d.Placement))); err == nil {
+				w = p.MaxModelLen
 			}
 		}
 		if w > 0 && (smallest == 0 || w < smallest) {

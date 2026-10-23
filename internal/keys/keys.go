@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -90,7 +89,7 @@ func (s *Service) Issue(ctx context.Context, name string, models []string) (Cred
 		return Credentials{}, err
 	}
 	if changed {
-		if err := writeFileAtomic(s.ClusterPath, out); err != nil {
+		if err := config.WriteFileAtomic(s.ClusterPath, out); err != nil {
 			return Credentials{}, err
 		}
 	}
@@ -184,33 +183,4 @@ func secretRefFor(c *config.Cluster, name string) string {
 		}
 	}
 	return ""
-}
-
-// writeFileAtomic replaces path with data, keeping its permissions.
-func writeFileAtomic(path string, data []byte) error {
-	mode := os.FileMode(0o644)
-	if fi, err := os.Stat(path); err == nil {
-		mode = fi.Mode().Perm()
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
 }

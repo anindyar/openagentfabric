@@ -74,6 +74,11 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
+        "embeddingDimensions": {
+          "description": "Vector size of an embedding-class model, passed to apps that store the vectors.",
+          "type": "integer",
+          "minimum": 1
+        },
         "classes": {
           "description": "Routing classes. They drive default routing: fast → `model: auto`, think → reasoning signals, medical → medical signals.",
           "type": "array",

@@ -6,8 +6,9 @@
 # Memory on one GB10 (121.6 GiB visible), measured on a DGX Spark 2026-10-20:
 #   qwen-flash at 0.75   91.2 GiB  (weights 72.9, activations 2.0, fp8 KV ~15.3)
 #   vLLM host processes  ~4.6 GiB  (outside --gpu-memory-utilization)
+#   embed (bge-m3)       ~6.5 GiB  (measured 2026-10-23; mostly vLLM overhead)
 #   OAF stack            ~3.1 GiB  (capped at 7.3 GiB)
-#   left                 ~22 GiB   for the OS and other apps
+#   left                 ~15 GiB   for the OS and other apps
 apiVersion: oaf/v1alpha1
 kind: Cluster
 metadata:
@@ -27,6 +28,14 @@ spec:
       placement: { node: spark-1 }
       gpuMemoryUtilization: 0.75
       maxModelLen: 262144
+    # Embeddings for the apps on the box, through the gateway at /v1/embeddings.
+    # Named after the model: apps store these vectors, so a different model
+    # must look different to them.
+    - name: bge-m3
+      catalogRef: bge-m3
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.03
+      maxModelLen: 8192
   routing:
     mode: observe
     gateway:

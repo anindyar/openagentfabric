@@ -176,6 +176,7 @@ func (r *renderer) apiKeyPolicy() (map[string]any, error) {
 func (r *renderer) gatewayModels() ([]map[string]any, error) {
 	var out []map[string]any
 	base := map[string]string{}
+	firstChat := ""
 	for i, d := range r.Cluster.Spec.Models {
 		if !d.IsEnabled() {
 			continue
@@ -183,14 +184,22 @@ func (r *renderer) gatewayModels() ([]map[string]any, error) {
 		nodes := r.Cluster.PlacementNodes(d.Placement)
 		n, _ := r.Cluster.Node(nodes[0])
 		base[d.Name] = "http://" + hostPort(n.Address, r.Cluster.ModelPort(i)) + "/v1"
+		// Embedding models are served by name for /v1/embeddings; "auto"
+		// never routes to one.
 		out = append(out, backend(d.Name, d.Name, base[d.Name]))
+		if m, ok := r.Catalog.Lookup(d.CatalogRef); firstChat == "" && (!ok || !m.IsEmbedding()) {
+			firstChat = d.Name
+		}
 	}
 	if len(out) == 0 {
 		return nil, nil
 	}
 	fast := r.Cluster.Spec.Routing.Defaults.Fast
 	if fast == "" {
-		fast = out[0]["name"].(string)
+		fast = firstChat
+	}
+	if fast == "" {
+		return out, nil // embedding models only: no chat route for "auto"
 	}
 	if _, ok := base[fast]; !ok {
 		return nil, fmt.Errorf("routing.defaults.fast %q is not an enabled model", fast)

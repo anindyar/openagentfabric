@@ -36,7 +36,8 @@ spec:
       catalogRef: gpt-oss-120b
       profile: pair-tp2
       placement: { group: pair-a }
-      gpuMemoryUtilization: 0.55
+      # 0.30 + 0.50 plus ~4.6 GiB of vLLM overhead per model stays under 0.90 on spark-1.
+      gpuMemoryUtilization: 0.50
   routing:
     mode: observe
     gateway:

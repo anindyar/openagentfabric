@@ -290,15 +290,30 @@ func (c *Catalog) Lookup(id string) (*CatalogModel, bool) {
 
 // CatalogModel is one model the catalog knows how to serve.
 type CatalogModel struct {
-	ID          string        `yaml:"id"`
-	DisplayName string        `yaml:"displayName,omitempty"`
-	Description string        `yaml:"description,omitempty"`
-	Source      ModelSource   `yaml:"source"`
-	License     ModelLicense  `yaml:"license"`
-	Entitlement *Entitlement  `yaml:"entitlement,omitempty"`
-	SizeGiB     float64       `yaml:"sizeGiB"`
-	Classes     []string      `yaml:"classes"`
-	Profiles    []ServingProf `yaml:"profiles"`
+	ID          string       `yaml:"id"`
+	DisplayName string       `yaml:"displayName,omitempty"`
+	Description string       `yaml:"description,omitempty"`
+	Source      ModelSource  `yaml:"source"`
+	License     ModelLicense `yaml:"license"`
+	Entitlement *Entitlement `yaml:"entitlement,omitempty"`
+	SizeGiB     float64      `yaml:"sizeGiB"`
+	Classes     []string     `yaml:"classes"`
+	// EmbeddingDimensions is the vector size of an embedding-class model.
+	EmbeddingDimensions int           `yaml:"embeddingDimensions,omitempty"`
+	Profiles            []ServingProf `yaml:"profiles"`
+}
+
+// ClassEmbedding marks a model that serves /v1/embeddings, not chat.
+const ClassEmbedding = "embedding"
+
+// IsEmbedding reports whether the model serves embeddings.
+func (m *CatalogModel) IsEmbedding() bool {
+	for _, c := range m.Classes {
+		if c == ClassEmbedding {
+			return true
+		}
+	}
+	return false
 }
 
 // Entitlement names the feature that unlocks a model.

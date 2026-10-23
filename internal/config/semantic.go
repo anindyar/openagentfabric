@@ -8,9 +8,19 @@ import (
 	"strings"
 )
 
-// MaxNodeMemoryFraction caps the summed gpuMemoryUtilization of the
-// deployments on one node, leaving unified memory for the OS and services.
+// MaxNodeMemoryFraction caps what the deployments on one node may take of its
+// unified memory, leaving the rest for the OS and services.
 const MaxNodeMemoryFraction = 0.90
+
+// Each vLLM instance also uses memory outside --gpu-memory-utilization: the
+// CUDA context, the API server and worker processes. Measured on a GB10
+// (121.6 GiB visible): ~4.6 GiB for the chat model's processes, ~2.7 GiB on
+// top of its budget for a small embedding model. The larger figure is charged
+// to every deployment, so two models on one box are not over-committed.
+const (
+	GB10MemoryGiB        = 121.6
+	VLLMInstanceOverhead = 4.6 / GB10MemoryGiB
+)
 
 // DefaultGatewayPort matches the schema default for routing.gateway.port.
 const DefaultGatewayPort = 4000
@@ -352,6 +362,7 @@ func (k *checker) groupsCheck() {
 func (k *checker) models() {
 	names := map[string]bool{}
 	memory := map[string]float64{}
+	instances := map[string]int{}
 	ports := map[string]map[int]string{} // node -> port -> owner
 
 	reserve := func(node string, port int, owner, path string) {
@@ -410,6 +421,7 @@ func (k *checker) models() {
 		}
 		for r, n := range placed {
 			memory[n] += d.GPUMemoryUtilization
+			instances[n]++
 			if r == 0 {
 				reserve(n, k.c.ModelPort(i), fmt.Sprintf("model %q", d.Name), p+".port")
 				if len(placed) > 1 {
@@ -421,6 +433,11 @@ func (k *checker) models() {
 	for _, n := range sortedKeys(memory) {
 		if memory[n] > MaxNodeMemoryFraction+1e-9 {
 			k.errorf("spec.models", "node %q: gpuMemoryUtilization of its deployments sums to %.2f, over the %.2f limit", n, memory[n], MaxNodeMemoryFraction)
+			continue
+		}
+		if total := memory[n] + float64(instances[n])*VLLMInstanceOverhead; total > MaxNodeMemoryFraction+1e-9 {
+			k.warnf("spec.models", "node %q: with about %.1f GiB of vLLM overhead per model its deployments need %.2f of unified memory, over the %.2f limit; little is left for the OS and other apps",
+				n, VLLMInstanceOverhead*GB10MemoryGiB, total, MaxNodeMemoryFraction)
 		}
 	}
 }
@@ -466,21 +483,36 @@ func (k *checker) profileFor(d ModelDeployment, m *CatalogModel, nodes int, path
 func (k *checker) routing() {
 	r := k.c.Spec.Routing
 	served := map[string]bool{}
+	embedding := map[string]bool{} // embedding models are served, but never a chat route
+	chatModels := 0
 	for _, d := range k.c.Spec.Models {
-		if d.IsEnabled() {
-			served[d.Name] = true
+		if !d.IsEnabled() {
+			continue
+		}
+		served[d.Name] = true
+		if m, ok := k.cat.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
+			embedding[d.Name] = true
+		} else {
+			chatModels++
 		}
 	}
-	hasModels := len(served) > 0
+	chatTarget := func(path, name string) {
+		switch {
+		case !served[name]:
+			k.errorf(path, "%q is not an enabled deployment", name)
+		case embedding[name]:
+			k.errorf(path, "%q is an embedding model; it cannot answer chat requests", name)
+		}
+	}
 
-	if hasModels && r.Defaults.Fast == "" {
+	if chatModels > 0 && r.Defaults.Fast == "" {
 		k.errorf("spec.routing.defaults.fast", "required when models are deployed")
 	}
-	if r.Defaults.Fast != "" && !served[r.Defaults.Fast] {
-		k.errorf("spec.routing.defaults.fast", "%q is not an enabled deployment", r.Defaults.Fast)
+	if r.Defaults.Fast != "" {
+		chatTarget("spec.routing.defaults.fast", r.Defaults.Fast)
 	}
-	if r.Defaults.Fallback != "" && !served[r.Defaults.Fallback] {
-		k.errorf("spec.routing.defaults.fallback", "%q is not an enabled deployment", r.Defaults.Fallback)
+	if r.Defaults.Fallback != "" {
+		chatTarget("spec.routing.defaults.fallback", r.Defaults.Fallback)
 	}
 
 	ruleNames := map[string]bool{}
@@ -496,8 +528,8 @@ func (k *checker) routing() {
 			k.warnf(p, "rule %q is inactive: entitlement %q is not present; matching requests go to the default model", rule.Name, rule.Requires.Entitlement)
 		case !served[rule.Target] && gated:
 			k.warnf(p+".target", "rule %q is inactive: %q is not deployed", rule.Name, rule.Target)
-		case !served[rule.Target]:
-			k.errorf(p+".target", "%q is not an enabled deployment", rule.Target)
+		default:
+			chatTarget(p+".target", rule.Target)
 		}
 	}
 

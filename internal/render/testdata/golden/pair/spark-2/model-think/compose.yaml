@@ -15,7 +15,7 @@ services:
       - --served-model-name
       - think
       - --gpu-memory-utilization
-      - "0.55"
+      - "0.5"
       - --tensor-parallel-size
       - "2"
       - --nnodes
