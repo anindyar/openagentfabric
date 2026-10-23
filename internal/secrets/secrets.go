@@ -54,6 +54,14 @@ func (s Store) Value(name string) (string, error) {
 	return s.Value(name)
 }
 
+// Lookup returns an existing secret without generating a missing one.
+func (s Store) Lookup(name string) (string, bool, error) {
+	if !validName.MatchString(name) {
+		return "", false, fmt.Errorf("invalid secret name %q", name)
+	}
+	return s.read(name)
+}
+
 func (s Store) read(name string) (string, bool, error) {
 	p := filepath.Join(s.Dir, name)
 	b, err := os.ReadFile(p)

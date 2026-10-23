@@ -467,6 +467,14 @@ If the gateway cannot be applied, the old key is put back and stays valid.
 `X-OAF-User` and `X-OAF-Session` headers. Langfuse then lists the trace under that user and session.
 The headers only label traces; they grant nothing, and requests without them are traced as before.
 
+**Which step used which model.** Each call is traced as `llm <model>`. An app names the step that
+made it with `X-OAF-Step` (e.g. `chat pass 2`, `case draft`), shown as the `oaf.step` attribute.
+To see its own work and the model calls in one trace, the app sends its spans to Langfuse
+(`$LANGFUSE_HOST/api/public/otel/v1/traces`) and passes a W3C `traceparent` header on each call:
+the gateway exports the call as a child of the app's span. `oaf keys issue` prints `LANGFUSE_HOST`,
+`LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` for this when Langfuse is on; the same keys read
+traces back through Langfuse's public API.
+
 ## 7. Models
 
 Each entry under `spec.models` is one served model:

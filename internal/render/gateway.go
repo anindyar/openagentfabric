@@ -15,6 +15,9 @@ import (
 const (
 	HeaderUser    = "x-oaf-user"
 	HeaderSession = "x-oaf-session"
+	// HeaderStep names the app step that made the call (e.g. "chat pass 2",
+	// "case draft"), so a trace shows which part of an app used which model.
+	HeaderStep = "x-oaf-step"
 )
 
 // AutoModel is the model name that vSR routes. Until the vSR renderer lands
@@ -113,8 +116,11 @@ func (r *renderer) tracing(obs config.Node) map[string]any {
 			capture = *lf.CaptureContent
 		}
 	}
+	// An app joins the call to its own trace with a W3C traceparent header;
+	// the gateway then exports the call as a child of the app's span.
 	fields := map[string]string{
-		"span.name":                      `"openai.chat"`,
+		// Named after the model, so traces with several models read at a glance.
+		"span.name":                      `"llm " + llm.requestModel`,
 		"gen_ai.system":                  "llm.provider",
 		"gen_ai.usage.prompt_tokens":     "llm.inputTokens",
 		"gen_ai.usage.completion_tokens": "llm.outputTokens",
@@ -123,6 +129,7 @@ func (r *renderer) tracing(obs config.Node) map[string]any {
 		// request without them is still traced, with the fields left out.
 		"user.id":    `request.headers["` + HeaderUser + `"]`,
 		"session.id": `request.headers["` + HeaderSession + `"]`,
+		"oaf.step":   `request.headers["` + HeaderStep + `"]`,
 	}
 	if capture {
 		fields["gen_ai.prompt"] = "flattenRecursive(llm.prompt)"

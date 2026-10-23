@@ -81,8 +81,10 @@ func newKeysIssueCmd() *cobra.Command {
 		Short: "Make sure an app has a gateway key, and print its connection settings",
 		Long: "Adds routing.keys entry <name> (secret gateway-key-<name>) to cluster.yaml if it is\n" +
 			"missing, generates the key, applies the gateway, and prints the app's settings as\n" +
-			"AGENT_GATEWAY_* env lines. Re-running returns the same key. --host is the gateway\n" +
-			"address as the app sees it (host.docker.internal for a container on the gateway node).",
+			"AGENT_GATEWAY_* env lines (and LANGFUSE_* ones when Langfuse is on, so the app can\n" +
+			"trace its own steps and read traces back). Re-running returns the same key. --host is\n" +
+			"the gateway address as the app sees it (host.docker.internal for a container on the\n" +
+			"gateway node).",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), f.timeout)
@@ -139,7 +141,39 @@ func appEnv(f *stackFlags, creds keys.Credentials, host string) (string, error) 
 			}
 		}
 	}
+	b.WriteString(langfuseEnv(f, c, host))
 	return b.String(), nil
+}
+
+// langfuseEnv points an app at Langfuse with the project's keys: the app
+// sends spans for its own steps (OTLP) and joins the gateway's model calls
+// to them with traceparent, then reads traces back for its own UI. Empty
+// when Langfuse is off or its keys are not generated yet.
+func langfuseEnv(f *stackFlags, c *config.Cluster, gatewayHost string) string {
+	if lf := c.Spec.Observability.Langfuse; lf != nil && lf.Enabled != nil && !*lf.Enabled {
+		return ""
+	}
+	store := secrets.Store{Dir: f.secretsDir}
+	pk, ok1, err1 := store.Lookup(render.SecretLangfusePublicKey)
+	sk, ok2, err2 := store.Lookup(render.SecretLangfuseSecretKey)
+	if err1 != nil || err2 != nil || !ok1 || !ok2 || pk == "" || sk == "" {
+		return ""
+	}
+	host := ""
+	for _, n := range c.Spec.Nodes {
+		if n.HasRole(config.RoleObservability) {
+			host = n.Address
+			// Same node as the gateway: reach it the way the app reaches the gateway.
+			if n.HasRole(config.RoleGateway) && gatewayHost != "" {
+				host = gatewayHost
+			}
+		}
+	}
+	if host == "" {
+		return ""
+	}
+	return fmt.Sprintf("LANGFUSE_HOST=http://%s\nLANGFUSE_PUBLIC_KEY=pk-lf-%s\nLANGFUSE_SECRET_KEY=sk-lf-%s\n",
+		joinHostPort(host, config.PortLangfuse), pk, sk)
 }
 
 // embeddingModel is the first enabled embedding deployment and its vector size.
