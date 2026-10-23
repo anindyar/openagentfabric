@@ -58,6 +58,21 @@ func TestObservabilityEnable(t *testing.T) {
 	if s := c.Spec.Observability.Metrics.Scrape; len(s) != 1 || s[0].URL != "https://10.0.0.6:8080/metrics" || s[0].InsecureSkipVerify {
 		t.Fatalf("scrape = %+v", s)
 	}
+	if out, err = runCLI(t, "observability", "grafana-url", "https://10.0.0.5/grafana/", "-f", cluster); err != nil {
+		t.Fatalf("grafana-url: %v\n%s", err, out)
+	}
+	if out, _ = runCLI(t, "observability", "grafana-url", "https://10.0.0.5/grafana/", "-f", cluster); !strings.Contains(out, "nothing to change") {
+		t.Fatalf("second grafana-url must be a no-op:\n%s", out)
+	}
+	if c, _ = config.LoadCluster(cluster); c.Spec.Observability.Grafana.RootURL != "https://10.0.0.5/grafana/" {
+		t.Fatalf("rootUrl = %q", c.Spec.Observability.Grafana.RootURL)
+	}
+	if out, err = runCLI(t, "observability", "grafana-url", "", "-f", cluster); err != nil {
+		t.Fatalf("clear: %v\n%s", err, out)
+	}
+	if c, _ = config.LoadCluster(cluster); c.Spec.Observability.Grafana.RootURL != "" {
+		t.Fatal("rootUrl not cleared")
+	}
 	if _, err = runCLI(t, "observability", "enable", "tracing", "-f", cluster); err == nil {
 		t.Fatal("unknown feature accepted")
 	}

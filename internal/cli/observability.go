@@ -19,7 +19,7 @@ var observabilityFeatures = map[string][]string{
 
 func newObservabilityCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "observability", Short: "Turn optional observability features on or off in cluster.yaml"}
-	cmd.AddCommand(newObservabilitySetCmd("enable", true), newObservabilitySetCmd("disable", false), newObservabilityScrapeCmd())
+	cmd.AddCommand(newObservabilitySetCmd("enable", true), newObservabilitySetCmd("disable", false), newObservabilityScrapeCmd(), newObservabilityGrafanaURLCmd())
 	return cmd
 }
 
@@ -90,6 +90,38 @@ func newObservabilitySetCmd(verb string, value bool) *cobra.Command {
 				return err
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%sd %s; run `oaf apply` to deploy\n", verb, strings.Join(args, ", "))
+			return err
+		},
+	}
+	cmd.Flags().StringVarP(&clusterPath, "file", "f", DefaultClusterPath, "path to cluster.yaml")
+	return cmd
+}
+
+func newObservabilityGrafanaURLCmd() *cobra.Command {
+	var clusterPath string
+	cmd := &cobra.Command{
+		Use:   "grafana-url <url>",
+		Short: "Set the public URL an app serves Grafana at through its reverse proxy (\"\" clears it)",
+		Long: "For an app that embeds Grafana from its own origin, e.g. https://console/grafana/. A path\n" +
+			"makes Grafana serve from that sub path, on its own port too. Run `oaf apply` afterwards.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			data, err := os.ReadFile(clusterPath)
+			if err != nil {
+				return err
+			}
+			out, changed, err := config.SetSpecString(data, args[0], "observability", "grafana", "rootUrl")
+			if err != nil {
+				return err
+			}
+			if !changed {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s: nothing to change\n", clusterPath)
+				return err
+			}
+			if err := config.WriteFileAtomic(clusterPath, out); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "grafana rootUrl set; run `oaf apply` to deploy\n")
 			return err
 		},
 	}

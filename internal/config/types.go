@@ -287,6 +287,10 @@ type GrafanaSettings struct {
 	// AnonymousViewer lets anyone who reaches Grafana view dashboards
 	// without signing in, so an app can embed them.
 	AnonymousViewer bool `yaml:"anonymousViewer,omitempty"`
+	// RootURL is the public URL Grafana is reached at when an app serves it
+	// through its own reverse proxy, e.g. https://console/grafana/. A path
+	// makes Grafana serve from that sub path (also on its own port).
+	RootURL string `yaml:"rootUrl,omitempty"`
 }
 
 // EntitlementRef points to a signed entitlement file.

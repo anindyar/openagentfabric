@@ -152,6 +152,55 @@ func SetSpecBool(data []byte, value bool, path ...string) ([]byte, bool, error) 
 	return out, true, nil
 }
 
+// SetSpecString sets the string at path under spec, like SetSpecBool; an
+// empty value removes the key.
+func SetSpecString(data []byte, value string, path ...string) ([]byte, bool, error) {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, false, err
+	}
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, false, fmt.Errorf("cluster.yaml is not a mapping")
+	}
+	m := mappingChild(doc.Content[0], "spec")
+	if m == nil {
+		return nil, false, fmt.Errorf("cluster.yaml has no spec")
+	}
+	if len(path) == 0 {
+		return nil, false, fmt.Errorf("empty path")
+	}
+	for _, k := range path[:len(path)-1] {
+		m = mappingChildOrCreate(m, k)
+	}
+	leaf := path[len(path)-1]
+	idx := -1
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == leaf {
+			idx = i
+		}
+	}
+	switch {
+	case idx >= 0 && value == "":
+		m.Content = append(m.Content[:idx], m.Content[idx+2:]...)
+	case idx >= 0 && m.Content[idx+1].Value == value:
+		return data, false, nil
+	case idx >= 0:
+		*m.Content[idx+1] = *scalar(value)
+	case value == "":
+		return data, false, nil
+	default:
+		m.Content = append(m.Content, scalar(leaf), scalar(value))
+	}
+	out, err := encode(&doc)
+	if err != nil {
+		return nil, false, err
+	}
+	if _, err := ParseCluster(out); err != nil {
+		return nil, false, fmt.Errorf("setting spec.%s: %w", strings.Join(path, "."), err)
+	}
+	return out, true, nil
+}
+
 // SetScrapeTarget adds or replaces the app scrape target with t's name under
 // spec.observability.metrics.scrape, keeping comments and order.
 func SetScrapeTarget(data []byte, t ScrapeTarget) ([]byte, bool, error) {

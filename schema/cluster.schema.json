@@ -768,6 +768,11 @@
               "description": "Let anyone who reaches Grafana view dashboards without signing in, so an app can embed them.",
               "type": "boolean",
               "default": false
+            },
+            "rootUrl": {
+              "description": "Public URL when an app serves Grafana through its own reverse proxy, e.g. https://console.example/grafana/. A path makes Grafana serve from that sub path, on its own port too.",
+              "type": "string",
+              "pattern": "^https?://[^/]+(/.*)?$"
             }
           }
         }

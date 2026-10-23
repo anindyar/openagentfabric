@@ -223,9 +223,18 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 		"GF_ANALYTICS_FEEDBACK_LINKS_ENABLED":       "false",
 		"GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH": dashboardsDir + "/" + homeDashboard,
 	}
-	if g := r.Cluster.Spec.Observability.Grafana; g != nil && g.AnonymousViewer {
-		graf.Environment["GF_AUTH_ANONYMOUS_ENABLED"] = "true"
-		graf.Environment["GF_AUTH_ANONYMOUS_ORG_ROLE"] = "Viewer"
+	if g := r.Cluster.Spec.Observability.Grafana; g != nil {
+		if g.AnonymousViewer {
+			graf.Environment["GF_AUTH_ANONYMOUS_ENABLED"] = "true"
+			graf.Environment["GF_AUTH_ANONYMOUS_ORG_ROLE"] = "Viewer"
+		}
+		if g.RootURL != "" {
+			root := strings.TrimRight(g.RootURL, "/") + "/"
+			graf.Environment["GF_SERVER_ROOT_URL"] = root
+			if u, err := url.Parse(root); err == nil && u.Path != "/" {
+				graf.Environment["GF_SERVER_SERVE_FROM_SUB_PATH"] = "true"
+			}
+		}
 	}
 	graf.Ports = []string{portMap(config.PortGrafana, 3000)}
 	graf.Volumes = []string{

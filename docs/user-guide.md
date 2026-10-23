@@ -414,6 +414,10 @@ spec:
 Or, keeping the rest of the file as it is: `sudo oaf observability enable logs remote-write
 anonymous-grafana`, then `sudo oaf apply`.
 
+An app that embeds Grafana from its own origin (one certificate for the browser to trust) proxies
+a path to it and tells Grafana: `sudo oaf observability grafana-url https://<app>/grafana/`. Grafana
+then serves from `/grafana/`, on port 3001 too (`http://<observability>:3001/grafana/`).
+
 An app's own `/metrics` joins with `sudo oaf observability scrape <app> https://<host>:<port>/metrics
 [--insecure]` (job `app-<app>`, label `app`; `--insecure` accepts the app's self-signed certificate).
 
