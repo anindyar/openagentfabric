@@ -151,8 +151,8 @@ models:
           NCCL_CUMEM_ENABLE: "0"
           NCCL_NVLS_ENABLE: "0"
           NCCL_IB_ROCE_VERSION_NUM: "2"
-        container:
-          commandPrefix: [vllm, serve]
+        # No commandPrefix: vLLM's published images start with `vllm serve`
+        # (ENTRYPOINT), unlike the community GB10 build.
 
   # Embeddings for the appliance's apps (vclocal memory search), served through
   # the gateway like every other model. Small: about 6.5 GiB on a GB10 in all,
