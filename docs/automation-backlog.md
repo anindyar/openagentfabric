@@ -17,16 +17,17 @@ Status: **open**, **in progress**, **done (commit)**.
 | G5 | Join copied all bundle images; `docker load` dropped their digests, 47 GB unusable, pruned by hand (`docker image prune`) | .212, 2026-10-24 | Join skips copying when registries are reachable (done a0f6c26, 270d85f); offline boxes pull from a registry on the control node (PLAN M5) | in progress |
 | G6 | `systemctl daemon-reload` after the agent's unit file changed | .212, 2026-10-24 | `oaf upgrade` (see U1) reloads units it changes | open |
 | G7 | Join token passed on the command line (visible in the process list) | join, 2026-10-24 | Pass it to `oaf join` through the environment or stdin | open |
+| G8 | Add-model form could not offer a new pair (only pairs that already ran a model) | console, 2026-10-24 | Status lists spec.groups; the form offers every pair (af8e2ee, Garrison 5a8164f) | done |
 
 ## Models
 
 | # | Done by hand | Where | Automatic replacement | Status |
 |---|---|---|---|---|
 | M1 | GLM-5.3-Flash weights downloaded with `hf download` (pinned revision) to `/var/lib/oaf/models/<id>` on one box | .142, 2026-10-24 | Model pipeline (PLAN M2): download on one node, check disk first, fan out over the fabric to every node of the group, verify checksums | open |
-| M2 | Weights to be copied to the second box of the pair over ConnectX-7 (rsync) | pair, pending | Same as M1 (fan-out step) | open |
+| M2 | Weights copied to the second box of the pair over a ConnectX-7 rail with `tar -c | nc` → `nc -l <rail IP> | tar -x` (netcat installed if missing), then file-size lists compared | pair, 2026-10-24 | Same as M1 (fan-out step, over the fabric, with checksums) | open |
 | M3 | Engine image `vllm/vllm-openai:glm53-flash-arm64-cu130` pulled by hand on both boxes | pair, 2026-10-24 | `oaf apply` pulls each deployment's pinned image on its nodes before starting it (pre-pull with progress) | open |
 | M4 | vSR encoder artifact must be placed in `<modelsPath>/vsr-encoder` before reasoning signals work | gateway node | Pipeline fetches bundle artifacts by pinned revision (PLAN M2) | open |
-| M5 | Model catalog on the box (`/etc/oaf/catalog/models.yaml`) replaced by hand with the repo's version | .242, 2026-10-24 | The catalog ships in the bundle and `oaf upgrade` installs it | open |
+| M5 | Model catalog on the box (`/etc/oaf/catalog/models.yaml`) replaced by hand with the repo's version; it is stale again (GLM still says 512K, repo says 256K) | .242, 2026-10-24 | The catalog ships in the bundle and `oaf upgrade` installs it | open |
 | M6 | NVIDIA CUDA EULA acceptance for a new engine image recorded in `spec.licenseAcceptances` | pending | Console asks for acceptance when a plan needs an image with included terms, and records who and when | open |
 
 ## Upgrades and services
