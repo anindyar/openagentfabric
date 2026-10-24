@@ -10,13 +10,13 @@ Status: **open**, **in progress**, **done (commit)**.
 
 | # | Done by hand | Where | Automatic replacement | Status |
 |---|---|---|---|---|
-| G1 | Rail addresses and MTU 9000 written to `/etc/netplan/40-oaf-fabric.yaml` and `netplan apply` (user guide §2) | new pair, 2026-10-24 | Agent `ConfigureFabric` RPC: writes the netplan file for the rails in `fabric.links` (never a port carrying other addresses), applies it, waits for carrier; run by `oaf apply` before projects | open |
-| G2 | Second cable found by putting temporary addresses on port 0 of both boxes and pinging | new pair, 2026-10-24 | Cabling discovery at join/plan time: probe each up port with temporary link-local or /30 addresses (removed after), record which port reaches which box, and plan one link per cable | open |
-| G3 | Link check by ping and jumbo ping (`ping -M do -s 8972`) | new pair, 2026-10-24 | `oaf apply` runs the fabric check after G1: ping, MTU, `ib_write_bw` per rail, results on `/events` and in the plan steps | open |
+| G1 | Rail addresses and MTU 9000 written to `/etc/netplan/40-oaf-fabric.yaml` and `netplan apply` (user guide §2) | new pair, 2026-10-24 | Agent `ConfigureFabric` RPC: writes the netplan file for the rails in `fabric.links` (never a port carrying other addresses), applies it, waits for carrier; run by `oaf apply` and `oaf install` before projects | done (92f4d68, dd01da9): ran on .142/.212, took over the hand-written port 1 file and added port 0; second run unchanged; stray address refused. Still to see: `oaf apply` from the control box |
+| G2 | Second cable found by putting temporary addresses on port 0 of both boxes and pinging | new pair, 2026-10-24 | Cabling probe at plan time (`POST /api/v1/topology/recommend` for pending boxes): temporary 198.18.0.0/24 addresses on free up ports, ping, the answering MAC names the peer port, addresses removed; one link per cable | done (92f4d68): found both cables of .142/.212 in ~5 s, nothing left behind. Still to see: through oafd on the control box |
+| G3 | Link check by ping and jumbo ping (`ping -M do -s 8972`) | new pair, 2026-10-24 | `oaf apply` runs the fabric check after G1: ping, MTU, `ib_write_bw` per rail, results on `/events` and in the plan steps | done (92f4d68): ran on .142/.212, four rails 104–112 Gb/s, 189/195 Gb/s per cable. Still to see: the `/events` lines in the console |
 | G4 | Join token expired (2 h) during a slow first join; a new token was made | 2026-10-24 | Console shows expiry and offers "new command"; join retries keep the token while preflight fails (already: failed preflight does not use it up) | open |
 | G5 | Join copied all bundle images; `docker load` dropped their digests, 47 GB unusable, pruned by hand (`docker image prune`) | .212, 2026-10-24 | Join skips copying when registries are reachable (done a0f6c26, 270d85f); offline boxes pull from a registry on the control node (PLAN M5) | in progress |
-| G6 | `systemctl daemon-reload` after the agent's unit file changed | .212, 2026-10-24 | `oaf upgrade` (see U1) reloads units it changes | open |
-| G7 | Join token passed on the command line (visible in the process list) | join, 2026-10-24 | Pass it to `oaf join` through the environment or stdin | open |
+| G6 | `systemctl daemon-reload` after the agent's unit file changed | .212, 2026-10-24 | `oaf upgrade` (see U1) reloads units it changes. Again on .142/.212 (2026-10-24): the agent unit gained `ReadWritePaths=-/etc/netplan` for G1, installed by hand with `daemon-reload` and restart | open |
+| G7 | Join token passed on the command line (visible in the process list) | join, 2026-10-24 | The join command exports `OAF_JOIN_TOKEN` and runs `sudo --preserve-env=OAF_JOIN_TOKEN bash -s`; join.sh sends it to curl on stdin and to `oaf join` in the environment (`--token` still accepted) | in progress (92f4d68): `--preserve-env` checked on DGX OS; needs a real join with the new script |
 
 ## Models
 
@@ -33,7 +33,7 @@ Status: **open**, **in progress**, **done (commit)**.
 
 | # | Done by hand | Where | Automatic replacement | Status |
 |---|---|---|---|---|
-| U1 | New `oaf` binary copied to every node with scp, installed, services restarted (`oaf-node`, `oaf-keys`, `oaf-api`) | all boxes, repeatedly | `oaf upgrade`: the control node pushes the bundle's binary to every agent, restarts services in order, checks versions | open |
+| U1 | New `oaf` binary copied to every node with scp, installed, services restarted (`oaf-node`, `oaf-keys`, `oaf-api`) | all boxes, repeatedly (last: 92f4d68 on .142/.212) | `oaf upgrade`: the control node pushes the bundle's binary to every agent, restarts services in order, checks versions | open |
 | U2 | `oaf-api.service` installed by hand on the control box | .242, 2026-10-24 | Installer (`spark-bootstrap.sh` has the step; the one-command installer must too) | open |
 | U3 | `oaf observability enable/scrape/grafana-url` run by the Garrison installer, `oaf apply` by hand after OAF upgrades | .242 | Part of the app install profile (PLAN M6) and `oaf upgrade` | open |
 
