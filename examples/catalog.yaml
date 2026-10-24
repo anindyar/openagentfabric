@@ -113,12 +113,12 @@ models:
           caches: [/root/.cache/b12x, /root/.cache/vllm, /root/.cache/flashinfer, /root/.triton]
 
   # GLM-5.3-Flash (NVFP4, NVIDIA): 320B MoE, 18B active, ~190 GiB of weights, so
-  # it needs a pair (TP=2). The recipe below was verified on a GB10 pair with a
-  # local arm64 vLLM build of the glm5_next architecture, which upstream vLLM at
-  # our pin cannot load. TODO: pin that GB10 build as a bundle component (by
-  # digest) and name it as this profile's engine; until then the profile names
-  # the existing GB10 component and will not load the model.
-  # On each GB10 at 0.86 with an 8 GiB fp8 KV cache and 512K context.
+  # it needs a pair (TP=2). The glm5_next architecture is not in a vLLM release
+  # at our pin; vllm-glm53 is vLLM's own published build for it. The recipe
+  # (flags, memory shaping) was verified on a GB10 pair with a patched local
+  # build at 512K context; with the published build the profile starts at 256K
+  # until 512K is verified on it.
+  # On each GB10 at 0.86 with an 8 GiB fp8 KV cache.
   # --language-model-only is needed at 512K: without it the multimodal
   # front-end runs the GB10 driver out of memory. NCCL interfaces, HCA and GID
   # index come from the fabric (detected, never hardcoded); the env below adds
@@ -134,11 +134,11 @@ models:
     classes: [think]
     profiles:
       - name: pair-tp2
-        engine: vllm-spark-b12x
+        engine: vllm-glm53
         nodes: 2
         tensorParallel: 2
         gpuMemoryUtilization: 0.86
-        maxModelLen: 524288
+        maxModelLen: 262144
         args: [--trust-remote-code, --kv-cache-dtype, fp8, --kv-cache-memory-bytes, "8589934592",
                --max-num-seqs, "6", --block-size, "2304", --moe-backend, marlin,
                --max-num-batched-tokens, "4096", --enable-chunked-prefill, --enable-prefix-caching,

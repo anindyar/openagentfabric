@@ -48,7 +48,7 @@ func TestVLLMNeedsAcceptance(t *testing.T) {
 	}
 	for _, c := range v.Components {
 		got := c.License.NeedsAcceptance()
-		if want := c.Name == "vllm" || c.Name == "vllm-spark-b12x"; got != want {
+		if want := c.Name == "vllm" || c.Name == "vllm-spark-b12x" || c.Name == "vllm-glm53"; got != want {
 			t.Errorf("%s: NeedsAcceptance = %v, want %v", c.Name, got, want)
 		}
 	}

@@ -53,3 +53,7 @@ spec:
       url: https://docs.nvidia.com/cuda/eula/index.html
       acceptedBy: admin@example.com
       acceptedAt: 2026-10-24T12:00:00Z
+    - subject: image/vllm-glm53
+      url: https://docs.nvidia.com/cuda/eula/index.html
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-10-24T12:00:00Z
