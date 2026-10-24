@@ -199,7 +199,10 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 		return oafd.StatusView{}, err
 	}
 	v := oafd.StatusView{Cluster: s.cluster.Metadata.Name, Topology: s.cluster.Spec.Fabric.Topology,
-		Nodes: []oafd.NodeView{}, Deployments: []oafd.DeploymentView{}, Components: []oafd.ComponentView{}}
+		Nodes: []oafd.NodeView{}, Groups: []oafd.GroupView{}, Deployments: []oafd.DeploymentView{}, Components: []oafd.ComponentView{}}
+	for _, g := range s.cluster.Spec.Groups {
+		v.Groups = append(v.Groups, oafd.GroupView{Name: g.Name, Nodes: g.Nodes})
+	}
 	projects, _ := s.render(ctx, secrets.Preview{Store: secrets.Store{Dir: f.secretsDir}})
 	states := reconcile.Status(ctx, s.nodes, projects)
 

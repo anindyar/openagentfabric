@@ -14,8 +14,16 @@ type StatusView struct {
 	Cluster     string           `json:"cluster"`
 	Topology    string           `json:"topology"`
 	Nodes       []NodeView       `json:"nodes"`
+	Groups      []GroupView      `json:"groups"`
 	Deployments []DeploymentView `json:"deployments"`
 	Components  []ComponentView  `json:"components"`
+}
+
+// GroupView is a placement group: the boxes a multi-node model runs across
+// (a ConnectX-7 pair), from spec.groups.
+type GroupView struct {
+	Name  string   `json:"name"`
+	Nodes []string `json:"nodes"`
 }
 
 // NodeView is one node. State: joined | pending | joining | offline.
