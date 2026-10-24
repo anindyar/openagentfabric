@@ -65,8 +65,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    mem_limit: 640m
-    memswap_limit: 640m
+    mem_limit: 512m
+    memswap_limit: 512m
     logging:
       driver: json-file
       options:

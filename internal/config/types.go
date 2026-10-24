@@ -232,6 +232,8 @@ type Signal struct {
 	Domains       []string `yaml:"domains,omitempty"`
 	Keywords      []string `yaml:"keywords,omitempty"`
 	CaseSensitive bool     `yaml:"caseSensitive,omitempty"`
+	// MinTokens: a context signal fires for prompts at least this long.
+	MinTokens int `yaml:"minTokens,omitempty"`
 }
 
 // RuleRequires gates a rule on an entitlement feature.
@@ -455,6 +457,36 @@ type Versions struct {
 	Kind       string      `yaml:"kind"`
 	Version    string      `yaml:"version"`
 	Components []Component `yaml:"components"`
+	Artifacts  []Artifact  `yaml:"artifacts,omitempty"`
+}
+
+// Artifact is a model file set a component loads itself (e.g. vSR's
+// encoder), pinned by revision and fetched by OAF, never at run time.
+type Artifact struct {
+	Name        string          `yaml:"name"`
+	ThirdParty  string          `yaml:"thirdParty"`
+	UsedBy      string          `yaml:"usedBy"`
+	MountAs     string          `yaml:"mountAs"`
+	HuggingFace HFSource        `yaml:"huggingface"`
+	SizeMiB     int             `yaml:"sizeMiB"`
+	MemoryMiB   int             `yaml:"memoryMiB"`
+	License     ArtifactLicense `yaml:"license"`
+}
+
+// ArtifactLicense is an artifact's licence.
+type ArtifactLicense struct {
+	SPDX string `yaml:"spdx"`
+	URL  string `yaml:"url"`
+}
+
+// Artifact returns the artifact called name.
+func (v *Versions) Artifact(name string) (Artifact, bool) {
+	for _, a := range v.Artifacts {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return Artifact{}, false
 }
 
 // Component is one pinned upstream image.

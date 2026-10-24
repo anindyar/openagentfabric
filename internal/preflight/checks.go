@@ -34,7 +34,6 @@ var checks = []check{
 var hostPorts = func() map[int]string {
 	p := config.ServicePorts(config.Node{Roles: []string{config.RoleControl, config.RoleGateway, config.RoleObservability, config.RoleInference}})
 	p[config.DefaultGatewayPort] = "agentgateway (API)"
-	p[8899] = "vSR"
 	return p
 }()
 

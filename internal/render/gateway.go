@@ -20,8 +20,8 @@ const (
 	HeaderStep = "x-oaf-step"
 )
 
-// AutoModel is the model name that vSR routes. Until the vSR renderer lands
-// (M3) the gateway maps it to routing.defaults.fast.
+// AutoModel is the model name that vSR routes (the router project). With no
+// active routing rule the gateway maps it straight to routing.defaults.fast.
 const AutoModel = "auto"
 
 // gateway renders agentgateway: one OpenAI-compatible listener that serves
@@ -69,7 +69,7 @@ func (r *renderer) gateway(n config.Node) (Project, error) {
 	} else if pol != nil {
 		llm["policies"] = map[string]any{"apiKey": pol}
 	}
-	models, err := r.gatewayModels()
+	models, err := r.gatewayModels(n)
 	if err != nil {
 		return p, err
 	}
@@ -130,6 +130,12 @@ func (r *renderer) tracing(obs config.Node) map[string]any {
 		"user.id":    `request.headers["` + HeaderUser + `"]`,
 		"session.id": `request.headers["` + HeaderSession + `"]`,
 		"oaf.step":   `request.headers["` + HeaderStep + `"]`,
+		// model: auto through vSR: the decision (rule name, or "default") and
+		// the model it chose. In observe mode the decision is what would have
+		// happened; the request went to the fast model.
+		"oaf.route":        `response.headers["` + headerVSRDecision + `"]`,
+		"oaf.routed_model": `response.headers["` + headerVSRModel + `"]`,
+		"oaf.served_by":    `response.headers["` + headerServedBy + `"]`,
 	}
 	if capture {
 		fields["gen_ai.prompt"] = "flattenRecursive(llm.prompt)"
@@ -180,7 +186,7 @@ func (r *renderer) apiKeyPolicy() (map[string]any, error) {
 }
 
 // gatewayModels serves each enabled deployment under its name, plus "auto".
-func (r *renderer) gatewayModels() ([]map[string]any, error) {
+func (r *renderer) gatewayModels(gw config.Node) ([]map[string]any, error) {
 	var out []map[string]any
 	base := map[string]string{}
 	firstChat := ""
@@ -210,6 +216,12 @@ func (r *renderer) gatewayModels() ([]map[string]any, error) {
 	}
 	if _, ok := base[fast]; !ok {
 		return nil, fmt.Errorf("routing.defaults.fast %q is not an enabled model", fast)
+	}
+	if r.routes().Enabled() {
+		// vSR picks the model behind Envoy; the vLLM key still travels as
+		// the Authorization header to whichever vLLM is chosen.
+		out = append(out, backend(AutoModel, AutoModel, "http://"+hostPort(gw.Address, config.PortRouter)+"/v1"))
+		return out, nil
 	}
 	out = append(out, backend(AutoModel, fast, base[fast]))
 	return out, nil

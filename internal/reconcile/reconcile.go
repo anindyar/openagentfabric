@@ -369,10 +369,12 @@ func applyOrder(project string) int {
 		return 2
 	case strings.HasPrefix(project, "model-"):
 		return 3
-	case project == render.ProjectGateway:
+	case project == render.ProjectRouter:
 		return 4
-	default:
+	case project == render.ProjectGateway:
 		return 5
+	default:
+		return 6
 	}
 }
 

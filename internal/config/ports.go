@@ -16,6 +16,7 @@ const (
 	PortOAFD             = 8443
 	PortNodeAgent        = 7701
 	PortKeyService       = 7702 // oaf keys serve, on the control node
+	PortRouter           = 8899 // Envoy in front of vSR (model: auto), on the gateway node
 
 	// DefaultModelPortBase + index in spec.models is a deployment's port when it
 	// sets none.
@@ -58,6 +59,7 @@ func ServicePorts(n Node) map[int]string {
 		p[PortGatewayAdmin] = "agentgateway admin"
 		p[PortGatewayStats] = "agentgateway stats"
 		p[PortGatewayReadiness] = "agentgateway readiness"
+		p[PortRouter] = "vSR router (Envoy)"
 	}
 	if n.HasRole(RoleObservability) {
 		p[PortLangfuse] = "Langfuse"
