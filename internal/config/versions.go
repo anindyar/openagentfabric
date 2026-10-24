@@ -28,6 +28,23 @@ func ValidateVersions(v *Versions, thirdPartyMD string) Report {
 			add(p+".license.acceptUrl", "required: %s needs user acceptance", c.Name)
 		}
 	}
+	for i, a := range v.Artifacts {
+		p := fmt.Sprintf("artifacts[%d]", i)
+		if names[a.Name] {
+			add(p+".name", "duplicate name %q", a.Name)
+		}
+		names[a.Name] = true
+		if !rows[a.ThirdParty] {
+			add(p+".thirdParty", "no row named %q in THIRD_PARTY.md", a.ThirdParty)
+		}
+		used := false
+		for _, c := range v.Components {
+			used = used || c.Name == a.UsedBy
+		}
+		if !used {
+			add(p+".usedBy", "no component %q", a.UsedBy)
+		}
+	}
 	return Report{Issues: out}
 }
 

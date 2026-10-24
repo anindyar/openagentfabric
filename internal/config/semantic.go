@@ -23,6 +23,10 @@ const (
 	VLLMInstanceOverhead = 4.6 / GB10MemoryGiB
 )
 
+// RouterEncoderGiB is vSR's resident memory with the vsr-encoder loaded
+// (measured 1.68 GiB on a GB10, 2026-10-24), rounded up.
+const RouterEncoderGiB = 1.75
+
 // DefaultGatewayPort matches the schema default for routing.gateway.port.
 const DefaultGatewayPort = 4000
 
@@ -474,6 +478,15 @@ func (k *checker) models() {
 			}
 		}
 	}
+	// vSR's encoder (reasoning signals) lives on the gateway node, on CPU but
+	// in the same unified memory.
+	if k.c.ActiveRoutes(k.cat, k.opts.Features).NeedsEncoder {
+		for _, n := range k.c.Spec.Nodes {
+			if n.HasRole(RoleGateway) {
+				memory[n.Name] += RouterEncoderGiB / GB10MemoryGiB
+			}
+		}
+	}
 	for _, n := range sortedKeys(memory) {
 		if memory[n] > MaxNodeMemoryFraction+1e-9 {
 			k.errorf("spec.models", "node %q: gpuMemoryUtilization of its deployments sums to %.2f, over the %.2f limit", n, memory[n], MaxNodeMemoryFraction)
@@ -583,6 +596,17 @@ func (k *checker) routing() {
 		default:
 			chatTarget(p+".target", rule.Target)
 		}
+	}
+
+	routes := k.c.ActiveRoutes(k.cat, k.opts.Features)
+	for _, s := range routes.Skipped {
+		if containsAny(s, "not supported yet", "no supported signal") {
+			k.warnf("spec.routing.rules", "%s", s)
+		}
+	}
+	if routes.NeedsEncoder {
+		k.warnf("spec.routing.rules", "reasoning signals load the %s bundle artifact (about 1.2 GB, %.1f GiB of memory) on the gateway node: put it in <modelsPath>/%s before applying (docs/user-guide.md, Routing); without it vSR does not start and model: auto goes to the fast model",
+			RouterEncoderArtifact, RouterEncoderGiB, RouterEncoderArtifact)
 	}
 
 	for i, key := range r.Keys {
@@ -724,4 +748,13 @@ func (k *checker) providers() {
 			taken[m.Name] = "provider " + pr.Name
 		}
 	}
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, x := range subs {
+		if strings.Contains(s, x) {
+			return true
+		}
+	}
+	return false
 }

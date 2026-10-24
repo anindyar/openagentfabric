@@ -202,7 +202,7 @@ func TestProjectsPerNode(t *testing.T) {
 		names = append(names, p.Node+"/"+p.Name)
 	}
 	want := []string{
-		"spark-1/gateway", "spark-1/langfuse", "spark-1/metrics", "spark-1/model-fast", "spark-1/model-think", "spark-1/node-exporter",
+		"spark-1/gateway", "spark-1/langfuse", "spark-1/metrics", "spark-1/model-fast", "spark-1/model-think", "spark-1/node-exporter", "spark-1/router",
 		"spark-2/model-think", "spark-2/node-exporter",
 	}
 	if strings.Join(names, " ") != strings.Join(want, " ") {

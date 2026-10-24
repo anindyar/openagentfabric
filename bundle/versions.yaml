@@ -142,5 +142,37 @@ components:
     upstream: { repo: grafana/loki, ref: v3.7.8 }
     license: { spdx: AGPL-3.0-only, file: LICENSE, sha256: 0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0 }
 
+  # --- routing: vSR front end ---------------------------------------------
+  # vSR is an Envoy external processor (gRPC). Envoy fronts it: it buffers the
+  # request, asks vSR which model to use (x-selected-model) and routes to that
+  # vLLM. Same release vSR's own launcher uses (cli/consts.py at v0.4.0).
+  - name: envoy
+    thirdParty: Envoy
+    image: docker.io/envoyproxy/envoy:v1.35.3@sha256:4d496918618a7ebd6c71ae8285e31ebff092f3a0a5ad642d50decf4a54eb2456
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: envoyproxy/envoy, ref: v1.35.3 }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30 }
+
+# Model files components load themselves (not served by vLLM). Fetched by OAF
+# at the pinned revision into the node's models path, so nothing downloads at
+# run time and air-gapped installs work.
+artifacts:
+  # vSR's `reasoning` signal (complexity) embeds prompts with this encoder on
+  # CPU: ~1.2 GB of weights, ~1.7 GiB resident. The vSR image verifies these
+  # exact files (its .router-model-revision.json), so the revision is the one
+  # vllm-sr v0.4.0 pins. Keyword and context signals need no model.
+  - name: vsr-encoder
+    thirdParty: Vela-1.0 Encoder (vSR)
+    usedBy: vsr
+    mountAs: /app/models/Vela-1.0-Encoder-307M-Embedding
+    huggingface:
+      repo: llm-semantic-router/Vela-1.0-Encoder-307M-Embedding
+      revision: 1e57cebf5a7b7fec6e6973f05bbca97c5cca4436
+      include: [config.json, modules.json, model.safetensors, special_tokens_map.json, tokenizer.json,
+                tokenizer_config.json, "1_Pooling/*"]
+    sizeMiB: 1205
+    memoryMiB: 1792
+    license: { spdx: Apache-2.0, url: "https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Embedding" }
+
 # Not pinned yet:
 # - dcgm-exporter: GB10 support unverified (M1 spike); its image also carries NVIDIA DCGM terms.

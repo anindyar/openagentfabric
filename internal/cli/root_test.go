@@ -47,7 +47,7 @@ func TestValidateExample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("validate: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "valid (1 warning(s))") || !strings.Contains(out, "warning: spec.routing.rules[1]") {
+	if !strings.Contains(out, "valid (2 warning(s))") || !strings.Contains(out, "warning: spec.routing.rules[1]") || !strings.Contains(out, "vsr-encoder") {
 		t.Fatalf("unexpected output:\n%s", out)
 	}
 }

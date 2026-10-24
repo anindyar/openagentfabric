@@ -48,6 +48,7 @@ type Project struct {
 const (
 	ProjectNodeExporter = "node-exporter"
 	ProjectGateway      = "gateway"
+	ProjectRouter       = "router" // vSR + Envoy for model: auto, when routing has active rules
 	ProjectLangfuse     = "langfuse"
 	ProjectMetrics      = "metrics"
 	modelProjectPrefix  = "model-"
@@ -106,6 +107,11 @@ func Render(in Input) ([]Project, error) {
 		if n.HasRole(config.RoleGateway) {
 			if err := add(r.gateway(n)); err != nil {
 				return nil, err
+			}
+			if rt := r.routes(); rt.Enabled() {
+				if err := add(r.router(n, rt)); err != nil {
+					return nil, err
+				}
 			}
 		}
 		if n.HasRole(config.RoleObservability) {

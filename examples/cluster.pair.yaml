@@ -52,7 +52,9 @@ spec:
       - name: think
         match:
           signals:
-            - { type: reasoning, threshold: 0.6 }
+            - { type: reasoning, threshold: 0.1 }        # vSR complexity: closer to hard than easy examples by 0.1
+            - { type: keyword, keywords: [step by step, prove, think carefully] }
+            - { type: context, minTokens: 4000 }         # long inputs too
         target: think
       - name: medical
         match:

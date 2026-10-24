@@ -238,7 +238,12 @@ func TestAcceptedLicenceUnblocksDeployment(t *testing.T) {
 	if !r.OK() {
 		t.Fatalf("unexpected errors: %v", r.Errors())
 	}
-	if len(r.Warnings()) != 0 {
-		t.Fatalf("unexpected warnings: %v", r.Warnings())
+	for _, w := range r.Warnings() {
+		// The medical rule's domain signal needs vSR's domain classifier,
+		// which no bundle pins yet: routing says so, licensing must not.
+		if !strings.Contains(w.Message, "domain signals are not supported yet") && !strings.Contains(w.Message, "no supported signal left") &&
+			!strings.Contains(w.Message, "reasoning signals load the vsr-encoder") {
+			t.Fatalf("unexpected warning: %v", w)
+		}
 	}
 }

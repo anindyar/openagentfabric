@@ -33,6 +33,8 @@ metadata plus the LICENSE file wherever the metadata said `NOASSERTION`).
 | node_exporter | github.com/prometheus/node_exporter | Apache-2.0 | image | OK. |
 | dcgm-exporter | github.com/NVIDIA/dcgm-exporter | Apache-2.0 (exporter) | image | **Not pinned yet.** Exporter is OK. The DCGM libraries in the image are under NVIDIA terms. Support on GB10 is unverified (spike in M1). |
 | Grafana | github.com/grafana/grafana | AGPL-3.0 | image | OK **only** as an unmodified image, embedded through iframe or its HTTP API. Never vendor or patch it. See audit §3.4. |
+| Envoy | github.com/envoyproxy/envoy | Apache-2.0 | image | Unmodified image, configured by file. Fronts vSR (its external processor) on the gateway node when `spec.routing` has active rules. |
+| Vela-1.0 Encoder (vSR) | huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Embedding | Apache-2.0 | model weights | Loaded by vSR for the `reasoning` (complexity) signal only. Pinned to the revision the vSR image verifies; fetched by OAF, never at run time. |
 | Grafana Loki | github.com/grafana/loki | AGPL-3.0 | image | Same terms as Grafana: OK **only** as an unmodified image, configured by file and used through its HTTP API. Off unless `spec.observability.logs.enabled`. |
 
 ## Host-level dependencies (installed or checked by preflight)

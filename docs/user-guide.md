@@ -6,7 +6,7 @@ observable LLM platform, and then covers day-to-day operation and troubleshootin
 > **Status: milestone M1 (CLI only).** The parts below marked *(planned)* do not exist yet. Today
 > you place the `oaf` binary and the node agents by hand, address the QSFP fabric yourself and copy
 > model weights into place. `oaf install` then does the rest. The one-line installer, the web UI, the
-> model download pipeline and vSR routing arrive in later milestones (see [PLAN.md](PLAN.md) §7).
+> model download pipeline arrives in a later milestone (see [PLAN.md](PLAN.md) §7).
 
 Contents:
 1. [What you get](#1-what-you-get)
@@ -34,7 +34,7 @@ which is all pinned upstream images, unmodified:
 | **Langfuse** (+ Postgres, ClickHouse, Valkey, SeaweedFS) | Traces, latency and token usage of every request | `observability` node |
 | **Prometheus + Grafana** | Metrics: nodes, gateway, vLLM | `observability` node |
 | **node-exporter** | Host metrics | every node |
-| vSR (vLLM Semantic Router) *(planned, M3)* | Picks the model for `model: auto` requests | `gateway` node |
+| vSR (vLLM Semantic Router) + Envoy | Picks the model for `model: auto` requests (only when `routing.rules` has an active rule) | `gateway` node |
 | OAF UI and API (`oafd`) *(planned, M4)* | One web UI for all of the above | `control` node |
 
 Everything is described in one file, `/etc/oaf/cluster.yaml`. You change the cluster by editing
@@ -392,12 +392,56 @@ curl http://<gateway>:4000/v1/chat/completions -H "Authorization: Bearer $KEY" \
   -d '{"model":"fast","messages":[{"role":"user","content":"Hello"}]}'
 ```
 
-`model` is the deployment name from `cluster.yaml`. `model: auto` goes to `routing.defaults.fast`
-until vSR arrives in M3. Every request shows up in Langfuse (project named after the cluster) within
+`model` is the deployment name from `cluster.yaml`. `model: auto` is routed by vSR (see Routing
+below), or goes to `routing.defaults.fast` when no routing rule is active. Every request shows up in Langfuse (project named after the cluster) within
 a few seconds, with latency and token counts. Prompt and response text are recorded only with
 `observability.langfuse.captureContent: true`.
 
 Any OpenAI SDK works: set the base URL to `http://<gateway>:4000/v1` and the API key to the gateway key.
+
+### Routing: `model: auto`
+
+A request with `"model": "auto"` lets OAF pick the model: simple requests stay on the fast model,
+complex ones go to a bigger one. Explicit model names are never re-routed.
+
+```yaml
+spec:
+  routing:
+    mode: observe          # observe first; switch to active once the decisions look right
+    defaults:
+      fast: qwen-flash     # everything a rule does not claim, and where requests go if vSR is down
+      fallback: qwen-flash # used when the model a rule picked is down
+    rules:
+      - name: complex
+        target: glm        # must be an enabled chat deployment
+        match:
+          signals:         # the rule fires if ANY signal fires
+            - { type: keyword, keywords: [step by step, prove, think carefully] }
+            - { type: context, minTokens: 4000 }   # long inputs
+            - { type: reasoning, threshold: 0.1 }  # vSR's complexity score (needs the encoder, below)
+```
+
+- **Signals:** `keyword` and `context` need nothing extra. `reasoning` compares the prompt with
+  built-in hard and easy examples (infrastructure and security work) using vSR's encoder: about
+  1.2 GB on disk and 1.75 GiB of memory on the gateway node, counted in that node's memory budget.
+  `domain` signals are accepted but skipped with a warning until a domain classifier is pinned.
+- **Observe:** vSR decides but every request goes to `defaults.fast`. Each model call's trace in
+  Langfuse carries `oaf.route` (the rule that fired, or `default`), `oaf.routed_model` (vSR's pick)
+  and `oaf.served_by`. When the decisions look right, set `mode: active` and `oaf apply`.
+- **Failures:** a model that fails its health check is replaced by `defaults.fallback`; with vSR
+  itself down, `auto` goes to `defaults.fast`. `oaf.served_by` shows what actually answered.
+- **Shape:** with at least one active rule, the gateway node runs a `router` project: vSR and Envoy
+  on port 8899. agentgateway sends `auto` there; nothing else changes. Without an active rule there
+  is no router.
+- **The encoder (reasoning signals only):** OAF does not fetch it yet; put the pinned files on the
+  gateway node before `oaf apply` (`bundle/versions.yaml`, `artifacts`, holds the revision):
+
+  ```sh
+  sudo docker run --rm --network host -v /var/lib/oaf/models/vsr-encoder:/out python:3.12-slim sh -c \
+    'pip -q install huggingface_hub && python -c "from huggingface_hub import snapshot_download as s; s(\"llm-semantic-router/Vela-1.0-Encoder-307M-Embedding\", revision=\"1e57cebf5a7b7fec6e6973f05bbca97c5cca4436\", local_dir=\"/out\", allow_patterns=[\"config.json\",\"modules.json\",\"model.safetensors\",\"special_tokens_map.json\",\"tokenizer.json\",\"tokenizer_config.json\",\"1_Pooling/*\"])"'
+  ```
+
+  Without it vSR does not start, Envoy lets requests through, and `auto` goes to `defaults.fast`.
 
 ### Metrics and logs for apps
 
@@ -806,6 +850,7 @@ the failing project's logs, and open an issue at <https://github.com/anindyar/op
 | 15020 / 15021 | agentgateway metrics / readiness | all interfaces |
 | 7701 | oaf-node agent (mTLS) | all interfaces |
 | 7702 | key service: apps rotate their gateway key (control node) | all interfaces |
+| 8899 | router (Envoy in front of vSR) for `model: auto`, only with active routing rules (gateway node) | all interfaces |
 | 8000 + n | model n's OpenAI API (rank 0 node), unless `port:` is set | host network |
 | 29500 + n | model n's rendezvous between the nodes of a pair | host network |
 | 18515–18614 | `ib_write_bw` exchange, only during a fabric check | rail addresses |
@@ -816,15 +861,19 @@ the failing project's logs, and open an issue at <https://github.com/anindyar/op
 | Service | Limit | Idle usage measured on a DGX Spark |
 |---|---|---|
 | langfuse-web | 2 GiB | ~1.0 GiB |
-| langfuse-worker | 1 GiB | ~0.6 GiB |
-| clickhouse | 1.5 GiB | ~0.25 GiB |
-| prometheus | 768 MiB | ~50 MiB |
-| grafana | 512 MiB | ~250 MiB |
-| postgres | 512 MiB | ~100 MiB |
-| seaweedfs | 384 MiB | ~150 MiB |
-| valkey | 256 MiB | ~12 MiB |
-| agentgateway | 256 MiB | ~13 MiB |
-| node-exporter | 64 MiB | ~15 MiB |
+| langfuse-worker | 1 GiB | ~0.55 GiB |
+| clickhouse | 1.5 GiB | ~1.1 GiB |
+| grafana | 1 GiB | ~0.37 GiB (peaks above 512 MiB when apps embed dashboards) |
+| prometheus | 512 MiB | ~76 MiB |
+| postgres | 512 MiB | ~140 MiB |
+| loki (if `observability.logs.enabled`) | 384 MiB | ~63 MiB |
+| seaweedfs | 384 MiB | ~180 MiB |
+| valkey | 256 MiB | ~14 MiB |
+| agentgateway | 192 MiB | ~17 MiB |
+| vsr (router, keyword/context signals) | 128 MiB | ~36 MiB |
+| vsr with reasoning signals (encoder) | 1792 MiB, counted in the gateway node's model budget | ~1.7 GiB |
+| envoy (router) | 64 MiB | ~25 MiB |
+| node-exporter | 96 MiB | ~51 MiB |
 
 vLLM has no container limit: its share is set by `gpuMemoryUtilization`.
 

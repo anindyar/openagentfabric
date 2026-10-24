@@ -20,8 +20,8 @@ const (
 	HeaderStep = "x-oaf-step"
 )
 
-// AutoModel is the model name that vSR routes. Until the vSR renderer lands
-// (M3) the gateway maps it to routing.defaults.fast.
+// AutoModel is the model name that vSR routes (the router project). With no
+// active routing rule the gateway maps it straight to routing.defaults.fast.
 const AutoModel = "auto"
 
 // gateway renders agentgateway: one OpenAI-compatible listener that serves
@@ -69,7 +69,7 @@ func (r *renderer) gateway(n config.Node) (Project, error) {
 	} else if pol != nil {
 		llm["policies"] = map[string]any{"apiKey": pol}
 	}
-	models, err := r.gatewayModels()
+	models, err := r.gatewayModels(n)
 	if err != nil {
 		return p, err
 	}
@@ -80,7 +80,9 @@ func (r *renderer) gateway(n config.Node) (Project, error) {
 		}
 		containerEnv["VLLM_API_KEY"] = env.ref("VLLM_API_KEY", key)
 	}
-	// Guardrails on local deployments; "auto" carries the fast model's.
+	// Guardrails on local deployments. "auto" carries those of every model it
+	// can reach: the fast model, or behind the router the fast and fallback
+	// models and every rule target (the union, so the strictest applies).
 	byName := map[string][]string{}
 	for _, d := range r.Cluster.Spec.Models {
 		if d.IsEnabled() && len(d.Guardrails) > 0 {
@@ -93,6 +95,14 @@ func (r *renderer) gateway(n config.Node) (Project, error) {
 		if name == AutoModel {
 			served, _ := m["params"].(map[string]any)["model"].(string)
 			policies = byName[served]
+			if served == AutoModel { // the router picks among these
+				rt := r.routes()
+				reach := []string{rt.Fast, rt.Fallback}
+				for _, rule := range rt.Rules {
+					reach = append(reach, rule.Target)
+				}
+				policies = unionPolicies(byName, reach)
+			}
 		}
 		g, err := r.guardrailsFor(policies)
 		if err != nil {
@@ -157,6 +167,12 @@ func (r *renderer) tracing(obs config.Node) map[string]any {
 		"user.id":    `request.headers["` + HeaderUser + `"]`,
 		"session.id": `request.headers["` + HeaderSession + `"]`,
 		"oaf.step":   `request.headers["` + HeaderStep + `"]`,
+		// model: auto through vSR: the decision (rule name, or "default") and
+		// the model it chose. In observe mode the decision is what would have
+		// happened; the request went to the fast model.
+		"oaf.route":        `response.headers["` + headerVSRDecision + `"]`,
+		"oaf.routed_model": `response.headers["` + headerVSRModel + `"]`,
+		"oaf.served_by":    `response.headers["` + headerServedBy + `"]`,
 	}
 	if capture {
 		fields["gen_ai.prompt"] = "flattenRecursive(llm.prompt)"
@@ -207,7 +223,7 @@ func (r *renderer) apiKeyPolicy() (map[string]any, error) {
 }
 
 // gatewayModels serves each enabled deployment under its name, plus "auto".
-func (r *renderer) gatewayModels() ([]map[string]any, error) {
+func (r *renderer) gatewayModels(gw config.Node) ([]map[string]any, error) {
 	var out []map[string]any
 	base := map[string]string{}
 	firstChat := ""
@@ -238,6 +254,12 @@ func (r *renderer) gatewayModels() ([]map[string]any, error) {
 	if _, ok := base[fast]; !ok {
 		return nil, fmt.Errorf("routing.defaults.fast %q is not an enabled model", fast)
 	}
+	if r.routes().Enabled() {
+		// vSR picks the model behind Envoy; the vLLM key still travels as
+		// the Authorization header to whichever vLLM is chosen.
+		out = append(out, backend(AutoModel, AutoModel, "http://"+hostPort(gw.Address, config.PortRouter)+"/v1"))
+		return out, nil
+	}
 	out = append(out, backend(AutoModel, fast, base[fast]))
 	return out, nil
 }
@@ -252,4 +274,19 @@ func backend(name, served, baseURL string) map[string]any {
 			"apiKey":  "$VLLM_API_KEY",
 		},
 	}
+}
+
+// unionPolicies is the guardrail policies of models, each once, in order.
+func unionPolicies(byName map[string][]string, models []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, m := range models {
+		for _, p := range byName[m] {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }

@@ -60,7 +60,9 @@ func TestPairExampleDecodes(t *testing.T) {
 func TestPairExampleWarnsAboutUnentitledDDx(t *testing.T) {
 	r := Validate(mustCluster(t, pairExample), mustCatalog(t), Options{})
 	w := r.Warnings()
-	if len(w) != 1 || !strings.Contains(w[0].Message, `entitlement "ddx" is not present`) {
+	// The DDx rule is inactive, and the think rule's reasoning signal needs
+	// vSR's encoder artifact on the gateway node.
+	if len(w) != 2 || !strings.Contains(w[0].Message, `entitlement "ddx" is not present`) || !strings.Contains(w[1].Message, "vsr-encoder") {
 		t.Fatalf("warnings = %v", w)
 	}
 }

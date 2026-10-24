@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openagentfabric.dev/schema/v1alpha1/cluster.schema.json",
   "title": "OAF cluster.yaml",
-  "description": "Desired state of one OAF cluster. It is the single source of truth for topology, fabric, model deployments, routing, apps and agents. This schema checks structure only. Cross-reference and hardware rules are enforced by oafd semantic validation (see docs/PLAN.md §4.3).",
+  "description": "Desired state of one OAF cluster. It is the single source of truth for topology, fabric, model deployments, routing, apps and agents. This schema checks structure only. Cross-reference and hardware rules are enforced by oafd semantic validation (see docs/PLAN.md \u00a74.3).",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -88,7 +88,7 @@
           "default": []
         },
         "licenseAcceptances": {
-          "description": "Licences the user accepted through the upstream page (docs/licence-audit.md §3.7). OAF will not fetch or deploy an artefact that needs acceptance unless it has an entry here.",
+          "description": "Licences the user accepted through the upstream page (docs/licence-audit.md \u00a73.7). OAF will not fetch or deploy an artefact that needs acceptance unless it has an entry here.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/licenseAcceptance"
@@ -653,9 +653,11 @@
             "threshold": {
               "type": "number",
               "minimum": 0,
-              "maximum": 1
+              "maximum": 1,
+              "description": "How much closer to the hard examples than the easy ones a prompt must be (vSR complexity threshold). Default 0.1."
             }
-          }
+          },
+          "description": "vSR's complexity signal: the prompt is embedded and compared with hard and easy examples. Needs the vsr-encoder artifact (~1.2 GB, ~1.7 GiB of memory on the gateway node)."
         },
         {
           "type": "object",
@@ -680,7 +682,8 @@
               "minimum": 0,
               "maximum": 1
             }
-          }
+          },
+          "description": "Not supported yet: needs vSR's domain classifier, which no bundle pins. Rules keep validating; the signal is skipped with a warning."
         },
         {
           "type": "object",
@@ -703,6 +706,25 @@
             "caseSensitive": {
               "type": "boolean",
               "default": false
+            }
+          },
+          "description": "Fires when the prompt contains any of the keywords. No model needed."
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "minTokens"
+          ],
+          "properties": {
+            "type": {
+              "const": "context"
+            },
+            "minTokens": {
+              "description": "Fires for prompts at least this many tokens long (long inputs go to a bigger context model).",
+              "type": "integer",
+              "minimum": 1
             }
           }
         }

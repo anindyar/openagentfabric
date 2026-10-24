@@ -76,7 +76,7 @@ func TestApplyStatusUninstall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dry run: %v\n%s", err, out)
 	}
-	for _, want := range []string{"create    spark-1/node-exporter", "create    spark-2/model-think", "create    spark-1/gateway", "8 change(s), 0 unchanged"} {
+	for _, want := range []string{"create    spark-1/node-exporter", "create    spark-2/model-think", "create    spark-1/router", "create    spark-1/gateway", "9 change(s), 0 unchanged"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dry-run output lacks %q:\n%s", want, out)
 		}
@@ -100,7 +100,7 @@ func TestApplyStatusUninstall(t *testing.T) {
 	}
 
 	out, err = runCLI(t, args("apply", "--dry-run")...)
-	if err != nil || !strings.Contains(out, "0 change(s), 8 unchanged") {
+	if err != nil || !strings.Contains(out, "0 change(s), 9 unchanged") {
 		t.Fatalf("re-apply should be a no-op: %v\n%s", err, out)
 	}
 
@@ -116,7 +116,7 @@ func TestApplyStatusUninstall(t *testing.T) {
 		t.Fatalf("uninstall without --yes must refuse: %v\n%s", err, out)
 	}
 	out, err = runCLI(t, args("uninstall", "--yes")...)
-	if err != nil || strings.Count(out, "removed") != 8 {
+	if err != nil || strings.Count(out, "removed") != 9 {
 		t.Fatalf("uninstall: %v\n%s", err, out)
 	}
 

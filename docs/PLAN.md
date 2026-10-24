@@ -163,7 +163,7 @@ Each PR is small and has tests. **Exit criteria** are what I will demonstrate at
    discovery). Secrets come from `/etc/oaf/secrets` (generated, 0600) and reach containers only through each project's
    0600 `.env`; configs hold none (gateway keys as SHA-256 hashes). GPUs via `gpus: all` (CDI). CI renders the example
    pair, runs `docker compose config` on every project and brings up the control-node projects for real.
-   Known gaps: vSR is rendered in M3 (until then `model: auto` → `routing.defaults.fast`); per-key rate limits are not
+   Known gaps: per-key rate limits are not
    rendered yet; Langfuse browser media uploads need the S3 port published (not yet); deployments over 3 nodes
    (triangle) are refused until the triangle work.
 8. `oaf install` / `oaf apply --dry-run` / `oaf status` / `oaf uninstall`. ✅ `internal/reconcile` plans through the agents
@@ -190,6 +190,12 @@ Render the agentgateway config, keys and routes; render the vSR config from depl
 observe/active mode; fallback; a policy editor in the UI (first UI PRs); the 3-prompt acceptance test.
 Decide whether an agentgateway fork is needed at all (the goal is that it is not).
 - **Exit:** the routing acceptance test passes in both modes; killing a backend falls back to the default.
+- **Status (2026-10-24):** vSR rendered (ADR-0003): a `router` project (vSR + Envoy) when a rule is
+  active, generated from enabled deployments only; keyword, context and reasoning signals; observe
+  and active; fallback on a failed health check and on vSR down; decisions traced as `oaf.route`.
+  Proven by hand on a DGX Spark with two real models (qwen-flash, GLM-5.3-Flash). No agentgateway
+  fork needed. Open: the automated 3-prompt acceptance test, the UI policy editor, fetching the
+  encoder artifact (M2 pipeline), domain signals (classifier not pinned).
 
 ### M4: observability in one UI
 Langfuse wiring (OTEL from agentgateway/vSR), Grafana provisioning (datasources, OAF dashboards),

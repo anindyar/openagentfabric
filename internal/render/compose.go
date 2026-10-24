@@ -86,13 +86,17 @@ var memoryLimitsMiB = map[string]int{
 	"langfuse-worker": 1024,
 	"clickhouse":      1536, // ClickHouse sizes its caches to 90% of this
 	"grafana":         1024,
-	"prometheus":      640,
+	"prometheus":      512, // 76 MiB measured with app scrapes and remote write
 	"postgres":        512,
 	"loki":            384,
 	"seaweedfs":       384,
 	"valkey":          256,
-	"agentgateway":    256,
-	"node-exporter":   96,
+	"agentgateway":    192, // 17 MiB measured
+	// vSR with keyword/context signals only (36 MiB measured); with the
+	// reasoning encoder it gets the artifact's memoryMiB instead.
+	"vsr":           128,
+	"envoy":         64, // 19 MiB measured
+	"node-exporter": 96,
 }
 
 // valkeyMaxMemoryMiB keeps Valkey's data under its container limit: with
@@ -101,6 +105,9 @@ const valkeyMaxMemoryMiB = 192
 
 func limitMemory(services map[string]*service) {
 	for name, s := range services {
+		if s.MemLimit != "" {
+			continue // sized by its renderer (e.g. vSR with its encoder)
+		}
 		if mib, ok := memoryLimitsMiB[name]; ok {
 			s.MemLimit = fmt.Sprintf("%dm", mib)
 			s.MemswapLimit = s.MemLimit // no swap on top
