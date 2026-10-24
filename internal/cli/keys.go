@@ -76,6 +76,7 @@ func newKeysIssueCmd() *cobra.Command {
 	var f stackFlags
 	var models []string
 	var host, envOut string
+	var admin bool
 	cmd := &cobra.Command{
 		Use:   "issue <name>",
 		Short: "Make sure an app has a gateway key, and print its connection settings",
@@ -97,6 +98,17 @@ func newKeysIssueCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if admin {
+				c, err := config.LoadCluster(f.cluster)
+				if err != nil {
+					return err
+				}
+				extra, err := adminEnv(&f, c, args[0], host)
+				if err != nil {
+					return err
+				}
+				env += extra
+			}
 			if envOut == "" {
 				_, err = io.WriteString(cmd.OutOrStdout(), env)
 				return err
@@ -112,6 +124,7 @@ func newKeysIssueCmd() *cobra.Command {
 	cmd.Flags().StringSliceVar(&models, "models", nil, "models the key may use (default: all)")
 	cmd.Flags().StringVar(&host, "host", "", "gateway address as the app reaches it (default: the gateway node's address)")
 	cmd.Flags().StringVar(&envOut, "env-out", "", "write the env lines to this file (0600) instead of stdout")
+	cmd.Flags().BoolVar(&admin, "admin", false, "also give the app a management token for oafd (OAF_API_URL, OAF_API_TOKEN, OAF_API_CERT_SHA256)")
 	return cmd
 }
 

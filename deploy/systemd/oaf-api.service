@@ -1,0 +1,22 @@
+# Installed on the control node. oafd: the management API apps use to run the
+# platform (ADR-0002). Changes are plans that it applies through the node agents.
+[Unit]
+Description=openagentfabric management API (oafd)
+Documentation=https://github.com/anindyar/openagentfabric
+After=network-online.target oaf-node.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/oaf serve
+Restart=on-failure
+RestartSec=5
+# Runs as root: it rewrites /etc/oaf/cluster.yaml and secrets, and drives the
+# node agents with the control-plane certificate in /etc/oaf/pki.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/etc/oaf /var/lib/oaf
+
+[Install]
+WantedBy=multi-user.target

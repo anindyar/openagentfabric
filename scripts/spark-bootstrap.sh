@@ -408,6 +408,27 @@ curl -fsS -o /dev/null http://127.0.0.1:7702/healthz || die "oaf-keys is not ans
 info "oaf-keys active on :7702"
 
 # ---------------------------------------------------------------------------
+step "Management API"
+# oafd (port 8443): apps manage models, providers, guardrails and routing
+# through it with `oaf keys issue <app> --admin`.
+unit=/etc/systemd/system/oaf-api.service
+if ! cmp -s "$REPO_ROOT/deploy/systemd/oaf-api.service" "$unit"; then
+	sudo install -m 0644 "$REPO_ROOT/deploy/systemd/oaf-api.service" "$unit"
+	sudo systemctl daemon-reload
+	api_changed=true
+else
+	api_changed=false
+fi
+sudo systemctl enable --quiet oaf-api
+if $api_changed || $agent_changed; then sudo systemctl restart oaf-api; else sudo systemctl start oaf-api; fi
+for _ in $(seq 15); do
+	curl -fsSk -o /dev/null https://127.0.0.1:8443/healthz 2>/dev/null && break
+	sleep 1
+done
+curl -fsSk -o /dev/null https://127.0.0.1:8443/healthz || die "oaf-api is not answering: journalctl -u oaf-api -n 50"
+info "oaf-api active on :8443"
+
+# ---------------------------------------------------------------------------
 step "Smoke test through the gateway"
 key=$(sudo cat "$ETC/secrets/gateway-key-default")
 curl -fsS "http://127.0.0.1:4000/v1/models" -H "Authorization: Bearer $key" >/dev/null && info "GET /v1/models: ok"
