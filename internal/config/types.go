@@ -420,7 +420,7 @@ type CatalogModel struct {
 	Entitlement *Entitlement `yaml:"entitlement,omitempty"`
 	SizeGiB     float64      `yaml:"sizeGiB"`
 	Classes     []string     `yaml:"classes"`
-	// CompanionOf: a fast single-node model offered only beside a pair that
+	// CompanionOf: a fast single-node model recommended beside a pair that
 	// runs a model of this class (think): the pair takes the heavy work, so
 	// the single box serves a quick model instead of a middle-ground one.
 	CompanionOf string `yaml:"companionOf,omitempty"`

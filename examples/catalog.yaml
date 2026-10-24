@@ -161,7 +161,7 @@ models:
   # Companions: quick models for the single box beside a pair that runs a
   # large (think) model such as GLM-5.3-Flash. The pair takes the heavy work,
   # so the single box serves one of these instead of a middle-ground model like
-  # Qwen3.8 Flash-Next; the add-model form offers them only in that layout.
+  # Qwen3.8 Flash-Next; the add-model form recommends them in that layout.
   - id: qwen3-coder-30b-a3b-instruct-fp8
     displayName: Qwen3-Coder 30B-A3B Instruct (FP8)
     source:

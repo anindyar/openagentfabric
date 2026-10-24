@@ -113,8 +113,7 @@ func (s *Server) catalog(w http.ResponseWriter, _ *http.Request) {
 			Classes: append([]string{}, m.Classes...), Offered: true}
 		switch {
 		case m.CompanionOf != "" && pairDep == "":
-			v.Offered = false
-			v.Note = "Offered once a pair runs a large (" + m.CompanionOf + ") model"
+			v.Note = "Fast model for a single box; recommended beside a large (" + m.CompanionOf + ") model on a pair"
 		case m.CompanionOf != "":
 			v.Recommended = true
 			v.Note = "Fast model for a single box while " + pairDep + " on " + pairGroup + " takes the heavy work"

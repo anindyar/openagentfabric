@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// Companion models are offered for a single box only once a pair runs a
-// think-class model, and are then recommended.
+// Companion models are always offered, and recommended once a pair runs a
+// think-class model.
 func TestCatalogCompanions(t *testing.T) {
 	f := newFixture(t)
 	companion := func() map[string]any {
@@ -20,7 +20,7 @@ func TestCatalogCompanions(t *testing.T) {
 		t.Fatal("companion model missing from the catalog")
 		return nil
 	}
-	if v := companion(); v["offered"] != false || v["recommended"] == true {
+	if v := companion(); v["offered"] != true || v["recommended"] == true {
 		t.Fatalf("single box: %v", v)
 	}
 	data, err := os.ReadFile("../../examples/cluster.pair-plus-single.yaml")
