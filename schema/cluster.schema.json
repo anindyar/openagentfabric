@@ -257,12 +257,13 @@
       ],
       "properties": {
         "topology": {
-          "description": "Switchless topologies only. single = 1 node. pair = 2 nodes, dual rail. triangle = 3 nodes, point-to-point mesh. pairs = 4 nodes as two independent pairs (NO 4-node ring: NCCL tree channels need non-adjacent links and RDMA cannot be forwarded).",
+          "description": "Switchless topologies only. single = 1 node. pair = 2 nodes, dual rail. triangle = 3 nodes, point-to-point mesh. pairs = 4 nodes as two independent pairs (NO 4-node ring: NCCL tree channels need non-adjacent links and RDMA cannot be forwarded). pair-plus-single = 3 nodes: one pair over ConnectX-7 plus one node reached over the LAN only (no fabric link).",
           "enum": [
             "single",
             "pair",
             "triangle",
-            "pairs"
+            "pairs",
+            "pair-plus-single"
           ]
         },
         "mtu": {

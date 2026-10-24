@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=../schema/cluster.schema.json
+# Example: the first box keeps the stack and a small model; two more boxes,
+# cabled to each other over ConnectX-7 (port 1 ↔ port 1, one cable = two
+# rails), serve a large model with TP=2. The first box reaches the pair over
+# the LAN only. `model: auto` sends complex queries to the pair (vSR).
+apiVersion: oaf/v1alpha1
+kind: Cluster
+metadata:
+  name: lab-pps
+spec:
+  bundle: { version: 0.1.0 }
+  nodes:
+    - { name: spark-1, address: 192.0.2.11, roles: [control, gateway, observability, inference] }
+    - { name: spark-2, address: 192.0.2.12, roles: [inference] }
+    - { name: spark-3, address: 192.0.2.13, roles: [inference] }
+  fabric:
+    topology: pair-plus-single
+    mtu: 9000
+    links:
+      - { a: { node: spark-2, port: 1 }, b: { node: spark-3, port: 1 }, subnets: [10.200.0.0/30, 10.200.0.4/30] }
+    roce: { gidIndex: auto }
+    nccl: { transport: auto }      # → ib on the pair
+  groups:
+    - { name: pair-1, nodes: [spark-2, spark-3] }
+  models:
+    - name: fast
+      catalogRef: qwen3-30b-a3b-instruct-2507-fp8
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.30
+      maxModelLen: 32768
+    - name: glm-5.3-flash
+      catalogRef: glm-5.3-flash-nvfp4
+      profile: pair-tp2
+      placement: { group: pair-1 }
+      gpuMemoryUtilization: 0.86
+  routing:
+    mode: observe
+    keys:
+      - { name: default, secretRef: gateway-key-default }
+    defaults: { fast: fast, fallback: fast }
+    rules:
+      - name: complex
+        match:
+          signals:
+            - { type: reasoning, threshold: 0.6 }
+        target: glm-5.3-flash
+  licenseAcceptances:
+    - subject: image/vllm
+      url: https://docs.nvidia.com/cuda/eula/index.html
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-10-24T12:00:00Z
+    - subject: image/vllm-spark-b12x
+      url: https://docs.nvidia.com/cuda/eula/index.html
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-10-24T12:00:00Z
