@@ -351,3 +351,16 @@ func TestNodeHeadlessPlan(t *testing.T) {
 		t.Fatalf("no token: %d", c)
 	}
 }
+
+func TestLineType(t *testing.T) {
+	for line, want := range map[string]string{
+		"updated   spark-2/fabric  enp1s0f1np1 10.200.0.1/30":                   "fabric",
+		"link  spark-2:enp1s0f1np1 ↔ spark-3:enp1s0f1np1  0.40 ms, MTU 9000 ok": "link",
+		"warning: link spark-2:1 ↔ spark-3:1: rail 0: 70.1 Gb/s is below 85":    "fabric",
+		"created   spark-2/node-exporter":                                       "plan",
+	} {
+		if got := lineType(line); got != want {
+			t.Errorf("%q: %s, want %s", line, got, want)
+		}
+	}
+}

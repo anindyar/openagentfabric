@@ -4,11 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	nodev1 "openagentfabric.dev/oaf/internal/gen/oaf/node/v1"
-	"openagentfabric.dev/oaf/internal/reconcile"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
 	"time"
+
+	nodev1 "openagentfabric.dev/oaf/internal/gen/oaf/node/v1"
+	"openagentfabric.dev/oaf/internal/reconcile"
 
 	"openagentfabric.dev/oaf/bundle"
 	"openagentfabric.dev/oaf/internal/config"
@@ -100,6 +104,7 @@ func mountGrowth(srv *oafd.Server, f *stackFlags, c *config.Cluster, stateDir st
 		},
 		Pending:  pending,
 		SavePlan: srv.SavePlan,
+		Probe:    (&cablingProbe{f: f, pending: pending}).probe,
 	}) {
 		srv.Handle(p, h)
 	}
@@ -164,4 +169,60 @@ func nodeDesktops(ctx context.Context, f *stackFlags, c *config.Cluster) map[str
 		out[name] = &join.DesktopView{Mode: resp.GetMode(), DisplayManagerActive: resp.GetDisplayManagerActive(), EstimatedMiB: resp.GetEstimatedMib()}
 	}
 	return out
+}
+
+// cablingProbe runs reconcile.ProbeCabling on joined boxes for the topology
+// planner (backlog G2), reaching their agents by the address they joined
+// with. Results are kept for two minutes: the wizard asks more than once,
+// and each probe briefly adds addresses on the boxes' free ports.
+type cablingProbe struct {
+	f       *stackFlags
+	pending *join.PendingStore
+
+	mu     sync.Mutex
+	key    string
+	at     time.Time
+	cables []topology.Cable
+}
+
+func (p *cablingProbe) probe(ctx context.Context, nodes []string) ([]topology.Cable, error) {
+	sorted := append([]string(nil), nodes...)
+	sort.Strings(sorted)
+	key := strings.Join(sorted, ",")
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if key == p.key && time.Since(p.at) < 2*time.Minute {
+		return p.cables, nil
+	}
+	pend, err := p.pending.List()
+	if err != nil {
+		return nil, err
+	}
+	addr := map[string]string{}
+	for _, n := range pend {
+		addr[n.Name] = n.Address
+	}
+	one := &config.Cluster{}
+	for _, n := range nodes {
+		if a := addr[n]; a != "" {
+			one.Spec.Nodes = append(one.Spec.Nodes, config.Node{Name: n, Address: a})
+		}
+	}
+	ns, err := reconcile.Dial(one, p.f.pkiDir)
+	if err != nil {
+		return nil, err
+	}
+	pctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	found, err := reconcile.ProbeCabling(pctx, ns, nodes)
+	if err != nil {
+		return nil, err
+	}
+	var out []topology.Cable
+	for _, c := range found {
+		ap, bp := c.APort, c.BPort
+		out = append(out, topology.Cable{A: config.LinkEnd{Node: c.ANode, Port: &ap}, B: config.LinkEnd{Node: c.BNode, Port: &bp}})
+	}
+	p.key, p.at, p.cables = key, time.Now(), out
+	return out, nil
 }

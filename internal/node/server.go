@@ -6,6 +6,7 @@ package node
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/netip"
 	"os"
@@ -40,8 +41,16 @@ type Server struct {
 	PreflightOptions preflight.Options
 	// Bench runs ib_write_bw for RailBandwidth; nil disables it.
 	Bench hostexec.Runner
-	// Host makes host changes (the desktop mode); nil disables them.
+	// Host makes host changes (the desktop mode, fabric addressing, cabling
+	// probes); nil disables them. `oaf node serve` wraps it in
+	// hostexec.Changes so only those changes can run.
 	Host hostexec.Runner
+	// NetplanFile overrides NetplanFile (tests).
+	NetplanFile string
+	// DiscoverFabric overrides fabric discovery (tests).
+	DiscoverFabric func(ctx context.Context) ([]fabric.Port, error)
+	// FabricWait bounds how long ConfigureFabric waits for addresses.
+	FabricWait time.Duration
 
 	mu sync.Mutex // serialises project changes
 
@@ -283,4 +292,52 @@ func (s *Server) Desktop(ctx context.Context, req *nodev1.DesktopRequest) (*node
 	}
 	return &nodev1.DesktopResponse{Mode: st.Mode, DisplayManagerActive: st.DisplayManagerActive,
 		EstimatedMib: st.EstimatedMiB, Changed: st.Changed, Warnings: st.Warnings}, nil
+}
+
+// ConfigureFabric implements NodeService.
+func (s *Server) ConfigureFabric(ctx context.Context, req *nodev1.ConfigureFabricRequest) (*nodev1.ConfigureFabricResponse, error) {
+	rails := make([]RailSpec, 0, len(req.GetRails()))
+	for _, r := range req.GetRails() {
+		p, err := netip.ParsePrefix(r.GetAddress())
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Sprintf("%s: address %q: %v", r.GetNetdev(), r.GetAddress(), err))
+		}
+		rails = append(rails, RailSpec{Netdev: r.GetNetdev(), Addr: p, MTU: int(r.GetMtu())})
+	}
+	s.mu.Lock() // one host change at a time
+	defer s.mu.Unlock()
+	res, err := s.ConfigureFabricRails(ctx, rails, req.GetDryRun())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err.Error())
+	}
+	out := &nodev1.ConfigureFabricResponse{Changed: res.Changed, Warnings: res.Warnings}
+	for _, r := range res.Rails {
+		out.Rails = append(out.Rails, &nodev1.RailState{Netdev: r.Netdev, Address: r.Addr.String(), Present: r.Present, Mtu: int32(r.MTU), OperState: r.OperState})
+	}
+	return out, nil
+}
+
+// ProbeAddress implements NodeService.
+func (s *Server) ProbeAddress(ctx context.Context, req *nodev1.ProbeAddressRequest) (*nodev1.ProbeAddressResponse, error) {
+	p, err := netip.ParsePrefix(req.GetAddress())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, "address: "+err.Error())
+	}
+	if err := s.ProbeAddr(ctx, req.GetNetdev(), p, req.GetRemove()); err != nil {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err.Error())
+	}
+	return &nodev1.ProbeAddressResponse{}, nil
+}
+
+// Ping implements NodeService.
+func (s *Server) Ping(ctx context.Context, req *nodev1.PingRequest) (*nodev1.PingResponse, error) {
+	t, err := netip.ParseAddr(req.GetTarget())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, "target: "+err.Error())
+	}
+	res, err := s.PingFrom(ctx, req.GetNetdev(), t, int(req.GetCount()), int(req.GetSize()), req.GetDontFragment())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err.Error())
+	}
+	return &nodev1.PingResponse{Ok: res.OK, RttMs: res.RTTms, NeighborMac: res.NeighborMAC}, nil
 }

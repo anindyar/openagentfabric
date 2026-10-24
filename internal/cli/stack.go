@@ -127,6 +127,11 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 	if err := reconcile.Desktop(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
 		return err
 	}
+	// Then the fabric: rails addressed and checked before models that span
+	// them start (backlog G1, G3).
+	if _, err := reconcile.FabricUp(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
+		return err
+	}
 	if dryRun {
 		return nil
 	}

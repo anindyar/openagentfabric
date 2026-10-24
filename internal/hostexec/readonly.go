@@ -25,6 +25,8 @@ var readOnly = map[string][][]string{
 	"systemctl":   {{"get-default"}, {"is-active", "display-manager"}},
 	"loginctl":    {{"list-sessions", "--no-legend"}},
 	"ps":          {{"-eo", "comm=,rss="}},
+	// ping sends a few packets out of one netdev (cabling probe, link check).
+	"ping": {{"-c"}},
 	"docker": {
 		{"version", "--format"},
 		{"info", "--format"},

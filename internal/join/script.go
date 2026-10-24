@@ -26,14 +26,21 @@ func PinFromCert(certPEM []byte) (string, error) {
 	return "sha256//" + base64.StdEncoding.EncodeToString(sum[:]), nil
 }
 
-// Command is the one line an admin runs on a new box.
+// TokenEnv carries the join token to join.sh and `oaf join`. A token in a
+// process's environment is readable only by its owner and root; on a
+// command line any user on the box sees it in the process list.
+const TokenEnv = "OAF_JOIN_TOKEN"
+
+// Command is the one line an admin runs on a new box. The token travels in
+// the environment (export is a shell builtin: no process carries it), so it
+// is in no command line.
 func Command(controlURL, pin, token string) string {
-	return fmt.Sprintf("curl -fsSLk --pinnedpubkey '%s' %s/join.sh | sudo bash -s -- --token %s",
-		pin, strings.TrimRight(controlURL, "/"), token)
+	return fmt.Sprintf("export %s=%s; curl -fsSLk --pinnedpubkey '%s' %s/join.sh | sudo --preserve-env=%s bash -s",
+		TokenEnv, token, pin, strings.TrimRight(controlURL, "/"), TokenEnv)
 }
 
 // Script is join.sh, served by oafd at /join.sh. It holds no secret: the
-// token comes on the command line. Every download pins oafd's TLS key, so
+// token comes in the environment (OAF_JOIN_TOKEN; --token still works). Every download pins oafd's TLS key, so
 // it works with the cluster's own certificate and refuses an impostor. The
 // oaf binary and the images come from the control node, so a box with no
 // internet joins too. Nothing is deployed on join.
@@ -49,7 +56,7 @@ set -euo pipefail
 
 CONTROL="@CONTROL@"
 PIN="@PIN@"
-TOKEN=""
+TOKEN="${OAF_JOIN_TOKEN:-}"
 EXTRA=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -60,7 +67,7 @@ while [ $# -gt 0 ]; do
     *) echo "join.sh: unknown argument $1" >&2; exit 2 ;;
   esac
 done
-[ -n "$TOKEN" ] || { echo "usage: join.sh --token <token> [--skip-images] [--name <node>] [--force]" >&2; exit 2; }
+[ -n "$TOKEN" ] || { echo "usage: OAF_JOIN_TOKEN=<token> join.sh [--skip-images] [--name <node>] [--force]" >&2; exit 2; }
 [ "$(id -u)" -eq 0 ] || { echo "join.sh: run as root (sudo)" >&2; exit 1; }
 case "$(uname -m)" in
   aarch64) ARCH=arm64 ;;
@@ -72,10 +79,13 @@ command -v docker >/dev/null || { echo "join.sh: docker is required (DGX OS ship
 echo "==> Downloading oaf ($ARCH) from $CONTROL"
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
-curl -fsSLk --pinnedpubkey "$PIN" -H "Authorization: Bearer $TOKEN" \
-  -o "$tmp" "$CONTROL/api/v1/join/binary?arch=$ARCH"
+# The header comes from stdin (curl -K -), not curl's command line.
+curl -fsSLk --pinnedpubkey "$PIN" -K - -o "$tmp" "$CONTROL/api/v1/join/binary?arch=$ARCH" <<EOF
+header = "Authorization: Bearer $TOKEN"
+EOF
 install -m 0755 "$tmp" /usr/local/bin/oaf
 
 echo "==> Joining"
-exec /usr/local/bin/oaf join --control "$CONTROL" --pin "$PIN" --token "$TOKEN" "${EXTRA[@]}"
+export OAF_JOIN_TOKEN="$TOKEN"
+exec /usr/local/bin/oaf join --control "$CONTROL" --pin "$PIN" "${EXTRA[@]}"
 `

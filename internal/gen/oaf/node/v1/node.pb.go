@@ -1014,6 +1014,7 @@ type FabricNetdev struct {
 	Addrs         []string `protobuf:"bytes,6,rep,name=addrs,proto3" json:"addrs,omitempty"`
 	RdmaDev       string   `protobuf:"bytes,7,opt,name=rdma_dev,json=rdmaDev,proto3" json:"rdma_dev,omitempty"`
 	Gids          []*Gid   `protobuf:"bytes,8,rep,name=gids,proto3" json:"gids,omitempty"`
+	Mac           string   `protobuf:"bytes,9,opt,name=mac,proto3" json:"mac,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1102,6 +1103,13 @@ func (x *FabricNetdev) GetGids() []*Gid {
 		return x.Gids
 	}
 	return nil
+}
+
+func (x *FabricNetdev) GetMac() string {
+	if x != nil {
+		return x.Mac
+	}
+	return ""
 }
 
 type Gid struct {
@@ -1439,6 +1447,496 @@ func (x *DesktopResponse) GetWarnings() []string {
 	return nil
 }
 
+// One rail: a QSFP netdev with its address (CIDR) and MTU (0 means 9000).
+type FabricRail struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Netdev        string                 `protobuf:"bytes,1,opt,name=netdev,proto3" json:"netdev,omitempty"`
+	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Mtu           int32                  `protobuf:"varint,3,opt,name=mtu,proto3" json:"mtu,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FabricRail) Reset() {
+	*x = FabricRail{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FabricRail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FabricRail) ProtoMessage() {}
+
+func (x *FabricRail) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FabricRail.ProtoReflect.Descriptor instead.
+func (*FabricRail) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *FabricRail) GetNetdev() string {
+	if x != nil {
+		return x.Netdev
+	}
+	return ""
+}
+
+func (x *FabricRail) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *FabricRail) GetMtu() int32 {
+	if x != nil {
+		return x.Mtu
+	}
+	return 0
+}
+
+type ConfigureFabricRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Every rail this node should have; rails not listed are removed from
+	// OAF's netplan file.
+	Rails []*FabricRail `protobuf:"bytes,1,rep,name=rails,proto3" json:"rails,omitempty"`
+	// Report what would change; change nothing.
+	DryRun        bool `protobuf:"varint,2,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfigureFabricRequest) Reset() {
+	*x = ConfigureFabricRequest{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfigureFabricRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfigureFabricRequest) ProtoMessage() {}
+
+func (x *ConfigureFabricRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfigureFabricRequest.ProtoReflect.Descriptor instead.
+func (*ConfigureFabricRequest) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *ConfigureFabricRequest) GetRails() []*FabricRail {
+	if x != nil {
+		return x.Rails
+	}
+	return nil
+}
+
+func (x *ConfigureFabricRequest) GetDryRun() bool {
+	if x != nil {
+		return x.DryRun
+	}
+	return false
+}
+
+type RailState struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Netdev  string                 `protobuf:"bytes,1,opt,name=netdev,proto3" json:"netdev,omitempty"`
+	Address string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	// The address is on the netdev (after any change).
+	Present       bool   `protobuf:"varint,3,opt,name=present,proto3" json:"present,omitempty"`
+	Mtu           int32  `protobuf:"varint,4,opt,name=mtu,proto3" json:"mtu,omitempty"`
+	OperState     string `protobuf:"bytes,5,opt,name=oper_state,json=operState,proto3" json:"oper_state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RailState) Reset() {
+	*x = RailState{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RailState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RailState) ProtoMessage() {}
+
+func (x *RailState) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RailState.ProtoReflect.Descriptor instead.
+func (*RailState) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *RailState) GetNetdev() string {
+	if x != nil {
+		return x.Netdev
+	}
+	return ""
+}
+
+func (x *RailState) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *RailState) GetPresent() bool {
+	if x != nil {
+		return x.Present
+	}
+	return false
+}
+
+func (x *RailState) GetMtu() int32 {
+	if x != nil {
+		return x.Mtu
+	}
+	return 0
+}
+
+func (x *RailState) GetOperState() string {
+	if x != nil {
+		return x.OperState
+	}
+	return ""
+}
+
+type ConfigureFabricResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Changed       bool                   `protobuf:"varint,1,opt,name=changed,proto3" json:"changed,omitempty"`
+	Rails         []*RailState           `protobuf:"bytes,2,rep,name=rails,proto3" json:"rails,omitempty"`
+	Warnings      []string               `protobuf:"bytes,3,rep,name=warnings,proto3" json:"warnings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfigureFabricResponse) Reset() {
+	*x = ConfigureFabricResponse{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfigureFabricResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfigureFabricResponse) ProtoMessage() {}
+
+func (x *ConfigureFabricResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfigureFabricResponse.ProtoReflect.Descriptor instead.
+func (*ConfigureFabricResponse) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ConfigureFabricResponse) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
+func (x *ConfigureFabricResponse) GetRails() []*RailState {
+	if x != nil {
+		return x.Rails
+	}
+	return nil
+}
+
+func (x *ConfigureFabricResponse) GetWarnings() []string {
+	if x != nil {
+		return x.Warnings
+	}
+	return nil
+}
+
+type ProbeAddressRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Netdev string                 `protobuf:"bytes,1,opt,name=netdev,proto3" json:"netdev,omitempty"`
+	// CIDR, inside the probe pool the caller uses.
+	Address       string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Remove        bool   `protobuf:"varint,3,opt,name=remove,proto3" json:"remove,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeAddressRequest) Reset() {
+	*x = ProbeAddressRequest{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeAddressRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeAddressRequest) ProtoMessage() {}
+
+func (x *ProbeAddressRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeAddressRequest.ProtoReflect.Descriptor instead.
+func (*ProbeAddressRequest) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ProbeAddressRequest) GetNetdev() string {
+	if x != nil {
+		return x.Netdev
+	}
+	return ""
+}
+
+func (x *ProbeAddressRequest) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *ProbeAddressRequest) GetRemove() bool {
+	if x != nil {
+		return x.Remove
+	}
+	return false
+}
+
+type ProbeAddressResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProbeAddressResponse) Reset() {
+	*x = ProbeAddressResponse{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProbeAddressResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProbeAddressResponse) ProtoMessage() {}
+
+func (x *ProbeAddressResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProbeAddressResponse.ProtoReflect.Descriptor instead.
+func (*ProbeAddressResponse) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{29}
+}
+
+type PingRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The netdev the pings leave from.
+	Netdev string `protobuf:"bytes,1,opt,name=netdev,proto3" json:"netdev,omitempty"`
+	Target string `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Count  int32  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	// ICMP payload size (0 = the default 56).
+	Size int32 `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
+	// Do not fragment (to test the MTU end to end).
+	DontFragment  bool `protobuf:"varint,5,opt,name=dont_fragment,json=dontFragment,proto3" json:"dont_fragment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PingRequest) Reset() {
+	*x = PingRequest{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PingRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PingRequest) ProtoMessage() {}
+
+func (x *PingRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
+func (*PingRequest) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *PingRequest) GetNetdev() string {
+	if x != nil {
+		return x.Netdev
+	}
+	return ""
+}
+
+func (x *PingRequest) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *PingRequest) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *PingRequest) GetSize() int32 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *PingRequest) GetDontFragment() bool {
+	if x != nil {
+		return x.DontFragment
+	}
+	return false
+}
+
+type PingResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Ok    bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	RttMs float64                `protobuf:"fixed64,2,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`
+	// The MAC that answered ARP for the target on this netdev, if any.
+	NeighborMac   string `protobuf:"bytes,3,opt,name=neighbor_mac,json=neighborMac,proto3" json:"neighbor_mac,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PingResponse) Reset() {
+	*x = PingResponse{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PingResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PingResponse) ProtoMessage() {}
+
+func (x *PingResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
+func (*PingResponse) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *PingResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *PingResponse) GetRttMs() float64 {
+	if x != nil {
+		return x.RttMs
+	}
+	return 0
+}
+
+func (x *PingResponse) GetNeighborMac() string {
+	if x != nil {
+		return x.NeighborMac
+	}
+	return ""
+}
+
 var File_oaf_node_v1_node_proto protoreflect.FileDescriptor
 
 const file_oaf_node_v1_node_proto_rawDesc = "" +
@@ -1502,7 +2000,7 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\n" +
 	"FabricPort\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x05R\x05index\x121\n" +
-	"\x06halves\x18\x02 \x03(\v2\x19.oaf.node.v1.FabricNetdevR\x06halves\"\xdb\x01\n" +
+	"\x06halves\x18\x02 \x03(\v2\x19.oaf.node.v1.FabricNetdevR\x06halves\"\xed\x01\n" +
 	"\fFabricNetdev\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03pci\x18\x02 \x01(\tR\x03pci\x12\x1d\n" +
@@ -1513,7 +2011,8 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"speed_mbps\x18\x05 \x01(\x05R\tspeedMbps\x12\x14\n" +
 	"\x05addrs\x18\x06 \x03(\tR\x05addrs\x12\x19\n" +
 	"\brdma_dev\x18\a \x01(\tR\ardmaDev\x12$\n" +
-	"\x04gids\x18\b \x03(\v2\x10.oaf.node.v1.GidR\x04gids\"A\n" +
+	"\x04gids\x18\b \x03(\v2\x10.oaf.node.v1.GidR\x04gids\x12\x10\n" +
+	"\x03mac\x18\t \x01(\tR\x03mac\"A\n" +
 	"\x03Gid\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x05R\x05index\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x10\n" +
@@ -1538,7 +2037,41 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\x16display_manager_active\x18\x02 \x01(\bR\x14displayManagerActive\x12#\n" +
 	"\restimated_mib\x18\x03 \x01(\x03R\festimatedMib\x12\x18\n" +
 	"\achanged\x18\x04 \x01(\bR\achanged\x12\x1a\n" +
-	"\bwarnings\x18\x05 \x03(\tR\bwarnings2\xd1\x05\n" +
+	"\bwarnings\x18\x05 \x03(\tR\bwarnings\"P\n" +
+	"\n" +
+	"FabricRail\x12\x16\n" +
+	"\x06netdev\x18\x01 \x01(\tR\x06netdev\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x10\n" +
+	"\x03mtu\x18\x03 \x01(\x05R\x03mtu\"`\n" +
+	"\x16ConfigureFabricRequest\x12-\n" +
+	"\x05rails\x18\x01 \x03(\v2\x17.oaf.node.v1.FabricRailR\x05rails\x12\x17\n" +
+	"\adry_run\x18\x02 \x01(\bR\x06dryRun\"\x88\x01\n" +
+	"\tRailState\x12\x16\n" +
+	"\x06netdev\x18\x01 \x01(\tR\x06netdev\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x18\n" +
+	"\apresent\x18\x03 \x01(\bR\apresent\x12\x10\n" +
+	"\x03mtu\x18\x04 \x01(\x05R\x03mtu\x12\x1d\n" +
+	"\n" +
+	"oper_state\x18\x05 \x01(\tR\toperState\"}\n" +
+	"\x17ConfigureFabricResponse\x12\x18\n" +
+	"\achanged\x18\x01 \x01(\bR\achanged\x12,\n" +
+	"\x05rails\x18\x02 \x03(\v2\x16.oaf.node.v1.RailStateR\x05rails\x12\x1a\n" +
+	"\bwarnings\x18\x03 \x03(\tR\bwarnings\"_\n" +
+	"\x13ProbeAddressRequest\x12\x16\n" +
+	"\x06netdev\x18\x01 \x01(\tR\x06netdev\x12\x18\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x16\n" +
+	"\x06remove\x18\x03 \x01(\bR\x06remove\"\x16\n" +
+	"\x14ProbeAddressResponse\"\x8c\x01\n" +
+	"\vPingRequest\x12\x16\n" +
+	"\x06netdev\x18\x01 \x01(\tR\x06netdev\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\x05R\x05count\x12\x12\n" +
+	"\x04size\x18\x04 \x01(\x05R\x04size\x12#\n" +
+	"\rdont_fragment\x18\x05 \x01(\bR\fdontFragment\"X\n" +
+	"\fPingResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x15\n" +
+	"\x06rtt_ms\x18\x02 \x01(\x01R\x05rttMs\x12!\n" +
+	"\fneighbor_mac\x18\x03 \x01(\tR\vneighborMac2\xc1\a\n" +
 	"\vNodeService\x12;\n" +
 	"\x04Info\x12\x18.oaf.node.v1.InfoRequest\x1a\x19.oaf.node.v1.InfoResponse\x12J\n" +
 	"\tPreflight\x12\x1d.oaf.node.v1.PreflightRequest\x1a\x1e.oaf.node.v1.PreflightResponse\x12S\n" +
@@ -1548,7 +2081,10 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\fListProjects\x12 .oaf.node.v1.ListProjectsRequest\x1a!.oaf.node.v1.ListProjectsResponse\x12A\n" +
 	"\x06Fabric\x12\x1a.oaf.node.v1.FabricRequest\x1a\x1b.oaf.node.v1.FabricResponse\x12V\n" +
 	"\rRailBandwidth\x12!.oaf.node.v1.RailBandwidthRequest\x1a\".oaf.node.v1.RailBandwidthResponse\x12D\n" +
-	"\aDesktop\x12\x1b.oaf.node.v1.DesktopRequest\x1a\x1c.oaf.node.v1.DesktopResponseB\xa3\x01\n" +
+	"\aDesktop\x12\x1b.oaf.node.v1.DesktopRequest\x1a\x1c.oaf.node.v1.DesktopResponse\x12\\\n" +
+	"\x0fConfigureFabric\x12#.oaf.node.v1.ConfigureFabricRequest\x1a$.oaf.node.v1.ConfigureFabricResponse\x12S\n" +
+	"\fProbeAddress\x12 .oaf.node.v1.ProbeAddressRequest\x1a!.oaf.node.v1.ProbeAddressResponse\x12;\n" +
+	"\x04Ping\x12\x18.oaf.node.v1.PingRequest\x1a\x19.oaf.node.v1.PingResponseB\xa3\x01\n" +
 	"\x0fcom.oaf.node.v1B\tNodeProtoP\x01Z7openagentfabric.dev/oaf/internal/gen/oaf/node/v1;nodev1\xa2\x02\x03ONX\xaa\x02\vOaf.Node.V1\xca\x02\vOaf\\Node\\V1\xe2\x02\x17Oaf\\Node\\V1\\GPBMetadata\xea\x02\rOaf::Node::V1b\x06proto3"
 
 var (
@@ -1563,32 +2099,40 @@ func file_oaf_node_v1_node_proto_rawDescGZIP() []byte {
 	return file_oaf_node_v1_node_proto_rawDescData
 }
 
-var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_oaf_node_v1_node_proto_goTypes = []any{
-	(*InfoRequest)(nil),           // 0: oaf.node.v1.InfoRequest
-	(*InfoResponse)(nil),          // 1: oaf.node.v1.InfoResponse
-	(*PreflightRequest)(nil),      // 2: oaf.node.v1.PreflightRequest
-	(*PreflightResponse)(nil),     // 3: oaf.node.v1.PreflightResponse
-	(*CheckResult)(nil),           // 4: oaf.node.v1.CheckResult
-	(*ApplyProjectRequest)(nil),   // 5: oaf.node.v1.ApplyProjectRequest
-	(*File)(nil),                  // 6: oaf.node.v1.File
-	(*ApplyProjectResponse)(nil),  // 7: oaf.node.v1.ApplyProjectResponse
-	(*RemoveProjectRequest)(nil),  // 8: oaf.node.v1.RemoveProjectRequest
-	(*RemoveProjectResponse)(nil), // 9: oaf.node.v1.RemoveProjectResponse
-	(*ProjectStatusRequest)(nil),  // 10: oaf.node.v1.ProjectStatusRequest
-	(*ProjectStatusResponse)(nil), // 11: oaf.node.v1.ProjectStatusResponse
-	(*Service)(nil),               // 12: oaf.node.v1.Service
-	(*ListProjectsRequest)(nil),   // 13: oaf.node.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),  // 14: oaf.node.v1.ListProjectsResponse
-	(*FabricRequest)(nil),         // 15: oaf.node.v1.FabricRequest
-	(*FabricResponse)(nil),        // 16: oaf.node.v1.FabricResponse
-	(*FabricPort)(nil),            // 17: oaf.node.v1.FabricPort
-	(*FabricNetdev)(nil),          // 18: oaf.node.v1.FabricNetdev
-	(*Gid)(nil),                   // 19: oaf.node.v1.Gid
-	(*RailBandwidthRequest)(nil),  // 20: oaf.node.v1.RailBandwidthRequest
-	(*RailBandwidthResponse)(nil), // 21: oaf.node.v1.RailBandwidthResponse
-	(*DesktopRequest)(nil),        // 22: oaf.node.v1.DesktopRequest
-	(*DesktopResponse)(nil),       // 23: oaf.node.v1.DesktopResponse
+	(*InfoRequest)(nil),             // 0: oaf.node.v1.InfoRequest
+	(*InfoResponse)(nil),            // 1: oaf.node.v1.InfoResponse
+	(*PreflightRequest)(nil),        // 2: oaf.node.v1.PreflightRequest
+	(*PreflightResponse)(nil),       // 3: oaf.node.v1.PreflightResponse
+	(*CheckResult)(nil),             // 4: oaf.node.v1.CheckResult
+	(*ApplyProjectRequest)(nil),     // 5: oaf.node.v1.ApplyProjectRequest
+	(*File)(nil),                    // 6: oaf.node.v1.File
+	(*ApplyProjectResponse)(nil),    // 7: oaf.node.v1.ApplyProjectResponse
+	(*RemoveProjectRequest)(nil),    // 8: oaf.node.v1.RemoveProjectRequest
+	(*RemoveProjectResponse)(nil),   // 9: oaf.node.v1.RemoveProjectResponse
+	(*ProjectStatusRequest)(nil),    // 10: oaf.node.v1.ProjectStatusRequest
+	(*ProjectStatusResponse)(nil),   // 11: oaf.node.v1.ProjectStatusResponse
+	(*Service)(nil),                 // 12: oaf.node.v1.Service
+	(*ListProjectsRequest)(nil),     // 13: oaf.node.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),    // 14: oaf.node.v1.ListProjectsResponse
+	(*FabricRequest)(nil),           // 15: oaf.node.v1.FabricRequest
+	(*FabricResponse)(nil),          // 16: oaf.node.v1.FabricResponse
+	(*FabricPort)(nil),              // 17: oaf.node.v1.FabricPort
+	(*FabricNetdev)(nil),            // 18: oaf.node.v1.FabricNetdev
+	(*Gid)(nil),                     // 19: oaf.node.v1.Gid
+	(*RailBandwidthRequest)(nil),    // 20: oaf.node.v1.RailBandwidthRequest
+	(*RailBandwidthResponse)(nil),   // 21: oaf.node.v1.RailBandwidthResponse
+	(*DesktopRequest)(nil),          // 22: oaf.node.v1.DesktopRequest
+	(*DesktopResponse)(nil),         // 23: oaf.node.v1.DesktopResponse
+	(*FabricRail)(nil),              // 24: oaf.node.v1.FabricRail
+	(*ConfigureFabricRequest)(nil),  // 25: oaf.node.v1.ConfigureFabricRequest
+	(*RailState)(nil),               // 26: oaf.node.v1.RailState
+	(*ConfigureFabricResponse)(nil), // 27: oaf.node.v1.ConfigureFabricResponse
+	(*ProbeAddressRequest)(nil),     // 28: oaf.node.v1.ProbeAddressRequest
+	(*ProbeAddressResponse)(nil),    // 29: oaf.node.v1.ProbeAddressResponse
+	(*PingRequest)(nil),             // 30: oaf.node.v1.PingRequest
+	(*PingResponse)(nil),            // 31: oaf.node.v1.PingResponse
 }
 var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	4,  // 0: oaf.node.v1.PreflightResponse.results:type_name -> oaf.node.v1.CheckResult
@@ -1598,29 +2142,37 @@ var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	17, // 4: oaf.node.v1.FabricResponse.ports:type_name -> oaf.node.v1.FabricPort
 	18, // 5: oaf.node.v1.FabricPort.halves:type_name -> oaf.node.v1.FabricNetdev
 	19, // 6: oaf.node.v1.FabricNetdev.gids:type_name -> oaf.node.v1.Gid
-	0,  // 7: oaf.node.v1.NodeService.Info:input_type -> oaf.node.v1.InfoRequest
-	2,  // 8: oaf.node.v1.NodeService.Preflight:input_type -> oaf.node.v1.PreflightRequest
-	5,  // 9: oaf.node.v1.NodeService.ApplyProject:input_type -> oaf.node.v1.ApplyProjectRequest
-	8,  // 10: oaf.node.v1.NodeService.RemoveProject:input_type -> oaf.node.v1.RemoveProjectRequest
-	10, // 11: oaf.node.v1.NodeService.ProjectStatus:input_type -> oaf.node.v1.ProjectStatusRequest
-	13, // 12: oaf.node.v1.NodeService.ListProjects:input_type -> oaf.node.v1.ListProjectsRequest
-	15, // 13: oaf.node.v1.NodeService.Fabric:input_type -> oaf.node.v1.FabricRequest
-	20, // 14: oaf.node.v1.NodeService.RailBandwidth:input_type -> oaf.node.v1.RailBandwidthRequest
-	22, // 15: oaf.node.v1.NodeService.Desktop:input_type -> oaf.node.v1.DesktopRequest
-	1,  // 16: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
-	3,  // 17: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
-	7,  // 18: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
-	9,  // 19: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
-	11, // 20: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
-	14, // 21: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
-	16, // 22: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
-	21, // 23: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
-	23, // 24: oaf.node.v1.NodeService.Desktop:output_type -> oaf.node.v1.DesktopResponse
-	16, // [16:25] is the sub-list for method output_type
-	7,  // [7:16] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	24, // 7: oaf.node.v1.ConfigureFabricRequest.rails:type_name -> oaf.node.v1.FabricRail
+	26, // 8: oaf.node.v1.ConfigureFabricResponse.rails:type_name -> oaf.node.v1.RailState
+	0,  // 9: oaf.node.v1.NodeService.Info:input_type -> oaf.node.v1.InfoRequest
+	2,  // 10: oaf.node.v1.NodeService.Preflight:input_type -> oaf.node.v1.PreflightRequest
+	5,  // 11: oaf.node.v1.NodeService.ApplyProject:input_type -> oaf.node.v1.ApplyProjectRequest
+	8,  // 12: oaf.node.v1.NodeService.RemoveProject:input_type -> oaf.node.v1.RemoveProjectRequest
+	10, // 13: oaf.node.v1.NodeService.ProjectStatus:input_type -> oaf.node.v1.ProjectStatusRequest
+	13, // 14: oaf.node.v1.NodeService.ListProjects:input_type -> oaf.node.v1.ListProjectsRequest
+	15, // 15: oaf.node.v1.NodeService.Fabric:input_type -> oaf.node.v1.FabricRequest
+	20, // 16: oaf.node.v1.NodeService.RailBandwidth:input_type -> oaf.node.v1.RailBandwidthRequest
+	22, // 17: oaf.node.v1.NodeService.Desktop:input_type -> oaf.node.v1.DesktopRequest
+	25, // 18: oaf.node.v1.NodeService.ConfigureFabric:input_type -> oaf.node.v1.ConfigureFabricRequest
+	28, // 19: oaf.node.v1.NodeService.ProbeAddress:input_type -> oaf.node.v1.ProbeAddressRequest
+	30, // 20: oaf.node.v1.NodeService.Ping:input_type -> oaf.node.v1.PingRequest
+	1,  // 21: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
+	3,  // 22: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
+	7,  // 23: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
+	9,  // 24: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
+	11, // 25: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
+	14, // 26: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
+	16, // 27: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
+	21, // 28: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
+	23, // 29: oaf.node.v1.NodeService.Desktop:output_type -> oaf.node.v1.DesktopResponse
+	27, // 30: oaf.node.v1.NodeService.ConfigureFabric:output_type -> oaf.node.v1.ConfigureFabricResponse
+	29, // 31: oaf.node.v1.NodeService.ProbeAddress:output_type -> oaf.node.v1.ProbeAddressResponse
+	31, // 32: oaf.node.v1.NodeService.Ping:output_type -> oaf.node.v1.PingResponse
+	21, // [21:33] is the sub-list for method output_type
+	9,  // [9:21] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_oaf_node_v1_node_proto_init() }
@@ -1634,7 +2186,7 @@ func file_oaf_node_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_oaf_node_v1_node_proto_rawDesc), len(file_oaf_node_v1_node_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -47,6 +47,12 @@ func newJoinCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if token == "" {
+				token = os.Getenv(join.TokenEnv)
+			}
+			if token == "" {
+				return fmt.Errorf("no join token: set %s (the join command does)", join.TokenEnv)
+			}
 			c := &join.Client{Control: control, Token: token, HTTP: hc}
 
 			opts := preflight.Defaults
@@ -119,7 +125,7 @@ func newJoinCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&control, "control", "", "control node URL, e.g. https://192.0.2.10:8443")
-	cmd.Flags().StringVar(&token, "token", "", "one-time join token")
+	cmd.Flags().StringVar(&token, "token", "", "one-time join token (prefer the "+join.TokenEnv+" environment variable: a command line is visible to every user)")
 	cmd.Flags().StringVar(&pin, "pin", "", "control node TLS key pin (sha256//...), from the join command")
 	cmd.Flags().StringVar(&name, "name", "", "node name (default: from the hostname)")
 	cmd.Flags().StringVar(&address, "address", "", "LAN address the control node reaches this box on (default: the address it sees)")
@@ -130,7 +136,7 @@ func newJoinCmd() *cobra.Command {
 	cmd.Flags().StringVar(&imagesMode, "images", "auto", "copy bundle images from the control node: auto (only when the registries are unreachable), always, never")
 	cmd.Flags().BoolVar(&force, "force", false, "join even if a blocking preflight check fails")
 	cmd.Flags().BoolVar(&noStart, "no-start", false, "install oaf-node.service without starting it")
-	for _, f := range []string{"control", "token", "pin"} {
+	for _, f := range []string{"control", "pin"} {
 		_ = cmd.MarkFlagRequired(f)
 	}
 	return cmd

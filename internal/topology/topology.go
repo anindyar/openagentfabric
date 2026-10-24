@@ -176,11 +176,35 @@ func cableBetween(cs []Cable, a, b string) (Cable, bool) {
 	return Cable{}, false
 }
 
-// cablePlan picks the ports for a pair cable: what is cabled already, else a
-// free port on each box, port 1 first (port 0 is often in use).
-func cablePlan(in Input, a, b string) (CableStep, string) {
-	if c, ok := cableBetween(in.Cabling, a, b); ok && c.A.Port != nil && c.B.Port != nil {
-		return CableStep{A: c.A, B: c.B, Done: true, Text: fmt.Sprintf("%s port %d ↔ %s port %d (cabled)", a, *c.A.Port, b, *c.B.Port)}, ""
+// cablesBetween are all the observed cables between two boxes, a's end
+// first, ordered by a's port (port 1 first).
+func cablesBetween(cs []Cable, a, b string) []Cable {
+	var out []Cable
+	seen := map[int]bool{}
+	for _, c := range cs {
+		if c.A.Node == b && c.B.Node == a {
+			c = Cable{A: c.B, B: c.A}
+		}
+		if c.A.Node != a || c.B.Node != b || c.A.Port == nil || c.B.Port == nil || seen[*c.A.Port] {
+			continue
+		}
+		seen[*c.A.Port] = true
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return *out[i].A.Port > *out[j].A.Port })
+	return out
+}
+
+// cablePlan picks the cables for a pair: every cable seen between the two
+// boxes (two cables = four rails), else a free port on each box, port 1
+// first (port 0 is often in use), to be connected.
+func cablePlan(in Input, a, b string) ([]CableStep, string) {
+	if cs := cablesBetween(in.Cabling, a, b); len(cs) > 0 {
+		var steps []CableStep
+		for _, c := range cs {
+			steps = append(steps, CableStep{A: c.A, B: c.B, Done: true, Text: fmt.Sprintf("%s port %d ↔ %s port %d (cabled)", a, *c.A.Port, b, *c.B.Port)})
+		}
+		return steps, ""
 	}
 	hwA, okA := hardwareOf(in, a)
 	hwB, okB := hardwareOf(in, b)
@@ -188,13 +212,13 @@ func cablePlan(in Input, a, b string) (CableStep, string) {
 	okA, okB = okA && len(hwA.Ports) > 0, okB && len(hwB.Ports) > 0
 	pa, pb := freePorts(hwA, okA), freePorts(hwB, okB)
 	if len(pa) == 0 {
-		return CableStep{}, fmt.Sprintf("%s has no free QSFP port (both carry addresses something else configured)", a)
+		return nil, fmt.Sprintf("%s has no free QSFP port (both carry addresses something else configured)", a)
 	}
 	if len(pb) == 0 {
-		return CableStep{}, fmt.Sprintf("%s has no free QSFP port (both carry addresses something else configured)", b)
+		return nil, fmt.Sprintf("%s has no free QSFP port (both carry addresses something else configured)", b)
 	}
-	return CableStep{A: config.LinkEnd{Node: a, Port: intp(pa[0])}, B: config.LinkEnd{Node: b, Port: intp(pb[0])},
-		Text: fmt.Sprintf("connect %s port %d ↔ %s port %d with one QSFP cable (one cable = two rails)", a, pa[0], b, pb[0])}, ""
+	return []CableStep{{A: config.LinkEnd{Node: a, Port: intp(pa[0])}, B: config.LinkEnd{Node: b, Port: intp(pb[0])},
+		Text: fmt.Sprintf("connect %s port %d ↔ %s port %d with one QSFP cable (one cable = two rails)", a, pa[0], b, pb[0])}}, ""
 }
 
 func hardwareOf(in Input, name string) (join.Hardware, bool) {
@@ -245,13 +269,13 @@ func Recommend(in Input) []Option {
 		a.NewNodes = pend[:1]
 		a.Nodes = append(append([]string{}, cur...), pend[0])
 		a.TotalMemoryGiB = memory(a.Nodes...)
-		step, why := cablePlan(in, cur[0], pend[0])
+		steps, why := cablePlan(in, cur[0], pend[0])
 		if why != "" {
 			a.Notes = append(a.Notes, why)
 			break
 		}
 		a.Possible = true
-		a.Cabling = []CableStep{step}
+		a.Cabling = steps
 		free := config.MaxNodeMemoryFraction - usedFraction(c, cur[0])
 		where := "pair " + cur[0] + "+" + pend[0]
 		a.Models = fits(in.Catalog, 2, free, where)
@@ -287,13 +311,16 @@ func Recommend(in Input) []Option {
 		cc.NewNodes = pend[:2]
 		cc.Nodes = append(append([]string{}, cur...), pend[0], pend[1])
 		cc.TotalMemoryGiB = memory(cc.Nodes...)
-		step, why := cablePlan(in, pend[0], pend[1])
+		steps, why := cablePlan(in, pend[0], pend[1])
 		if why != "" {
 			cc.Notes = append(cc.Notes, why)
 			break
 		}
 		cc.Possible = true
-		cc.Cabling = []CableStep{step}
+		cc.Cabling = steps
+		if len(steps) > 1 {
+			cc.Summary += fmt.Sprintf(" The pair has %d cables (%d rails), all used.", len(steps), 2*len(steps))
+		}
 		cc.Models = fits(in.Catalog, 2, config.MaxNodeMemoryFraction, "pair "+pend[0]+"+"+pend[1])
 		if big, ok := largest(cc.Models); ok {
 			cc.Routing = []string{fmt.Sprintf("complex and reasoning queries → %s on the pair (vSR)", big.DisplayName),
@@ -454,14 +481,17 @@ func Plan(data []byte, in Input, ch Choice) ([]byte, config.Report, error) {
 			return nil, config.Report{}, err
 		}
 	}
-	step := opt.Cabling[0]
-	subnets, err := allocSubnets(c, 2) // one /30 per rail
+	// One link per cable, one /30 per rail (two rails per cable).
+	subnets, err := allocSubnets(c, 2*len(opt.Cabling))
 	if err != nil {
 		return nil, config.Report{}, err
 	}
-	if err := e.Append(config.Link{A: step.A, B: step.B, Subnets: subnets}, "fabric", "links"); err != nil {
-		return nil, config.Report{}, err
+	for i, step := range opt.Cabling {
+		if err := e.Append(config.Link{A: step.A, B: step.B, Subnets: subnets[2*i : 2*i+2]}, "fabric", "links"); err != nil {
+			return nil, config.Report{}, err
+		}
 	}
+	step := opt.Cabling[0]
 	group := uniqueGroup(c)
 	if err := e.Append(config.Group{Name: group, Nodes: []string{step.A.Node, step.B.Node}}, "groups"); err != nil {
 		return nil, config.Report{}, err
