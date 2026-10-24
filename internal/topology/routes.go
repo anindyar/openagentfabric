@@ -136,6 +136,14 @@ func (d Deps) input(ctx context.Context) ([]byte, Input, error) {
 	}
 	in := Input{Cluster: c, Catalog: cat}
 	if d.Pending != nil {
+		inCluster := map[string]bool{}
+		for _, n := range c.Spec.Nodes {
+			inCluster[n.Name] = true
+		}
+		// Boxes already placed are not candidates any more.
+		if err := d.Pending.Prune(inCluster); err != nil {
+			return nil, Input{}, err
+		}
 		if in.Pending, err = d.Pending.List(); err != nil {
 			return nil, Input{}, err
 		}

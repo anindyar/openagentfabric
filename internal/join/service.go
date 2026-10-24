@@ -374,8 +374,19 @@ func (s *Service) listTokens(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"tokens": out})
 }
 
+// waiting lists the boxes that joined and are not in the cluster yet,
+// pruning those a topology plan has placed since.
+func (s *Service) waiting() ([]PendingNode, error) {
+	if s.Taken != nil {
+		if err := s.Pending.Prune(s.Taken()); err != nil {
+			return nil, err
+		}
+	}
+	return s.Pending.List()
+}
+
 func (s *Service) listPending(w http.ResponseWriter, _ *http.Request) {
-	ns, err := s.Pending.List()
+	ns, err := s.waiting()
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
@@ -451,7 +462,7 @@ func (s *Service) listNodes(w http.ResponseWriter, r *http.Request) {
 	if s.Nodes != nil {
 		out = s.Nodes(r.Context())
 	}
-	pend, err := s.Pending.List()
+	pend, err := s.waiting()
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return

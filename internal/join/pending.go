@@ -98,3 +98,24 @@ func (s *PendingStore) Remove(name string) (bool, error) {
 	}
 	return true, s.save(out)
 }
+
+// Prune drops the boxes that are in the cluster now (a topology plan placed
+// them), so they no longer show as waiting.
+func (s *PendingStore) Prune(inCluster map[string]bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ns, err := s.load()
+	if err != nil {
+		return err
+	}
+	keep := ns[:0]
+	for _, n := range ns {
+		if !inCluster[n.Name] {
+			keep = append(keep, n)
+		}
+	}
+	if len(keep) == len(ns) {
+		return nil
+	}
+	return s.save(keep)
+}
