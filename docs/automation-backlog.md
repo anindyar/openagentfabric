@@ -38,6 +38,8 @@ Status: **open**, **in progress**, **done (commit)**.
 | U1 | New `oaf` binary copied to every node with scp, installed, services restarted (`oaf-node`, `oaf-keys`, `oaf-api`) | all boxes, repeatedly (last: 92f4d68 on .142/.212) | `oaf upgrade`: the control node pushes the bundle's binary to every agent, restarts services in order, checks versions | open |
 | U2 | `oaf-api.service` installed by hand on the control box | .242, 2026-10-24 | Installer (`spark-bootstrap.sh` has the step; the one-command installer must too) | open |
 | U3 | `oaf observability enable/scrape/grafana-url` run by the Garrison installer, `oaf apply` by hand after OAF upgrades | .242 | Part of the app install profile (PLAN M6) and `oaf upgrade` | open |
+| U4 | Garrison containers started with `docker compose up -d --build` by hand: its installer stopped at `oaf keys issue`, which re-renders the whole cluster and failed on a model waiting for its licence | .242, 2026-10-24 | Installer keeps the key already in .env (Garrison commit after 5e7c375); OAF: `oaf keys issue` for an existing key should not need every project to render (an unrelated deployment must not block it) | in progress |
+| U5 | A failed apply left the change in cluster.yaml (the GLM deployment without its licence), blocking later applies | .242, 2026-10-24 | oafd renders a change before writing it (6167323); licences are asked for at plan time and accepted in the console | done |
 
 ## Garrison (appliance console)
 
