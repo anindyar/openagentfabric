@@ -209,6 +209,8 @@ type PlanRequest struct {
 	Model   string   `json:"model,omitempty"`
 	Name    string   `json:"name,omitempty"`
 	NoModel bool     `json:"no_model,omitempty"`
+	// Headless runs the new boxes without their desktop GUI (frees memory).
+	Headless bool `json:"headless,omitempty"`
 }
 
 // PlanResponse is the plan for review. errors means it cannot be applied.
@@ -253,7 +255,7 @@ func (d Deps) plan(w http.ResponseWriter, r *http.Request) {
 		}
 		in.Pending = chosen
 	}
-	out, rep, err := Plan(data, in, Choice{Option: opt, Model: req.Model, Name: req.Name, NoModel: req.NoModel})
+	out, rep, err := Plan(data, in, Choice{Option: opt, Model: req.Model, Name: req.Name, NoModel: req.NoModel, Headless: req.Headless})
 	resp := PlanResponse{}
 	for _, i := range rep.Warnings() {
 		resp.Warnings = append(resp.Warnings, i.String())

@@ -206,6 +206,23 @@ func TestPlanRefusals(t *testing.T) {
 	if next.Spec.Fabric.Topology != config.TopologyPair || len(next.Spec.Groups) != 1 || len(next.Spec.Models) != 2 {
 		t.Fatalf("a, no model: %+v", next.Spec)
 	}
+	for _, n := range next.Spec.Nodes {
+		if n.Headless != nil {
+			t.Fatalf("headless set on %s without being asked", n.Name)
+		}
+	}
+	// Headless applies to the new boxes only.
+	out, _, err = Plan(data, in, Choice{Option: OptionPair, NoModel: true, Headless: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, _ = config.ParseCluster(out)
+	for _, n := range next.Spec.Nodes {
+		isNew := n.Name != in.Cluster.Spec.Nodes[0].Name
+		if isNew != (n.Headless != nil && *n.Headless) {
+			t.Fatalf("headless on %s = %v (new box: %v)", n.Name, n.Headless, isNew)
+		}
+	}
 }
 
 func TestAllocSubnetsSkipsUsed(t *testing.T) {

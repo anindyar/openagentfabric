@@ -23,6 +23,10 @@ service NodeService {
   // server side waits for one client; the client retries until the server
   // listens. Both block until the test ends.
   rpc RailBandwidth(RailBandwidthRequest) returns (RailBandwidthResponse);
+  // Desktop reports whether the node's local desktop GUI (the display
+  // manager) runs, and with set=true switches it: headless stops the desktop
+  // and boots without it; graphical brings it back. Never reboots.
+  rpc Desktop(DesktopRequest) returns (DesktopResponse);
 }
 
 message InfoRequest {}
@@ -153,4 +157,25 @@ message RailBandwidthRequest {
 message RailBandwidthResponse {
   // Average Gb/s reported by ib_write_bw.
   double gbps = 1;
+}
+
+message DesktopRequest {
+  // false only reports.
+  bool set = 1;
+  // With set: true stops the desktop, false starts it.
+  bool headless = 2;
+  // With set: report what would change, change nothing.
+  bool dry_run = 3;
+}
+
+message DesktopResponse {
+  // "graphical" or "headless" (the default boot target), after any change.
+  string mode = 1;
+  bool display_manager_active = 2;
+  // Resident memory of the display stack (display manager, X/Wayland, the
+  // shell); on unified memory this is roughly what headless gives back.
+  // An estimate from /proc, not a GPU counter.
+  int64 estimated_mib = 3;
+  bool changed = 4;
+  repeated string warnings = 5;
 }

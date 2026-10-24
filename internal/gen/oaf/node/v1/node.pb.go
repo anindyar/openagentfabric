@@ -1246,6 +1246,149 @@ func (x *RailBandwidthResponse) GetGbps() float64 {
 	return 0
 }
 
+type DesktopRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// false only reports.
+	Set bool `protobuf:"varint,1,opt,name=set,proto3" json:"set,omitempty"`
+	// With set: true stops the desktop, false starts it.
+	Headless bool `protobuf:"varint,2,opt,name=headless,proto3" json:"headless,omitempty"`
+	// With set: report what would change, change nothing.
+	DryRun        bool `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DesktopRequest) Reset() {
+	*x = DesktopRequest{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DesktopRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DesktopRequest) ProtoMessage() {}
+
+func (x *DesktopRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DesktopRequest.ProtoReflect.Descriptor instead.
+func (*DesktopRequest) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *DesktopRequest) GetSet() bool {
+	if x != nil {
+		return x.Set
+	}
+	return false
+}
+
+func (x *DesktopRequest) GetHeadless() bool {
+	if x != nil {
+		return x.Headless
+	}
+	return false
+}
+
+func (x *DesktopRequest) GetDryRun() bool {
+	if x != nil {
+		return x.DryRun
+	}
+	return false
+}
+
+type DesktopResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// "graphical" or "headless" (the default boot target), after any change.
+	Mode                 string `protobuf:"bytes,1,opt,name=mode,proto3" json:"mode,omitempty"`
+	DisplayManagerActive bool   `protobuf:"varint,2,opt,name=display_manager_active,json=displayManagerActive,proto3" json:"display_manager_active,omitempty"`
+	// Resident memory of the display stack (display manager, X/Wayland, the
+	// shell); on unified memory this is roughly what headless gives back.
+	// An estimate from /proc, not a GPU counter.
+	EstimatedMib  int64    `protobuf:"varint,3,opt,name=estimated_mib,json=estimatedMib,proto3" json:"estimated_mib,omitempty"`
+	Changed       bool     `protobuf:"varint,4,opt,name=changed,proto3" json:"changed,omitempty"`
+	Warnings      []string `protobuf:"bytes,5,rep,name=warnings,proto3" json:"warnings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DesktopResponse) Reset() {
+	*x = DesktopResponse{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DesktopResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DesktopResponse) ProtoMessage() {}
+
+func (x *DesktopResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DesktopResponse.ProtoReflect.Descriptor instead.
+func (*DesktopResponse) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *DesktopResponse) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *DesktopResponse) GetDisplayManagerActive() bool {
+	if x != nil {
+		return x.DisplayManagerActive
+	}
+	return false
+}
+
+func (x *DesktopResponse) GetEstimatedMib() int64 {
+	if x != nil {
+		return x.EstimatedMib
+	}
+	return 0
+}
+
+func (x *DesktopResponse) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
+func (x *DesktopResponse) GetWarnings() []string {
+	if x != nil {
+		return x.Warnings
+	}
+	return nil
+}
+
 var File_oaf_node_v1_node_proto protoreflect.FileDescriptor
 
 const file_oaf_node_v1_node_proto_rawDesc = "" +
@@ -1329,7 +1472,17 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\vserver_addr\x18\x06 \x01(\tR\n" +
 	"serverAddr\"+\n" +
 	"\x15RailBandwidthResponse\x12\x12\n" +
-	"\x04gbps\x18\x01 \x01(\x01R\x04gbps2\x8b\x05\n" +
+	"\x04gbps\x18\x01 \x01(\x01R\x04gbps\"W\n" +
+	"\x0eDesktopRequest\x12\x10\n" +
+	"\x03set\x18\x01 \x01(\bR\x03set\x12\x1a\n" +
+	"\bheadless\x18\x02 \x01(\bR\bheadless\x12\x17\n" +
+	"\adry_run\x18\x03 \x01(\bR\x06dryRun\"\xb6\x01\n" +
+	"\x0fDesktopResponse\x12\x12\n" +
+	"\x04mode\x18\x01 \x01(\tR\x04mode\x124\n" +
+	"\x16display_manager_active\x18\x02 \x01(\bR\x14displayManagerActive\x12#\n" +
+	"\restimated_mib\x18\x03 \x01(\x03R\festimatedMib\x12\x18\n" +
+	"\achanged\x18\x04 \x01(\bR\achanged\x12\x1a\n" +
+	"\bwarnings\x18\x05 \x03(\tR\bwarnings2\xd1\x05\n" +
 	"\vNodeService\x12;\n" +
 	"\x04Info\x12\x18.oaf.node.v1.InfoRequest\x1a\x19.oaf.node.v1.InfoResponse\x12J\n" +
 	"\tPreflight\x12\x1d.oaf.node.v1.PreflightRequest\x1a\x1e.oaf.node.v1.PreflightResponse\x12S\n" +
@@ -1338,7 +1491,8 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\rProjectStatus\x12!.oaf.node.v1.ProjectStatusRequest\x1a\".oaf.node.v1.ProjectStatusResponse\x12S\n" +
 	"\fListProjects\x12 .oaf.node.v1.ListProjectsRequest\x1a!.oaf.node.v1.ListProjectsResponse\x12A\n" +
 	"\x06Fabric\x12\x1a.oaf.node.v1.FabricRequest\x1a\x1b.oaf.node.v1.FabricResponse\x12V\n" +
-	"\rRailBandwidth\x12!.oaf.node.v1.RailBandwidthRequest\x1a\".oaf.node.v1.RailBandwidthResponseB\xa3\x01\n" +
+	"\rRailBandwidth\x12!.oaf.node.v1.RailBandwidthRequest\x1a\".oaf.node.v1.RailBandwidthResponse\x12D\n" +
+	"\aDesktop\x12\x1b.oaf.node.v1.DesktopRequest\x1a\x1c.oaf.node.v1.DesktopResponseB\xa3\x01\n" +
 	"\x0fcom.oaf.node.v1B\tNodeProtoP\x01Z7openagentfabric.dev/oaf/internal/gen/oaf/node/v1;nodev1\xa2\x02\x03ONX\xaa\x02\vOaf.Node.V1\xca\x02\vOaf\\Node\\V1\xe2\x02\x17Oaf\\Node\\V1\\GPBMetadata\xea\x02\rOaf::Node::V1b\x06proto3"
 
 var (
@@ -1353,7 +1507,7 @@ func file_oaf_node_v1_node_proto_rawDescGZIP() []byte {
 	return file_oaf_node_v1_node_proto_rawDescData
 }
 
-var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_oaf_node_v1_node_proto_goTypes = []any{
 	(*InfoRequest)(nil),           // 0: oaf.node.v1.InfoRequest
 	(*InfoResponse)(nil),          // 1: oaf.node.v1.InfoResponse
@@ -1377,6 +1531,8 @@ var file_oaf_node_v1_node_proto_goTypes = []any{
 	(*Gid)(nil),                   // 19: oaf.node.v1.Gid
 	(*RailBandwidthRequest)(nil),  // 20: oaf.node.v1.RailBandwidthRequest
 	(*RailBandwidthResponse)(nil), // 21: oaf.node.v1.RailBandwidthResponse
+	(*DesktopRequest)(nil),        // 22: oaf.node.v1.DesktopRequest
+	(*DesktopResponse)(nil),       // 23: oaf.node.v1.DesktopResponse
 }
 var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	4,  // 0: oaf.node.v1.PreflightResponse.results:type_name -> oaf.node.v1.CheckResult
@@ -1394,16 +1550,18 @@ var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	13, // 12: oaf.node.v1.NodeService.ListProjects:input_type -> oaf.node.v1.ListProjectsRequest
 	15, // 13: oaf.node.v1.NodeService.Fabric:input_type -> oaf.node.v1.FabricRequest
 	20, // 14: oaf.node.v1.NodeService.RailBandwidth:input_type -> oaf.node.v1.RailBandwidthRequest
-	1,  // 15: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
-	3,  // 16: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
-	7,  // 17: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
-	9,  // 18: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
-	11, // 19: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
-	14, // 20: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
-	16, // 21: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
-	21, // 22: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
-	15, // [15:23] is the sub-list for method output_type
-	7,  // [7:15] is the sub-list for method input_type
+	22, // 15: oaf.node.v1.NodeService.Desktop:input_type -> oaf.node.v1.DesktopRequest
+	1,  // 16: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
+	3,  // 17: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
+	7,  // 18: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
+	9,  // 19: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
+	11, // 20: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
+	14, // 21: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
+	16, // 22: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
+	21, // 23: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
+	23, // 24: oaf.node.v1.NodeService.Desktop:output_type -> oaf.node.v1.DesktopResponse
+	16, // [16:25] is the sub-list for method output_type
+	7,  // [7:16] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -1420,7 +1578,7 @@ func file_oaf_node_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_oaf_node_v1_node_proto_rawDesc), len(file_oaf_node_v1_node_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

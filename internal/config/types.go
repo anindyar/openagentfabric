@@ -60,6 +60,10 @@ type Node struct {
 	SSH     *SSH              `yaml:"ssh,omitempty"`
 	Storage *Storage          `yaml:"storage,omitempty"`
 	Labels  map[string]string `yaml:"labels,omitempty"`
+	// Headless: true stops the box's desktop GUI (gdm) and boots without
+	// it, giving its memory to models (GB10 memory is unified); false brings
+	// the desktop back; unset leaves the box as it is.
+	Headless *bool `yaml:"headless,omitempty"`
 }
 
 // HasRole reports whether the node has role r.

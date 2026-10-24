@@ -41,6 +41,8 @@ const (
 	NodeServiceFabricProcedure = "/oaf.node.v1.NodeService/Fabric"
 	// NodeServiceRailBandwidthProcedure is the procedure name of the NodeService's RailBandwidth RPC.
 	NodeServiceRailBandwidthProcedure = "/oaf.node.v1.NodeService/RailBandwidth"
+	// NodeServiceDesktopProcedure is the procedure name of the NodeService's Desktop RPC.
+	NodeServiceDesktopProcedure = "/oaf.node.v1.NodeService/Desktop"
 )
 
 var (
@@ -100,6 +102,13 @@ var (
 			Procedure:  NodeServiceRailBandwidthProcedure,
 		}
 	})
+	nodeServiceDesktopSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("Desktop"),
+			Procedure:  NodeServiceDesktopProcedure,
+		}
+	})
 )
 
 // NodeServiceClient is a client for the oaf.node.v1.NodeService service.
@@ -123,6 +132,10 @@ type NodeServiceClient interface {
 	// server side waits for one client; the client retries until the server
 	// listens. Both block until the test ends.
 	RailBandwidth(context.Context, *v1.RailBandwidthRequest) (*v1.RailBandwidthResponse, error)
+	// Desktop reports whether the node's local desktop GUI (the display
+	// manager) runs, and with set=true switches it: headless stops the desktop
+	// and boots without it; graphical brings it back. Never reboots.
+	Desktop(context.Context, *v1.DesktopRequest) (*v1.DesktopResponse, error)
 }
 
 // NewNodeServiceClient constructs a client for the oaf.node.v1.NodeService service. Multiple
@@ -152,6 +165,10 @@ type NodeServiceHandler interface {
 	// server side waits for one client; the client retries until the server
 	// listens. Both block until the test ends.
 	RailBandwidth(context.Context, *v1.RailBandwidthRequest) (*v1.RailBandwidthResponse, error)
+	// Desktop reports whether the node's local desktop GUI (the display
+	// manager) runs, and with set=true switches it: headless stops the desktop
+	// and boots without it; graphical brings it back. Never reboots.
+	Desktop(context.Context, *v1.DesktopRequest) (*v1.DesktopResponse, error)
 }
 
 // RegisterNodeServiceHandler registers svc as the oaf.node.v1.NodeService implementation on server.
@@ -166,6 +183,7 @@ func RegisterNodeServiceHandler(server *connect.Server, svc NodeServiceHandler) 
 		connect.Method{Spec: nodeServiceListProjectsSpec(), Handler: adapter.listProjects},
 		connect.Method{Spec: nodeServiceFabricSpec(), Handler: adapter.fabric},
 		connect.Method{Spec: nodeServiceRailBandwidthSpec(), Handler: adapter.railBandwidth},
+		connect.Method{Spec: nodeServiceDesktopSpec(), Handler: adapter.desktop},
 	)
 }
 
@@ -202,6 +220,10 @@ func (UnimplementedNodeServiceHandler) Fabric(context.Context, *v1.FabricRequest
 
 func (UnimplementedNodeServiceHandler) RailBandwidth(context.Context, *v1.RailBandwidthRequest) (*v1.RailBandwidthResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.RailBandwidth is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) Desktop(context.Context, *v1.DesktopRequest) (*v1.DesktopResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.Desktop is not implemented")
 }
 
 type nodeServiceClient struct {
@@ -267,6 +289,14 @@ func (c *nodeServiceClient) Fabric(ctx context.Context, req *v1.FabricRequest) (
 func (c *nodeServiceClient) RailBandwidth(ctx context.Context, req *v1.RailBandwidthRequest) (*v1.RailBandwidthResponse, error) {
 	var res v1.RailBandwidthResponse
 	if err := c.client.CallUnary(ctx, nodeServiceRailBandwidthSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) Desktop(ctx context.Context, req *v1.DesktopRequest) (*v1.DesktopResponse, error) {
+	var res v1.DesktopResponse
+	if err := c.client.CallUnary(ctx, nodeServiceDesktopSpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -364,6 +394,18 @@ func (h nodeServiceHandler) railBandwidth(ctx context.Context, _ connect.Spec, s
 		return err
 	}
 	res, err := h.svc.RailBandwidth(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) desktop(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.DesktopRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.Desktop(ctx, &req)
 	if err != nil {
 		return err
 	}

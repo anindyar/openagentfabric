@@ -22,6 +22,9 @@ var readOnly = map[string][][]string{
 	"timedatectl": {{"show"}},
 	"ip":          {{"-j", "addr", "show"}, {"-j", "link", "show"}, {"-j", "neigh", "show"}},
 	"rdma":        {{"-j", "link", "show"}},
+	"systemctl":   {{"get-default"}, {"is-active", "display-manager"}},
+	"loginctl":    {{"list-sessions", "--no-legend"}},
+	"ps":          {{"-eo", "comm=,rss="}},
 	"docker": {
 		{"version", "--format"},
 		{"info", "--format"},
