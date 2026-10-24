@@ -76,6 +76,8 @@ func newServeCmd() *cobra.Command {
 				GatewayConfig: func(ctx context.Context) ([]byte, error) { return renderedGatewayConfig(ctx, &f) },
 				Keys:          f.keyService(cmd.ErrOrStderr()),
 				Log:           log,
+				Versions:      bundleVersions(),
+				Check:         func(ctx context.Context, doc []byte) error { return renderCheck(ctx, &f, stateDir, doc) },
 			})
 			if err := mountGrowth(srv, &f, c, stateDir, log); err != nil {
 				log.Warn("adding boxes is unavailable", "err", err)
@@ -203,6 +205,7 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 	for _, g := range s.cluster.Spec.Groups {
 		v.Groups = append(v.Groups, oafd.GroupView{Name: g.Name, Nodes: g.Nodes})
 	}
+	v.LicensesNeeded = config.NeededAcceptances(s.cluster, s.catalog, s.versions)
 	projects, _ := s.render(ctx, secrets.Preview{Store: secrets.Store{Dir: f.secretsDir}})
 	states := reconcile.Status(ctx, s.nodes, projects)
 

@@ -42,6 +42,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/v1/keys", s.issueKey)
 	m.HandleFunc("POST /api/v1/keys/{name}/rotate", s.rotateKey)
 
+	m.HandleFunc("POST /api/v1/licenses/accept", s.acceptLicenses)
 	m.HandleFunc("GET /api/v1/plans/{id}", s.getPlan)
 	m.HandleFunc("POST /api/v1/plans/{id}/apply", s.applyPlan)
 	m.HandleFunc("GET /api/v1/events", s.events)

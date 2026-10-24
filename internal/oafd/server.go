@@ -53,6 +53,11 @@ type Config struct {
 	Now  func() time.Time
 	// PlanTTL is how long an unapplied plan can be applied. Default 1 h.
 	PlanTTL time.Duration
+	// Versions is the bundle (which images need licences accepted).
+	Versions *config.Versions
+	// Check renders a candidate cluster.yaml without applying it; apply
+	// refuses a plan whose change does not render. Optional.
+	Check func(ctx context.Context, doc []byte) error
 }
 
 // Server is the management API.

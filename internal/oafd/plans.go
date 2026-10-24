@@ -48,8 +48,12 @@ type Plan struct {
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Steps     []Step    `json:"steps,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	Applied   time.Time `json:"applied_at,omitzero"`
+	// NeedsAcceptance: licences a person must read and accept before this
+	// change can apply (POST /api/v1/licenses/accept). The plan is invalid
+	// until then.
+	NeedsAcceptance []config.NeededAcceptance `json:"needs_acceptance,omitempty"`
+	Error           string                    `json:"error,omitempty"`
+	Applied         time.Time                 `json:"applied_at,omitzero"`
 
 	Log []string `json:"-"`
 
@@ -110,6 +114,15 @@ func (s *Server) offer(r *http.Request, base, doc []byte, summary string) (*Plan
 			rep := config.Validate(c, cat, config.Options{})
 			p.Errors = append(p.Errors, issues(rep.Errors())...)
 			p.Warnings = append(p.Warnings, issues(rep.Warnings())...)
+			// Found now, not at apply: an engine image or model with terms to
+			// accept would otherwise fail after the change was approved.
+			if s.cfg.Versions != nil {
+				p.NeedsAcceptance = config.NeededAcceptances(c, cat, s.cfg.Versions)
+				for _, n := range p.NeedsAcceptance {
+					p.Errors = append(p.Errors, Issue{Path: "spec.licenseAcceptances",
+						Message: fmt.Sprintf("%s needs %s accepted first (%s): accept it in the console or POST /api/v1/licenses/accept", n.For, n.Title, n.URL)})
+				}
+			}
 		}
 		// A provider key is never generated: it must exist before apply.
 		for i, pr := range c.Spec.Routing.Providers {
@@ -233,6 +246,17 @@ func (s *Server) applyPlan(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		writeErr(w, http.StatusConflict, "cluster.yaml changed since this plan was made; make a new plan")
 		return
+	}
+	// The change must render (images, licences, secrets, fabric) before it
+	// is written: a failed apply used to leave cluster.yaml holding it.
+	if s.cfg.Check != nil {
+		if err := s.cfg.Check(r.Context(), p.doc); err != nil {
+			p.Status, p.Error = PlanFailed, "not applied, cluster.yaml unchanged: "+err.Error()
+			s.mu.Unlock()
+			s.persist()
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": p.Error, "plan_id": p.ID})
+			return
+		}
 	}
 	if err := config.WriteFileAtomic(s.cfg.ClusterPath, p.doc); err != nil {
 		s.mu.Unlock()

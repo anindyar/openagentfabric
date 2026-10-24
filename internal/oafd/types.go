@@ -11,12 +11,15 @@ import (
 
 // StatusView is GET /api/v1/status.
 type StatusView struct {
-	Cluster     string           `json:"cluster"`
-	Topology    string           `json:"topology"`
-	Nodes       []NodeView       `json:"nodes"`
-	Groups      []GroupView      `json:"groups"`
-	Deployments []DeploymentView `json:"deployments"`
-	Components  []ComponentView  `json:"components"`
+	Cluster  string      `json:"cluster"`
+	Topology string      `json:"topology"`
+	Nodes    []NodeView  `json:"nodes"`
+	Groups   []GroupView `json:"groups"`
+	// LicensesNeeded: what cluster.yaml deploys but a person has not accepted
+	// yet (e.g. after a change was written without its licence).
+	LicensesNeeded []config.NeededAcceptance `json:"licenses_needed"`
+	Deployments    []DeploymentView          `json:"deployments"`
+	Components     []ComponentView           `json:"components"`
 }
 
 // GroupView is a placement group: the boxes a multi-node model runs across
