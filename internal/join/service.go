@@ -399,11 +399,22 @@ func (s *Service) removePending(w http.ResponseWriter, r *http.Request) {
 // DockerImages serves bundle images with `docker save`.
 type DockerImages struct {
 	List []Image
+	// OnlyPresent offers only images this node has: a control node never
+	// pulls every engine (e.g. only the GB10 builds it runs), and offering
+	// one it lacks would fail the joining box. Boxes pull the rest from the
+	// registry when a deployment needs them.
+	OnlyPresent bool
 }
 
 // Images implements ImageSource.
-func (d DockerImages) Images(context.Context) ([]Image, error) {
-	out := append([]Image(nil), d.List...)
+func (d DockerImages) Images(ctx context.Context) ([]Image, error) {
+	out := make([]Image, 0, len(d.List))
+	for _, img := range d.List {
+		if d.OnlyPresent && exec.CommandContext(ctx, "docker", "image", "inspect", img.Ref).Run() != nil {
+			continue
+		}
+		out = append(out, img)
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }

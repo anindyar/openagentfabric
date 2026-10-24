@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -73,9 +74,16 @@ func newJoinCmd() *cobra.Command {
 					return err
 				}
 				for _, img := range imgs {
+					// Already here (a re-run, or pulled by hand): nothing to copy.
+					if exec.CommandContext(ctx, "docker", "image", "inspect", img.Ref).Run() == nil {
+						_, _ = fmt.Fprintf(out, "==> Image %s already present\n", img.Name)
+						continue
+					}
 					_, _ = fmt.Fprintf(out, "==> Loading image %s (%s)\n", img.Name, img.Ref)
+					// A missing image is not worth failing the join for: the
+					// node pulls it from the registry when a deployment needs it.
 					if err := c.LoadImage(ctx, img.Name); err != nil {
-						return err
+						_, _ = fmt.Fprintf(out, "    warning: %v; it will be pulled when a deployment needs it\n", err)
 					}
 				}
 			}

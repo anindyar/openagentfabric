@@ -60,7 +60,7 @@ func mountGrowth(srv *oafd.Server, f *stackFlags, c *config.Cluster, stateDir st
 		ControlURL: control,
 		Pin:        pin,
 		BinaryDir:  filepath.Join(stateDir, "binaries"),
-		Images:     join.DockerImages{List: images},
+		Images:     join.DockerImages{List: images, OnlyPresent: true},
 		Taken: func() map[string]bool {
 			cur, err := config.LoadCluster(f.cluster)
 			out := map[string]bool{}
