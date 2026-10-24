@@ -23,6 +23,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/v1/models", s.addModel)
 	m.HandleFunc("DELETE /api/v1/models/{name}", s.removeModel)
 	m.HandleFunc("PUT /api/v1/models/{name}/guardrails", s.setModelGuardrails)
+	m.HandleFunc("PUT /api/v1/models/{name}", s.updateModel)
 	m.HandleFunc("PUT /api/v1/nodes/{name}/headless", s.setNodeHeadless)
 
 	m.HandleFunc("GET /api/v1/providers", s.listProviders)
@@ -259,6 +260,70 @@ func (s *Server) setModelGuardrails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, code := s.offer(r, data, out, fmt.Sprintf("Guardrails on %s: %s", name, strings.Join(req.Guardrails, ", ")))
+	writeJSON(w, code, s.view(p))
+}
+
+// updateModel changes a deployment's serving settings: PUT
+// /api/v1/models/{name} {max_model_len, gpu_memory_utilization, enabled}.
+// Absent fields stay; max_model_len 0 means the catalog profile's value.
+func (s *Server) updateModel(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		MaxModelLen          *int     `json:"max_model_len"`
+		GPUMemoryUtilization *float64 `json:"gpu_memory_utilization"`
+		Enabled              *bool    `json:"enabled"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+	name := r.PathValue("name")
+	data, err := os.ReadFile(s.cfg.ClusterPath)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	c, err := config.ParseCluster(data)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var d *config.ModelDeployment
+	for i := range c.Spec.Models {
+		if c.Spec.Models[i].Name == name {
+			d = &c.Spec.Models[i]
+		}
+	}
+	if d == nil {
+		writeErr(w, http.StatusNotFound, "no model deployment "+name)
+		return
+	}
+	var what []string
+	if req.MaxModelLen != nil {
+		d.MaxModelLen = *req.MaxModelLen
+		if *req.MaxModelLen == 0 {
+			what = append(what, "context: the profile's")
+		} else {
+			what = append(what, fmt.Sprintf("context %d", *req.MaxModelLen))
+		}
+	}
+	if req.GPUMemoryUtilization != nil {
+		d.GPUMemoryUtilization = *req.GPUMemoryUtilization
+		what = append(what, fmt.Sprintf("memory %.2f", *req.GPUMemoryUtilization))
+	}
+	if req.Enabled != nil {
+		d.Enabled = req.Enabled
+		what = append(what, fmt.Sprintf("enabled %v", *req.Enabled))
+	}
+	if len(what) == 0 {
+		writeErr(w, http.StatusBadRequest, "nothing to change: send max_model_len, gpu_memory_utilization or enabled")
+		return
+	}
+	out, _, err := config.SetNamed(data, *d, name, "models")
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	p, code := s.offer(r, data, out, fmt.Sprintf("Model %s: %s", name, strings.Join(what, ", ")))
 	writeJSON(w, code, s.view(p))
 }
 

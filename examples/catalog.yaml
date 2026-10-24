@@ -138,8 +138,11 @@ models:
         nodes: 2
         tensorParallel: 2
         gpuMemoryUtilization: 0.86
-        maxModelLen: 262144
-        args: [--trust-remote-code, --kv-cache-dtype, fp8, --kv-cache-memory-bytes, "8589934592",
+        # The published build has no FP8 KV cache for GLM's MLA on GB10
+        # ("pe_dim must be 64 for fp8_ds_mla"; the patched local build does),
+        # so the KV cache is BF16 and the context starts at 64K.
+        maxModelLen: 65536
+        args: [--trust-remote-code, --kv-cache-memory-bytes, "8589934592",
                --max-num-seqs, "6", --block-size, "2304", --moe-backend, marlin,
                --max-num-batched-tokens, "4096", --enable-chunked-prefill, --enable-prefix-caching,
                --disable-custom-all-reduce,
