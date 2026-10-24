@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,6 +31,7 @@ var blockingChecks = map[string]bool{"host": true, "gpu": true, "docker": true, 
 func newJoinCmd() *cobra.Command {
 	var control, token, pin, name, address, pkiDir, unitDir, dataPath string
 	var skipImages, force, noStart bool
+	var imagesMode string
 	cmd := &cobra.Command{
 		Use:   "join",
 		Short: "Join this box to a cluster (run by join.sh; nothing is deployed)",
@@ -68,7 +70,15 @@ func newJoinCmd() *cobra.Command {
 				return fmt.Errorf("preflight: %d blocking check(s) failed; fix them or pass --force", blocked)
 			}
 
-			if !skipImages {
+			// Copied images arrive untagged: docker load cannot restore the
+			// registry digest deployments pin, so a deployment pulls anyway.
+			// Copy only when the box cannot reach the registries (offline);
+			// a local registry on the control node is the offline answer (M5).
+			if !skipImages && imagesMode == "auto" && registryReachable(ctx) {
+				_, _ = fmt.Fprintln(out, "==> Registries are reachable: images are pulled when a deployment needs them")
+				skipImages = true
+			}
+			if !skipImages && imagesMode != "never" {
 				imgs, err := c.Images(ctx)
 				if err != nil {
 					return err
@@ -117,6 +127,7 @@ func newJoinCmd() *cobra.Command {
 	cmd.Flags().StringVar(&unitDir, "unit-dir", "/etc/systemd/system", "where oaf-node.service goes")
 	cmd.Flags().StringVar(&dataPath, "data-path", "", "where models and data will live (disk check)")
 	cmd.Flags().BoolVar(&skipImages, "skip-images", false, "do not preload the bundle images (they are pulled at deploy time instead)")
+	cmd.Flags().StringVar(&imagesMode, "images", "auto", "copy bundle images from the control node: auto (only when the registries are unreachable), always, never")
 	cmd.Flags().BoolVar(&force, "force", false, "join even if a blocking preflight check fails")
 	cmd.Flags().BoolVar(&noStart, "no-start", false, "install oaf-node.service without starting it")
 	for _, f := range []string{"control", "token", "pin"} {
@@ -156,4 +167,22 @@ func installNodeUnit(ctx context.Context, dir string, start bool) error {
 		}
 	}
 	return nil
+}
+
+// registryReachable reports whether this box can reach the container
+// registries the bundle pins (Docker Hub and GHCR answer /v2/ with 401).
+func registryReachable(ctx context.Context) bool {
+	c := &http.Client{Timeout: 8 * time.Second}
+	for _, u := range []string{"https://registry-1.docker.io/v2/", "https://ghcr.io/v2/"} {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return false
+		}
+		resp, err := c.Do(req)
+		if err != nil {
+			return false
+		}
+		resp.Body.Close()
+	}
+	return true
 }

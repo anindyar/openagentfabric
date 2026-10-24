@@ -206,6 +206,11 @@ Grafana embedded in the UI, Langfuse views through its API, cost and latency pag
 ### M5: signed bundle and full-stack install
 Signed online and offline bundles, `install.sh`, upgrade (bump digests → reconcile, with rollback),
 uninstall, licences shipped in the bundle. **Gated on the LEGAL items in the licence audit.**
+- Images for boxes without registry access come from a registry on the control node, pushed from the
+  offline bundle by digest. `docker save`/`load` is not enough: Docker's classic image store loads
+  images untagged and without the registry digest that deployments pin (seen on the first real join,
+  2026-10-24), so a deployment would pull them anyway. Until then `oaf join` copies images only when
+  the box cannot reach the registries.
 - **Exit:** an air-gapped install on wiped nodes succeeds, and an upgrade from N-1 passes acceptance.
 
 ### M6: apps and agents
