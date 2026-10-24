@@ -23,6 +23,21 @@ type StatusView struct {
 	Components     []ComponentView           `json:"components"`
 	// Applying is the plan being applied now, if any.
 	Applying *ApplyingView `json:"applying,omitempty"`
+	// Downloads are model weights downloading on the nodes, or finished or
+	// failed since their agent started (also for models not deployed yet).
+	Downloads []DownloadView `json:"downloads"`
+}
+
+// DownloadView is one model's weights on one node.
+type DownloadView struct {
+	Node           string  `json:"node"`
+	ModelID        string  `json:"model_id"`
+	State          string  `json:"state"` // downloading | complete | failed
+	BytesDone      int64   `json:"bytes_done"`
+	BytesTotal     int64   `json:"bytes_total"`
+	BytesPerSecond float64 `json:"bytes_per_second,omitempty"`
+	Error          string  `json:"error,omitempty"`
+	StartedAt      string  `json:"started_at,omitempty"`
 }
 
 // ApplyingView is the plan being applied.

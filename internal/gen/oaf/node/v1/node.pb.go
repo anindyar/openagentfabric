@@ -351,7 +351,10 @@ type ApplyProjectRequest struct {
 	// Must include compose.yaml. Paths are relative to the project directory.
 	Files []*File `protobuf:"bytes,2,rep,name=files,proto3" json:"files,omitempty"`
 	// Report what would change without writing files or running compose.
-	DryRun        bool `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	DryRun bool `protobuf:"varint,3,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
+	// The model weights the project needs: the agent downloads them if they
+	// are not complete and starts the project only once they are.
+	Weights       *WeightsSpec `protobuf:"bytes,4,opt,name=weights,proto3" json:"weights,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -407,6 +410,361 @@ func (x *ApplyProjectRequest) GetDryRun() bool {
 	return false
 }
 
+func (x *ApplyProjectRequest) GetWeights() *WeightsSpec {
+	if x != nil {
+		return x.Weights
+	}
+	return nil
+}
+
+// A model's weights: a Hugging Face repo pinned at a revision, downloaded
+// into dir (absolute, ending in model_id).
+type WeightsSpec struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	ModelId  string                 `protobuf:"bytes,1,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	Dir      string                 `protobuf:"bytes,2,opt,name=dir,proto3" json:"dir,omitempty"`
+	Repo     string                 `protobuf:"bytes,3,opt,name=repo,proto3" json:"repo,omitempty"`
+	Revision string                 `protobuf:"bytes,4,opt,name=revision,proto3" json:"revision,omitempty"`
+	// Glob patterns of the files to fetch; empty fetches every file.
+	Include       []string `protobuf:"bytes,5,rep,name=include,proto3" json:"include,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WeightsSpec) Reset() {
+	*x = WeightsSpec{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WeightsSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WeightsSpec) ProtoMessage() {}
+
+func (x *WeightsSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WeightsSpec.ProtoReflect.Descriptor instead.
+func (*WeightsSpec) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *WeightsSpec) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *WeightsSpec) GetDir() string {
+	if x != nil {
+		return x.Dir
+	}
+	return ""
+}
+
+func (x *WeightsSpec) GetRepo() string {
+	if x != nil {
+		return x.Repo
+	}
+	return ""
+}
+
+func (x *WeightsSpec) GetRevision() string {
+	if x != nil {
+		return x.Revision
+	}
+	return ""
+}
+
+func (x *WeightsSpec) GetInclude() []string {
+	if x != nil {
+		return x.Include
+	}
+	return nil
+}
+
+type PullWeightsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Weights       *WeightsSpec           `protobuf:"bytes,1,opt,name=weights,proto3" json:"weights,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PullWeightsRequest) Reset() {
+	*x = PullWeightsRequest{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PullWeightsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PullWeightsRequest) ProtoMessage() {}
+
+func (x *PullWeightsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PullWeightsRequest.ProtoReflect.Descriptor instead.
+func (*PullWeightsRequest) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *PullWeightsRequest) GetWeights() *WeightsSpec {
+	if x != nil {
+		return x.Weights
+	}
+	return nil
+}
+
+type PullWeightsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        *WeightsStatus         `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PullWeightsResponse) Reset() {
+	*x = PullWeightsResponse{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PullWeightsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PullWeightsResponse) ProtoMessage() {}
+
+func (x *PullWeightsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PullWeightsResponse.ProtoReflect.Descriptor instead.
+func (*PullWeightsResponse) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *PullWeightsResponse) GetStatus() *WeightsStatus {
+	if x != nil {
+		return x.Status
+	}
+	return nil
+}
+
+type WeightsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WeightsRequest) Reset() {
+	*x = WeightsRequest{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WeightsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WeightsRequest) ProtoMessage() {}
+
+func (x *WeightsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WeightsRequest.ProtoReflect.Descriptor instead.
+func (*WeightsRequest) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{9}
+}
+
+type WeightsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Weights       []*WeightsStatus       `protobuf:"bytes,1,rep,name=weights,proto3" json:"weights,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WeightsResponse) Reset() {
+	*x = WeightsResponse{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WeightsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WeightsResponse) ProtoMessage() {}
+
+func (x *WeightsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WeightsResponse.ProtoReflect.Descriptor instead.
+func (*WeightsResponse) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *WeightsResponse) GetWeights() []*WeightsStatus {
+	if x != nil {
+		return x.Weights
+	}
+	return nil
+}
+
+type WeightsStatus struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	ModelId string                 `protobuf:"bytes,1,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	Dir     string                 `protobuf:"bytes,2,opt,name=dir,proto3" json:"dir,omitempty"`
+	// downloading | complete | failed
+	State          string  `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	BytesDone      int64   `protobuf:"varint,4,opt,name=bytes_done,json=bytesDone,proto3" json:"bytes_done,omitempty"`
+	BytesTotal     int64   `protobuf:"varint,5,opt,name=bytes_total,json=bytesTotal,proto3" json:"bytes_total,omitempty"`
+	BytesPerSecond float64 `protobuf:"fixed64,6,opt,name=bytes_per_second,json=bytesPerSecond,proto3" json:"bytes_per_second,omitempty"`
+	Error          string  `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
+	StartedAt      string  `protobuf:"bytes,8,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *WeightsStatus) Reset() {
+	*x = WeightsStatus{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WeightsStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WeightsStatus) ProtoMessage() {}
+
+func (x *WeightsStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WeightsStatus.ProtoReflect.Descriptor instead.
+func (*WeightsStatus) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *WeightsStatus) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *WeightsStatus) GetDir() string {
+	if x != nil {
+		return x.Dir
+	}
+	return ""
+}
+
+func (x *WeightsStatus) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *WeightsStatus) GetBytesDone() int64 {
+	if x != nil {
+		return x.BytesDone
+	}
+	return 0
+}
+
+func (x *WeightsStatus) GetBytesTotal() int64 {
+	if x != nil {
+		return x.BytesTotal
+	}
+	return 0
+}
+
+func (x *WeightsStatus) GetBytesPerSecond() float64 {
+	if x != nil {
+		return x.BytesPerSecond
+	}
+	return 0
+}
+
+func (x *WeightsStatus) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *WeightsStatus) GetStartedAt() string {
+	if x != nil {
+		return x.StartedAt
+	}
+	return ""
+}
+
 type File struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Path    string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
@@ -419,7 +777,7 @@ type File struct {
 
 func (x *File) Reset() {
 	*x = File{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[6]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -431,7 +789,7 @@ func (x *File) String() string {
 func (*File) ProtoMessage() {}
 
 func (x *File) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[6]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -444,7 +802,7 @@ func (x *File) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use File.ProtoReflect.Descriptor instead.
 func (*File) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{6}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *File) GetPath() string {
@@ -473,14 +831,16 @@ type ApplyProjectResponse struct {
 	Changed  bool                   `protobuf:"varint,1,opt,name=changed,proto3" json:"changed,omitempty"`
 	Services []*Service             `protobuf:"bytes,2,rep,name=services,proto3" json:"services,omitempty"`
 	// Paths added, changed (content or mode) or removed, sorted.
-	ChangedPaths  []string `protobuf:"bytes,3,rep,name=changed_paths,json=changedPaths,proto3" json:"changed_paths,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ChangedPaths []string `protobuf:"bytes,3,rep,name=changed_paths,json=changedPaths,proto3" json:"changed_paths,omitempty"`
+	// The project waits for its weights to download; it starts by itself.
+	WaitingForWeights bool `protobuf:"varint,4,opt,name=waiting_for_weights,json=waitingForWeights,proto3" json:"waiting_for_weights,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ApplyProjectResponse) Reset() {
 	*x = ApplyProjectResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[7]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -492,7 +852,7 @@ func (x *ApplyProjectResponse) String() string {
 func (*ApplyProjectResponse) ProtoMessage() {}
 
 func (x *ApplyProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[7]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -505,7 +865,7 @@ func (x *ApplyProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyProjectResponse.ProtoReflect.Descriptor instead.
 func (*ApplyProjectResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{7}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ApplyProjectResponse) GetChanged() bool {
@@ -529,6 +889,13 @@ func (x *ApplyProjectResponse) GetChangedPaths() []string {
 	return nil
 }
 
+func (x *ApplyProjectResponse) GetWaitingForWeights() bool {
+	if x != nil {
+		return x.WaitingForWeights
+	}
+	return false
+}
+
 type RemoveProjectRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -539,7 +906,7 @@ type RemoveProjectRequest struct {
 
 func (x *RemoveProjectRequest) Reset() {
 	*x = RemoveProjectRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[8]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -551,7 +918,7 @@ func (x *RemoveProjectRequest) String() string {
 func (*RemoveProjectRequest) ProtoMessage() {}
 
 func (x *RemoveProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[8]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -564,7 +931,7 @@ func (x *RemoveProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveProjectRequest.ProtoReflect.Descriptor instead.
 func (*RemoveProjectRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{8}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *RemoveProjectRequest) GetName() string {
@@ -590,7 +957,7 @@ type RemoveProjectResponse struct {
 
 func (x *RemoveProjectResponse) Reset() {
 	*x = RemoveProjectResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[9]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -602,7 +969,7 @@ func (x *RemoveProjectResponse) String() string {
 func (*RemoveProjectResponse) ProtoMessage() {}
 
 func (x *RemoveProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[9]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -615,7 +982,7 @@ func (x *RemoveProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveProjectResponse.ProtoReflect.Descriptor instead.
 func (*RemoveProjectResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{9}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *RemoveProjectResponse) GetExisted() bool {
@@ -637,7 +1004,7 @@ type ProjectStatusRequest struct {
 
 func (x *ProjectStatusRequest) Reset() {
 	*x = ProjectStatusRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[10]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -649,7 +1016,7 @@ func (x *ProjectStatusRequest) String() string {
 func (*ProjectStatusRequest) ProtoMessage() {}
 
 func (x *ProjectStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[10]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -662,7 +1029,7 @@ func (x *ProjectStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectStatusRequest.ProtoReflect.Descriptor instead.
 func (*ProjectStatusRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{10}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ProjectStatusRequest) GetName() string {
@@ -689,7 +1056,7 @@ type ProjectStatusResponse struct {
 
 func (x *ProjectStatusResponse) Reset() {
 	*x = ProjectStatusResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[11]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -701,7 +1068,7 @@ func (x *ProjectStatusResponse) String() string {
 func (*ProjectStatusResponse) ProtoMessage() {}
 
 func (x *ProjectStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[11]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -714,7 +1081,7 @@ func (x *ProjectStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectStatusResponse.ProtoReflect.Descriptor instead.
 func (*ProjectStatusResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{11}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ProjectStatusResponse) GetExists() bool {
@@ -749,7 +1116,7 @@ type Service struct {
 
 func (x *Service) Reset() {
 	*x = Service{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[12]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -761,7 +1128,7 @@ func (x *Service) String() string {
 func (*Service) ProtoMessage() {}
 
 func (x *Service) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[12]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -774,7 +1141,7 @@ func (x *Service) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Service.ProtoReflect.Descriptor instead.
 func (*Service) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{12}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Service) GetName() string {
@@ -841,7 +1208,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[13]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -853,7 +1220,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[13]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -866,7 +1233,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{13}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{19}
 }
 
 type ListProjectsResponse struct {
@@ -879,7 +1246,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[14]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -891,7 +1258,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[14]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -904,7 +1271,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{14}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ListProjectsResponse) GetNames() []string {
@@ -922,7 +1289,7 @@ type FabricRequest struct {
 
 func (x *FabricRequest) Reset() {
 	*x = FabricRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[15]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -934,7 +1301,7 @@ func (x *FabricRequest) String() string {
 func (*FabricRequest) ProtoMessage() {}
 
 func (x *FabricRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[15]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -947,7 +1314,7 @@ func (x *FabricRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FabricRequest.ProtoReflect.Descriptor instead.
 func (*FabricRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{15}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{21}
 }
 
 type FabricResponse struct {
@@ -959,7 +1326,7 @@ type FabricResponse struct {
 
 func (x *FabricResponse) Reset() {
 	*x = FabricResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[16]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -971,7 +1338,7 @@ func (x *FabricResponse) String() string {
 func (*FabricResponse) ProtoMessage() {}
 
 func (x *FabricResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[16]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -984,7 +1351,7 @@ func (x *FabricResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FabricResponse.ProtoReflect.Descriptor instead.
 func (*FabricResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{16}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *FabricResponse) GetPorts() []*FabricPort {
@@ -1005,7 +1372,7 @@ type FabricPort struct {
 
 func (x *FabricPort) Reset() {
 	*x = FabricPort{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[17]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1017,7 +1384,7 @@ func (x *FabricPort) String() string {
 func (*FabricPort) ProtoMessage() {}
 
 func (x *FabricPort) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[17]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1030,7 +1397,7 @@ func (x *FabricPort) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FabricPort.ProtoReflect.Descriptor instead.
 func (*FabricPort) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{17}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *FabricPort) GetIndex() int32 {
@@ -1065,7 +1432,7 @@ type FabricNetdev struct {
 
 func (x *FabricNetdev) Reset() {
 	*x = FabricNetdev{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[18]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1077,7 +1444,7 @@ func (x *FabricNetdev) String() string {
 func (*FabricNetdev) ProtoMessage() {}
 
 func (x *FabricNetdev) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[18]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1090,7 +1457,7 @@ func (x *FabricNetdev) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FabricNetdev.ProtoReflect.Descriptor instead.
 func (*FabricNetdev) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{18}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *FabricNetdev) GetName() string {
@@ -1167,7 +1534,7 @@ type Gid struct {
 
 func (x *Gid) Reset() {
 	*x = Gid{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[19]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1179,7 +1546,7 @@ func (x *Gid) String() string {
 func (*Gid) ProtoMessage() {}
 
 func (x *Gid) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[19]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1192,7 +1559,7 @@ func (x *Gid) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Gid.ProtoReflect.Descriptor instead.
 func (*Gid) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{19}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *Gid) GetIndex() int32 {
@@ -1233,7 +1600,7 @@ type RailBandwidthRequest struct {
 
 func (x *RailBandwidthRequest) Reset() {
 	*x = RailBandwidthRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[20]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1245,7 +1612,7 @@ func (x *RailBandwidthRequest) String() string {
 func (*RailBandwidthRequest) ProtoMessage() {}
 
 func (x *RailBandwidthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[20]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1258,7 +1625,7 @@ func (x *RailBandwidthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RailBandwidthRequest.ProtoReflect.Descriptor instead.
 func (*RailBandwidthRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{20}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RailBandwidthRequest) GetRdmaDev() string {
@@ -1313,7 +1680,7 @@ type RailBandwidthResponse struct {
 
 func (x *RailBandwidthResponse) Reset() {
 	*x = RailBandwidthResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[21]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1325,7 +1692,7 @@ func (x *RailBandwidthResponse) String() string {
 func (*RailBandwidthResponse) ProtoMessage() {}
 
 func (x *RailBandwidthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[21]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1338,7 +1705,7 @@ func (x *RailBandwidthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RailBandwidthResponse.ProtoReflect.Descriptor instead.
 func (*RailBandwidthResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{21}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RailBandwidthResponse) GetGbps() float64 {
@@ -1362,7 +1729,7 @@ type DesktopRequest struct {
 
 func (x *DesktopRequest) Reset() {
 	*x = DesktopRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[22]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1374,7 +1741,7 @@ func (x *DesktopRequest) String() string {
 func (*DesktopRequest) ProtoMessage() {}
 
 func (x *DesktopRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[22]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1387,7 +1754,7 @@ func (x *DesktopRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DesktopRequest.ProtoReflect.Descriptor instead.
 func (*DesktopRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{22}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DesktopRequest) GetSet() bool {
@@ -1428,7 +1795,7 @@ type DesktopResponse struct {
 
 func (x *DesktopResponse) Reset() {
 	*x = DesktopResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[23]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1440,7 +1807,7 @@ func (x *DesktopResponse) String() string {
 func (*DesktopResponse) ProtoMessage() {}
 
 func (x *DesktopResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[23]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1453,7 +1820,7 @@ func (x *DesktopResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DesktopResponse.ProtoReflect.Descriptor instead.
 func (*DesktopResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{23}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *DesktopResponse) GetMode() string {
@@ -1503,7 +1870,7 @@ type FabricRail struct {
 
 func (x *FabricRail) Reset() {
 	*x = FabricRail{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[24]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1515,7 +1882,7 @@ func (x *FabricRail) String() string {
 func (*FabricRail) ProtoMessage() {}
 
 func (x *FabricRail) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[24]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1528,7 +1895,7 @@ func (x *FabricRail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FabricRail.ProtoReflect.Descriptor instead.
 func (*FabricRail) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{24}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *FabricRail) GetNetdev() string {
@@ -1565,7 +1932,7 @@ type ConfigureFabricRequest struct {
 
 func (x *ConfigureFabricRequest) Reset() {
 	*x = ConfigureFabricRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[25]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1577,7 +1944,7 @@ func (x *ConfigureFabricRequest) String() string {
 func (*ConfigureFabricRequest) ProtoMessage() {}
 
 func (x *ConfigureFabricRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[25]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1590,7 +1957,7 @@ func (x *ConfigureFabricRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigureFabricRequest.ProtoReflect.Descriptor instead.
 func (*ConfigureFabricRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{25}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ConfigureFabricRequest) GetRails() []*FabricRail {
@@ -1621,7 +1988,7 @@ type RailState struct {
 
 func (x *RailState) Reset() {
 	*x = RailState{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[26]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1633,7 +2000,7 @@ func (x *RailState) String() string {
 func (*RailState) ProtoMessage() {}
 
 func (x *RailState) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[26]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1646,7 +2013,7 @@ func (x *RailState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RailState.ProtoReflect.Descriptor instead.
 func (*RailState) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{26}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RailState) GetNetdev() string {
@@ -1695,7 +2062,7 @@ type ConfigureFabricResponse struct {
 
 func (x *ConfigureFabricResponse) Reset() {
 	*x = ConfigureFabricResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[27]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1707,7 +2074,7 @@ func (x *ConfigureFabricResponse) String() string {
 func (*ConfigureFabricResponse) ProtoMessage() {}
 
 func (x *ConfigureFabricResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[27]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1720,7 +2087,7 @@ func (x *ConfigureFabricResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigureFabricResponse.ProtoReflect.Descriptor instead.
 func (*ConfigureFabricResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{27}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ConfigureFabricResponse) GetChanged() bool {
@@ -1756,7 +2123,7 @@ type ProbeAddressRequest struct {
 
 func (x *ProbeAddressRequest) Reset() {
 	*x = ProbeAddressRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[28]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1768,7 +2135,7 @@ func (x *ProbeAddressRequest) String() string {
 func (*ProbeAddressRequest) ProtoMessage() {}
 
 func (x *ProbeAddressRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[28]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1781,7 +2148,7 @@ func (x *ProbeAddressRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeAddressRequest.ProtoReflect.Descriptor instead.
 func (*ProbeAddressRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{28}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ProbeAddressRequest) GetNetdev() string {
@@ -1813,7 +2180,7 @@ type ProbeAddressResponse struct {
 
 func (x *ProbeAddressResponse) Reset() {
 	*x = ProbeAddressResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[29]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1825,7 +2192,7 @@ func (x *ProbeAddressResponse) String() string {
 func (*ProbeAddressResponse) ProtoMessage() {}
 
 func (x *ProbeAddressResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[29]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1838,7 +2205,7 @@ func (x *ProbeAddressResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeAddressResponse.ProtoReflect.Descriptor instead.
 func (*ProbeAddressResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{29}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{35}
 }
 
 type PingRequest struct {
@@ -1857,7 +2224,7 @@ type PingRequest struct {
 
 func (x *PingRequest) Reset() {
 	*x = PingRequest{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[30]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1869,7 +2236,7 @@ func (x *PingRequest) String() string {
 func (*PingRequest) ProtoMessage() {}
 
 func (x *PingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[30]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1882,7 +2249,7 @@ func (x *PingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingRequest.ProtoReflect.Descriptor instead.
 func (*PingRequest) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{30}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *PingRequest) GetNetdev() string {
@@ -1932,7 +2299,7 @@ type PingResponse struct {
 
 func (x *PingResponse) Reset() {
 	*x = PingResponse{}
-	mi := &file_oaf_node_v1_node_proto_msgTypes[31]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1944,7 +2311,7 @@ func (x *PingResponse) String() string {
 func (*PingResponse) ProtoMessage() {}
 
 func (x *PingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_oaf_node_v1_node_proto_msgTypes[31]
+	mi := &file_oaf_node_v1_node_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1957,7 +2324,7 @@ func (x *PingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PingResponse.ProtoReflect.Descriptor instead.
 func (*PingResponse) Descriptor() ([]byte, []int) {
-	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{31}
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *PingResponse) GetOk() bool {
@@ -2007,19 +2374,46 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x18\n" +
 	"\asummary\x18\x03 \x01(\tR\asummary\x12\x18\n" +
-	"\adetails\x18\x04 \x03(\tR\adetails\"k\n" +
+	"\adetails\x18\x04 \x03(\tR\adetails\"\x9f\x01\n" +
 	"\x13ApplyProjectRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12'\n" +
 	"\x05files\x18\x02 \x03(\v2\x11.oaf.node.v1.FileR\x05files\x12\x17\n" +
-	"\adry_run\x18\x03 \x01(\bR\x06dryRun\"H\n" +
+	"\adry_run\x18\x03 \x01(\bR\x06dryRun\x122\n" +
+	"\aweights\x18\x04 \x01(\v2\x18.oaf.node.v1.WeightsSpecR\aweights\"\x84\x01\n" +
+	"\vWeightsSpec\x12\x19\n" +
+	"\bmodel_id\x18\x01 \x01(\tR\amodelId\x12\x10\n" +
+	"\x03dir\x18\x02 \x01(\tR\x03dir\x12\x12\n" +
+	"\x04repo\x18\x03 \x01(\tR\x04repo\x12\x1a\n" +
+	"\brevision\x18\x04 \x01(\tR\brevision\x12\x18\n" +
+	"\ainclude\x18\x05 \x03(\tR\ainclude\"H\n" +
+	"\x12PullWeightsRequest\x122\n" +
+	"\aweights\x18\x01 \x01(\v2\x18.oaf.node.v1.WeightsSpecR\aweights\"I\n" +
+	"\x13PullWeightsResponse\x122\n" +
+	"\x06status\x18\x01 \x01(\v2\x1a.oaf.node.v1.WeightsStatusR\x06status\"\x10\n" +
+	"\x0eWeightsRequest\"G\n" +
+	"\x0fWeightsResponse\x124\n" +
+	"\aweights\x18\x01 \x03(\v2\x1a.oaf.node.v1.WeightsStatusR\aweights\"\xf1\x01\n" +
+	"\rWeightsStatus\x12\x19\n" +
+	"\bmodel_id\x18\x01 \x01(\tR\amodelId\x12\x10\n" +
+	"\x03dir\x18\x02 \x01(\tR\x03dir\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\x12\x1d\n" +
+	"\n" +
+	"bytes_done\x18\x04 \x01(\x03R\tbytesDone\x12\x1f\n" +
+	"\vbytes_total\x18\x05 \x01(\x03R\n" +
+	"bytesTotal\x12(\n" +
+	"\x10bytes_per_second\x18\x06 \x01(\x01R\x0ebytesPerSecond\x12\x14\n" +
+	"\x05error\x18\a \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\b \x01(\tR\tstartedAt\"H\n" +
 	"\x04File\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\fR\acontent\x12\x12\n" +
-	"\x04mode\x18\x03 \x01(\rR\x04mode\"\x87\x01\n" +
+	"\x04mode\x18\x03 \x01(\rR\x04mode\"\xb7\x01\n" +
 	"\x14ApplyProjectResponse\x12\x18\n" +
 	"\achanged\x18\x01 \x01(\bR\achanged\x120\n" +
 	"\bservices\x18\x02 \x03(\v2\x14.oaf.node.v1.ServiceR\bservices\x12#\n" +
-	"\rchanged_paths\x18\x03 \x03(\tR\fchangedPaths\"Q\n" +
+	"\rchanged_paths\x18\x03 \x03(\tR\fchangedPaths\x12.\n" +
+	"\x13waiting_for_weights\x18\x04 \x01(\bR\x11waitingForWeights\"Q\n" +
 	"\x14RemoveProjectRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12%\n" +
 	"\x0eremove_volumes\x18\x02 \x01(\bR\rremoveVolumes\"1\n" +
@@ -2121,7 +2515,7 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\fPingResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x15\n" +
 	"\x06rtt_ms\x18\x02 \x01(\x01R\x05rttMs\x12!\n" +
-	"\fneighbor_mac\x18\x03 \x01(\tR\vneighborMac2\xc1\a\n" +
+	"\fneighbor_mac\x18\x03 \x01(\tR\vneighborMac2\xd9\b\n" +
 	"\vNodeService\x12;\n" +
 	"\x04Info\x12\x18.oaf.node.v1.InfoRequest\x1a\x19.oaf.node.v1.InfoResponse\x12J\n" +
 	"\tPreflight\x12\x1d.oaf.node.v1.PreflightRequest\x1a\x1e.oaf.node.v1.PreflightResponse\x12S\n" +
@@ -2134,7 +2528,9 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\aDesktop\x12\x1b.oaf.node.v1.DesktopRequest\x1a\x1c.oaf.node.v1.DesktopResponse\x12\\\n" +
 	"\x0fConfigureFabric\x12#.oaf.node.v1.ConfigureFabricRequest\x1a$.oaf.node.v1.ConfigureFabricResponse\x12S\n" +
 	"\fProbeAddress\x12 .oaf.node.v1.ProbeAddressRequest\x1a!.oaf.node.v1.ProbeAddressResponse\x12;\n" +
-	"\x04Ping\x12\x18.oaf.node.v1.PingRequest\x1a\x19.oaf.node.v1.PingResponseB\xa3\x01\n" +
+	"\x04Ping\x12\x18.oaf.node.v1.PingRequest\x1a\x19.oaf.node.v1.PingResponse\x12P\n" +
+	"\vPullWeights\x12\x1f.oaf.node.v1.PullWeightsRequest\x1a .oaf.node.v1.PullWeightsResponse\x12D\n" +
+	"\aWeights\x12\x1b.oaf.node.v1.WeightsRequest\x1a\x1c.oaf.node.v1.WeightsResponseB\xa3\x01\n" +
 	"\x0fcom.oaf.node.v1B\tNodeProtoP\x01Z7openagentfabric.dev/oaf/internal/gen/oaf/node/v1;nodev1\xa2\x02\x03ONX\xaa\x02\vOaf.Node.V1\xca\x02\vOaf\\Node\\V1\xe2\x02\x17Oaf\\Node\\V1\\GPBMetadata\xea\x02\rOaf::Node::V1b\x06proto3"
 
 var (
@@ -2149,7 +2545,7 @@ func file_oaf_node_v1_node_proto_rawDescGZIP() []byte {
 	return file_oaf_node_v1_node_proto_rawDescData
 }
 
-var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_oaf_node_v1_node_proto_goTypes = []any{
 	(*InfoRequest)(nil),             // 0: oaf.node.v1.InfoRequest
 	(*InfoResponse)(nil),            // 1: oaf.node.v1.InfoResponse
@@ -2157,72 +2553,86 @@ var file_oaf_node_v1_node_proto_goTypes = []any{
 	(*PreflightResponse)(nil),       // 3: oaf.node.v1.PreflightResponse
 	(*CheckResult)(nil),             // 4: oaf.node.v1.CheckResult
 	(*ApplyProjectRequest)(nil),     // 5: oaf.node.v1.ApplyProjectRequest
-	(*File)(nil),                    // 6: oaf.node.v1.File
-	(*ApplyProjectResponse)(nil),    // 7: oaf.node.v1.ApplyProjectResponse
-	(*RemoveProjectRequest)(nil),    // 8: oaf.node.v1.RemoveProjectRequest
-	(*RemoveProjectResponse)(nil),   // 9: oaf.node.v1.RemoveProjectResponse
-	(*ProjectStatusRequest)(nil),    // 10: oaf.node.v1.ProjectStatusRequest
-	(*ProjectStatusResponse)(nil),   // 11: oaf.node.v1.ProjectStatusResponse
-	(*Service)(nil),                 // 12: oaf.node.v1.Service
-	(*ListProjectsRequest)(nil),     // 13: oaf.node.v1.ListProjectsRequest
-	(*ListProjectsResponse)(nil),    // 14: oaf.node.v1.ListProjectsResponse
-	(*FabricRequest)(nil),           // 15: oaf.node.v1.FabricRequest
-	(*FabricResponse)(nil),          // 16: oaf.node.v1.FabricResponse
-	(*FabricPort)(nil),              // 17: oaf.node.v1.FabricPort
-	(*FabricNetdev)(nil),            // 18: oaf.node.v1.FabricNetdev
-	(*Gid)(nil),                     // 19: oaf.node.v1.Gid
-	(*RailBandwidthRequest)(nil),    // 20: oaf.node.v1.RailBandwidthRequest
-	(*RailBandwidthResponse)(nil),   // 21: oaf.node.v1.RailBandwidthResponse
-	(*DesktopRequest)(nil),          // 22: oaf.node.v1.DesktopRequest
-	(*DesktopResponse)(nil),         // 23: oaf.node.v1.DesktopResponse
-	(*FabricRail)(nil),              // 24: oaf.node.v1.FabricRail
-	(*ConfigureFabricRequest)(nil),  // 25: oaf.node.v1.ConfigureFabricRequest
-	(*RailState)(nil),               // 26: oaf.node.v1.RailState
-	(*ConfigureFabricResponse)(nil), // 27: oaf.node.v1.ConfigureFabricResponse
-	(*ProbeAddressRequest)(nil),     // 28: oaf.node.v1.ProbeAddressRequest
-	(*ProbeAddressResponse)(nil),    // 29: oaf.node.v1.ProbeAddressResponse
-	(*PingRequest)(nil),             // 30: oaf.node.v1.PingRequest
-	(*PingResponse)(nil),            // 31: oaf.node.v1.PingResponse
+	(*WeightsSpec)(nil),             // 6: oaf.node.v1.WeightsSpec
+	(*PullWeightsRequest)(nil),      // 7: oaf.node.v1.PullWeightsRequest
+	(*PullWeightsResponse)(nil),     // 8: oaf.node.v1.PullWeightsResponse
+	(*WeightsRequest)(nil),          // 9: oaf.node.v1.WeightsRequest
+	(*WeightsResponse)(nil),         // 10: oaf.node.v1.WeightsResponse
+	(*WeightsStatus)(nil),           // 11: oaf.node.v1.WeightsStatus
+	(*File)(nil),                    // 12: oaf.node.v1.File
+	(*ApplyProjectResponse)(nil),    // 13: oaf.node.v1.ApplyProjectResponse
+	(*RemoveProjectRequest)(nil),    // 14: oaf.node.v1.RemoveProjectRequest
+	(*RemoveProjectResponse)(nil),   // 15: oaf.node.v1.RemoveProjectResponse
+	(*ProjectStatusRequest)(nil),    // 16: oaf.node.v1.ProjectStatusRequest
+	(*ProjectStatusResponse)(nil),   // 17: oaf.node.v1.ProjectStatusResponse
+	(*Service)(nil),                 // 18: oaf.node.v1.Service
+	(*ListProjectsRequest)(nil),     // 19: oaf.node.v1.ListProjectsRequest
+	(*ListProjectsResponse)(nil),    // 20: oaf.node.v1.ListProjectsResponse
+	(*FabricRequest)(nil),           // 21: oaf.node.v1.FabricRequest
+	(*FabricResponse)(nil),          // 22: oaf.node.v1.FabricResponse
+	(*FabricPort)(nil),              // 23: oaf.node.v1.FabricPort
+	(*FabricNetdev)(nil),            // 24: oaf.node.v1.FabricNetdev
+	(*Gid)(nil),                     // 25: oaf.node.v1.Gid
+	(*RailBandwidthRequest)(nil),    // 26: oaf.node.v1.RailBandwidthRequest
+	(*RailBandwidthResponse)(nil),   // 27: oaf.node.v1.RailBandwidthResponse
+	(*DesktopRequest)(nil),          // 28: oaf.node.v1.DesktopRequest
+	(*DesktopResponse)(nil),         // 29: oaf.node.v1.DesktopResponse
+	(*FabricRail)(nil),              // 30: oaf.node.v1.FabricRail
+	(*ConfigureFabricRequest)(nil),  // 31: oaf.node.v1.ConfigureFabricRequest
+	(*RailState)(nil),               // 32: oaf.node.v1.RailState
+	(*ConfigureFabricResponse)(nil), // 33: oaf.node.v1.ConfigureFabricResponse
+	(*ProbeAddressRequest)(nil),     // 34: oaf.node.v1.ProbeAddressRequest
+	(*ProbeAddressResponse)(nil),    // 35: oaf.node.v1.ProbeAddressResponse
+	(*PingRequest)(nil),             // 36: oaf.node.v1.PingRequest
+	(*PingResponse)(nil),            // 37: oaf.node.v1.PingResponse
 }
 var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	4,  // 0: oaf.node.v1.PreflightResponse.results:type_name -> oaf.node.v1.CheckResult
-	6,  // 1: oaf.node.v1.ApplyProjectRequest.files:type_name -> oaf.node.v1.File
-	12, // 2: oaf.node.v1.ApplyProjectResponse.services:type_name -> oaf.node.v1.Service
-	12, // 3: oaf.node.v1.ProjectStatusResponse.services:type_name -> oaf.node.v1.Service
-	17, // 4: oaf.node.v1.FabricResponse.ports:type_name -> oaf.node.v1.FabricPort
-	18, // 5: oaf.node.v1.FabricPort.halves:type_name -> oaf.node.v1.FabricNetdev
-	19, // 6: oaf.node.v1.FabricNetdev.gids:type_name -> oaf.node.v1.Gid
-	24, // 7: oaf.node.v1.ConfigureFabricRequest.rails:type_name -> oaf.node.v1.FabricRail
-	26, // 8: oaf.node.v1.ConfigureFabricResponse.rails:type_name -> oaf.node.v1.RailState
-	0,  // 9: oaf.node.v1.NodeService.Info:input_type -> oaf.node.v1.InfoRequest
-	2,  // 10: oaf.node.v1.NodeService.Preflight:input_type -> oaf.node.v1.PreflightRequest
-	5,  // 11: oaf.node.v1.NodeService.ApplyProject:input_type -> oaf.node.v1.ApplyProjectRequest
-	8,  // 12: oaf.node.v1.NodeService.RemoveProject:input_type -> oaf.node.v1.RemoveProjectRequest
-	10, // 13: oaf.node.v1.NodeService.ProjectStatus:input_type -> oaf.node.v1.ProjectStatusRequest
-	13, // 14: oaf.node.v1.NodeService.ListProjects:input_type -> oaf.node.v1.ListProjectsRequest
-	15, // 15: oaf.node.v1.NodeService.Fabric:input_type -> oaf.node.v1.FabricRequest
-	20, // 16: oaf.node.v1.NodeService.RailBandwidth:input_type -> oaf.node.v1.RailBandwidthRequest
-	22, // 17: oaf.node.v1.NodeService.Desktop:input_type -> oaf.node.v1.DesktopRequest
-	25, // 18: oaf.node.v1.NodeService.ConfigureFabric:input_type -> oaf.node.v1.ConfigureFabricRequest
-	28, // 19: oaf.node.v1.NodeService.ProbeAddress:input_type -> oaf.node.v1.ProbeAddressRequest
-	30, // 20: oaf.node.v1.NodeService.Ping:input_type -> oaf.node.v1.PingRequest
-	1,  // 21: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
-	3,  // 22: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
-	7,  // 23: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
-	9,  // 24: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
-	11, // 25: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
-	14, // 26: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
-	16, // 27: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
-	21, // 28: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
-	23, // 29: oaf.node.v1.NodeService.Desktop:output_type -> oaf.node.v1.DesktopResponse
-	27, // 30: oaf.node.v1.NodeService.ConfigureFabric:output_type -> oaf.node.v1.ConfigureFabricResponse
-	29, // 31: oaf.node.v1.NodeService.ProbeAddress:output_type -> oaf.node.v1.ProbeAddressResponse
-	31, // 32: oaf.node.v1.NodeService.Ping:output_type -> oaf.node.v1.PingResponse
-	21, // [21:33] is the sub-list for method output_type
-	9,  // [9:21] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	12, // 1: oaf.node.v1.ApplyProjectRequest.files:type_name -> oaf.node.v1.File
+	6,  // 2: oaf.node.v1.ApplyProjectRequest.weights:type_name -> oaf.node.v1.WeightsSpec
+	6,  // 3: oaf.node.v1.PullWeightsRequest.weights:type_name -> oaf.node.v1.WeightsSpec
+	11, // 4: oaf.node.v1.PullWeightsResponse.status:type_name -> oaf.node.v1.WeightsStatus
+	11, // 5: oaf.node.v1.WeightsResponse.weights:type_name -> oaf.node.v1.WeightsStatus
+	18, // 6: oaf.node.v1.ApplyProjectResponse.services:type_name -> oaf.node.v1.Service
+	18, // 7: oaf.node.v1.ProjectStatusResponse.services:type_name -> oaf.node.v1.Service
+	23, // 8: oaf.node.v1.FabricResponse.ports:type_name -> oaf.node.v1.FabricPort
+	24, // 9: oaf.node.v1.FabricPort.halves:type_name -> oaf.node.v1.FabricNetdev
+	25, // 10: oaf.node.v1.FabricNetdev.gids:type_name -> oaf.node.v1.Gid
+	30, // 11: oaf.node.v1.ConfigureFabricRequest.rails:type_name -> oaf.node.v1.FabricRail
+	32, // 12: oaf.node.v1.ConfigureFabricResponse.rails:type_name -> oaf.node.v1.RailState
+	0,  // 13: oaf.node.v1.NodeService.Info:input_type -> oaf.node.v1.InfoRequest
+	2,  // 14: oaf.node.v1.NodeService.Preflight:input_type -> oaf.node.v1.PreflightRequest
+	5,  // 15: oaf.node.v1.NodeService.ApplyProject:input_type -> oaf.node.v1.ApplyProjectRequest
+	14, // 16: oaf.node.v1.NodeService.RemoveProject:input_type -> oaf.node.v1.RemoveProjectRequest
+	16, // 17: oaf.node.v1.NodeService.ProjectStatus:input_type -> oaf.node.v1.ProjectStatusRequest
+	19, // 18: oaf.node.v1.NodeService.ListProjects:input_type -> oaf.node.v1.ListProjectsRequest
+	21, // 19: oaf.node.v1.NodeService.Fabric:input_type -> oaf.node.v1.FabricRequest
+	26, // 20: oaf.node.v1.NodeService.RailBandwidth:input_type -> oaf.node.v1.RailBandwidthRequest
+	28, // 21: oaf.node.v1.NodeService.Desktop:input_type -> oaf.node.v1.DesktopRequest
+	31, // 22: oaf.node.v1.NodeService.ConfigureFabric:input_type -> oaf.node.v1.ConfigureFabricRequest
+	34, // 23: oaf.node.v1.NodeService.ProbeAddress:input_type -> oaf.node.v1.ProbeAddressRequest
+	36, // 24: oaf.node.v1.NodeService.Ping:input_type -> oaf.node.v1.PingRequest
+	7,  // 25: oaf.node.v1.NodeService.PullWeights:input_type -> oaf.node.v1.PullWeightsRequest
+	9,  // 26: oaf.node.v1.NodeService.Weights:input_type -> oaf.node.v1.WeightsRequest
+	1,  // 27: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
+	3,  // 28: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
+	13, // 29: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
+	15, // 30: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
+	17, // 31: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
+	20, // 32: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
+	22, // 33: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
+	27, // 34: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
+	29, // 35: oaf.node.v1.NodeService.Desktop:output_type -> oaf.node.v1.DesktopResponse
+	33, // 36: oaf.node.v1.NodeService.ConfigureFabric:output_type -> oaf.node.v1.ConfigureFabricResponse
+	35, // 37: oaf.node.v1.NodeService.ProbeAddress:output_type -> oaf.node.v1.ProbeAddressResponse
+	37, // 38: oaf.node.v1.NodeService.Ping:output_type -> oaf.node.v1.PingResponse
+	8,  // 39: oaf.node.v1.NodeService.PullWeights:output_type -> oaf.node.v1.PullWeightsResponse
+	10, // 40: oaf.node.v1.NodeService.Weights:output_type -> oaf.node.v1.WeightsResponse
+	27, // [27:41] is the sub-list for method output_type
+	13, // [13:27] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_oaf_node_v1_node_proto_init() }
@@ -2236,7 +2646,7 @@ func file_oaf_node_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_oaf_node_v1_node_proto_rawDesc), len(file_oaf_node_v1_node_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   32,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

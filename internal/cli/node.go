@@ -57,7 +57,9 @@ func newNodeServeCmd() *cobra.Command {
 				Bench:            hostexec.Local{},
 				Host:             hostexec.Changes{Inner: hostexec.Local{}},
 				PreflightOptions: preflight.Defaults,
+				Downloads:        &node.Weights{StateDir: stateDir},
 			}
+			srv.ResumeWeights()
 			hs := node.NewHTTPServer(listen, srv, tlsCfg)
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -51,6 +52,10 @@ type Server struct {
 	DiscoverFabric func(ctx context.Context) ([]fabric.Port, error)
 	// FabricWait bounds how long ConfigureFabric waits for addresses.
 	FabricWait time.Duration
+
+	// Downloads fetches model weights (PullWeights, models waiting for them);
+	// nil disables downloads.
+	Downloads *Weights
 
 	mu sync.Mutex // serialises project changes
 
@@ -138,6 +143,16 @@ func (s *Server) ApplyProject(ctx context.Context, req *nodev1.ApplyProjectReque
 			return nil, connect.NewError(connect.CodeInternal, "writing project: "+err.Error())
 		}
 	}
+	// A model starts once its weights are complete: until then the agent
+	// downloads them and starts the project by itself afterwards.
+	if wt := req.GetWeights(); wt != nil && s.Downloads != nil && !Complete(wt.GetDir()) {
+		if _, err := s.Downloads.Start(wt); err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err.Error())
+		}
+		s.waitForWeights(req.GetName(), wt.GetDir())
+		return &nodev1.ApplyProjectResponse{Changed: changed, ChangedPaths: paths, WaitingForWeights: true}, nil
+	}
+	s.stopWaiting(req.GetName())
 	// Always converge: `up` is idempotent and restarts anything that stopped.
 	if err := s.Compose.Up(ctx, req.GetName(), dir); err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, "compose up: "+err.Error())
@@ -147,6 +162,72 @@ func (s *Server) ApplyProject(ctx context.Context, req *nodev1.ApplyProjectReque
 		return nil, err
 	}
 	return &nodev1.ApplyProjectResponse{Changed: changed, Services: services, ChangedPaths: paths}, nil
+}
+
+// waitForWeights starts project once dir's weights are complete; the wait is
+// recorded so an agent restart keeps it.
+func (s *Server) waitForWeights(project, dir string) {
+	wdir := filepath.Join(s.StateDir, "waiting")
+	if os.MkdirAll(wdir, 0o755) == nil {
+		_ = os.WriteFile(filepath.Join(wdir, project), []byte(dir), 0o644)
+	}
+	s.Downloads.WhenComplete(dir, project, func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		pdir := filepath.Join(s.projectsDir(), project)
+		if _, err := os.Stat(filepath.Join(pdir, ComposeFile)); err != nil {
+			return // removed meanwhile
+		}
+		_ = os.Remove(filepath.Join(wdir, project))
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		_ = s.Compose.Up(ctx, project, pdir)
+	})
+}
+
+func (s *Server) stopWaiting(project string) {
+	if s.Downloads != nil {
+		s.Downloads.Forget(project)
+	}
+	_ = os.Remove(filepath.Join(s.StateDir, "waiting", project))
+}
+
+// ResumeWeights continues unfinished downloads and the projects waiting for
+// them, after an agent restart.
+func (s *Server) ResumeWeights() {
+	if s.Downloads == nil {
+		return
+	}
+	s.Downloads.Resume()
+	entries, _ := os.ReadDir(filepath.Join(s.StateDir, "waiting"))
+	for _, e := range entries {
+		if validateName(e.Name()) != nil {
+			continue
+		}
+		if dir, err := os.ReadFile(filepath.Join(s.StateDir, "waiting", e.Name())); err == nil {
+			s.waitForWeights(e.Name(), strings.TrimSpace(string(dir)))
+		}
+	}
+}
+
+// PullWeights implements NodeService.
+func (s *Server) PullWeights(_ context.Context, req *nodev1.PullWeightsRequest) (*nodev1.PullWeightsResponse, error) {
+	if s.Downloads == nil {
+		return nil, connect.NewError(connect.CodeUnimplemented, "this agent does not download weights")
+	}
+	st, err := s.Downloads.Start(req.GetWeights())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err.Error())
+	}
+	return &nodev1.PullWeightsResponse{Status: st}, nil
+}
+
+// Weights implements NodeService.
+func (s *Server) Weights(context.Context, *nodev1.WeightsRequest) (*nodev1.WeightsResponse, error) {
+	if s.Downloads == nil {
+		return &nodev1.WeightsResponse{}, nil
+	}
+	return &nodev1.WeightsResponse{Weights: s.Downloads.All()}, nil
 }
 
 // RemoveProject implements NodeService.
@@ -167,6 +248,7 @@ func (s *Server) RemoveProject(ctx context.Context, req *nodev1.RemoveProjectReq
 	if err := os.RemoveAll(dir); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err.Error())
 	}
+	s.stopWaiting(req.GetName())
 	return &nodev1.RemoveProjectResponse{Existed: true}, nil
 }
 

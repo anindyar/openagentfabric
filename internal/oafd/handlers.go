@@ -1,6 +1,7 @@
 package oafd
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -247,6 +248,11 @@ func (s *Server) addModel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, code := s.offer(r, data, out, fmt.Sprintf("Deploy %s (%s)", req.Name, req.CatalogRef))
+	// Choosing a model starts its download; a plan that cannot apply (a
+	// licence nobody accepted yet, no room) does not.
+	if p.Status == PlanPending && s.cfg.Prefetch != nil {
+		go s.cfg.Prefetch(context.WithoutCancel(r.Context()), c, d)
+	}
 	writeJSON(w, code, s.view(p))
 }
 

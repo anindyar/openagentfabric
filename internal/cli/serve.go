@@ -78,6 +78,7 @@ func newServeCmd() *cobra.Command {
 				Log:           log,
 				Versions:      bundleVersions(),
 				Check:         func(ctx context.Context, doc []byte) error { return renderCheck(ctx, &f, stateDir, doc) },
+				Prefetch:      func(ctx context.Context, c *config.Cluster, d config.ModelDeployment) { prefetch(ctx, &f, c, d, log) },
 			})
 			if err := mountGrowth(srv, &f, c, stateDir, log); err != nil {
 				log.Warn("adding boxes is unavailable", "err", err)
@@ -242,9 +243,15 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 		v.Nodes = append(v.Nodes, nv)
 	}
 	cat := s.catalog
+	v.Downloads = downloads(ctx, s.nodes)
+	byDownload := map[string]*oafd.DownloadView{}
+	for i, d := range v.Downloads {
+		byDownload[d.Node+"/"+d.ModelID] = &v.Downloads[i]
+	}
 	deployed := map[string]bool{}
 	for _, d := range s.cluster.Spec.Models {
-		dv := deploymentState(s.cluster, cat, d, byProject[reconcile.ModelProjectPrefix+d.Name])
+		dl := func(node string) *oafd.DownloadView { return byDownload[node+"/"+d.CatalogRef] }
+		dv := deploymentState(s.cluster, cat, d, byProject[reconcile.ModelProjectPrefix+d.Name], dl)
 		v.Deployments = append(v.Deployments, dv)
 		deployed[reconcile.ModelProjectPrefix+d.Name] = true
 	}
@@ -284,7 +291,7 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 	return v, nil
 }
 
-func deploymentState(c *config.Cluster, cat *config.Catalog, d config.ModelDeployment, sts []reconcile.ProjectState) oafd.DeploymentView {
+func deploymentState(c *config.Cluster, cat *config.Catalog, d config.ModelDeployment, sts []reconcile.ProjectState, dl func(string) *oafd.DownloadView) oafd.DeploymentView {
 	nodes := c.PlacementNodes(d.Placement)
 	if nodes == nil {
 		nodes = []string{}
@@ -299,7 +306,7 @@ func deploymentState(c *config.Cluster, cat *config.Catalog, d config.ModelDeplo
 		}
 	}
 	if d.IsEnabled() {
-		modelPhase(&dv, sts)
+		modelPhase(&dv, sts, dl)
 	} else {
 		dv.Phase = PhaseDisabled
 	}

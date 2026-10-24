@@ -12,13 +12,14 @@ import (
 
 // Model phases, as the console shows them.
 const (
-	PhaseQueued   = "queued"   // in cluster.yaml, not started on its nodes yet
-	PhaseStarting = "starting" // container up, nothing to report yet
-	PhaseLoading  = "loading"  // weights loading, compiling, warming up
-	PhaseReady    = "ready"    // healthy: requests are served
-	PhaseFailed   = "failed"   // exited or crash-looping; Error says why
-	PhaseRemoving = "removing" // removed from cluster.yaml, still on a node
-	PhaseDisabled = "disabled"
+	PhaseQueued      = "queued"      // in cluster.yaml, not started on its nodes yet
+	PhaseDownloading = "downloading" // its weights are downloading; it starts after
+	PhaseStarting    = "starting"    // container up, nothing to report yet
+	PhaseLoading     = "loading"     // weights loading, compiling, warming up
+	PhaseReady       = "ready"       // healthy: requests are served
+	PhaseFailed      = "failed"      // exited or crash-looping; Error says why
+	PhaseRemoving    = "removing"    // removed from cluster.yaml, still on a node
+	PhaseDisabled    = "disabled"
 )
 
 var (
@@ -36,18 +37,28 @@ var (
 
 // modelPhase reads a deployment's containers (one per node) into what the
 // console shows. A multi-node model is as far along as its slowest node and
-// failed when any node failed.
-func modelPhase(dv *oafd.DeploymentView, sts []reconcile.ProjectState) {
+// failed when any node failed. dl finds the weights download on a node.
+func modelPhase(dv *oafd.DeploymentView, sts []reconcile.ProjectState, dl func(node string) *oafd.DownloadView) {
+	if dl == nil {
+		dl = func(string) *oafd.DownloadView { return nil }
+	}
 	var parts []oafd.DeploymentView
 	for _, st := range sts {
-		p := nodePhase(st)
+		p := nodePhase(st, dl(st.Node))
 		parts = append(parts, p)
+	}
+	if len(parts) == 0 {
+		for _, n := range dv.Nodes {
+			if p, ok := downloadPhase(n, dl(n)); ok {
+				parts = append(parts, p)
+			}
+		}
 	}
 	if len(parts) == 0 {
 		dv.Phase, dv.Detail = PhaseQueued, "Waiting for the change to be applied"
 		return
 	}
-	rank := map[string]int{PhaseFailed: 0, PhaseQueued: 1, PhaseStarting: 2, PhaseLoading: 3, PhaseReady: 4}
+	rank := map[string]int{PhaseFailed: 0, PhaseQueued: 1, PhaseDownloading: 2, PhaseStarting: 3, PhaseLoading: 4, PhaseReady: 5}
 	worst := parts[0]
 	for _, p := range parts[1:] {
 		if rank[p.Phase] < rank[worst.Phase] || p.Phase == worst.Phase && p.Progress < worst.Progress {
@@ -64,14 +75,22 @@ func modelPhase(dv *oafd.DeploymentView, sts []reconcile.ProjectState) {
 }
 
 // nodePhase is one node's part; Name carries the node.
-func nodePhase(st reconcile.ProjectState) oafd.DeploymentView {
+func nodePhase(st reconcile.ProjectState, dl *oafd.DownloadView) oafd.DeploymentView {
 	p := oafd.DeploymentView{Name: st.Node}
 	switch {
 	case st.Err != nil:
 		p.Phase, p.Error = PhaseFailed, st.Node+" is unreachable: "+st.Err.Error()
 		return p
 	case !st.Exists || len(st.Services) == 0:
+		// Not started: its weights are downloading (it starts by itself
+		// afterwards), or the change is not applied yet.
+		if d, ok := downloadPhase(st.Node, dl); ok {
+			return d
+		}
 		p.Phase, p.Detail = PhaseQueued, "Waiting for the change to be applied"
+		if st.Exists {
+			p.Detail = "Waiting to start"
+		}
 		return p
 	}
 	sv := st.Services[0]

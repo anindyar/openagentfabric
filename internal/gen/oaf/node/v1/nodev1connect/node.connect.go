@@ -50,6 +50,10 @@ const (
 	NodeServiceProbeAddressProcedure = "/oaf.node.v1.NodeService/ProbeAddress"
 	// NodeServicePingProcedure is the procedure name of the NodeService's Ping RPC.
 	NodeServicePingProcedure = "/oaf.node.v1.NodeService/Ping"
+	// NodeServicePullWeightsProcedure is the procedure name of the NodeService's PullWeights RPC.
+	NodeServicePullWeightsProcedure = "/oaf.node.v1.NodeService/PullWeights"
+	// NodeServiceWeightsProcedure is the procedure name of the NodeService's Weights RPC.
+	NodeServiceWeightsProcedure = "/oaf.node.v1.NodeService/Weights"
 )
 
 var (
@@ -137,6 +141,20 @@ var (
 			Procedure:  NodeServicePingProcedure,
 		}
 	})
+	nodeServicePullWeightsSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("PullWeights"),
+			Procedure:  NodeServicePullWeightsProcedure,
+		}
+	})
+	nodeServiceWeightsSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("Weights"),
+			Procedure:  NodeServiceWeightsProcedure,
+		}
+	})
 )
 
 // NodeServiceClient is a client for the oaf.node.v1.NodeService service.
@@ -175,6 +193,11 @@ type NodeServiceClient interface {
 	// Ping sends pings out of one netdev and reports the link-layer address
 	// that answered for the target (the peer port on the cable).
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
+	// Start downloading a model's weights into its directory (idempotent: a
+	// download in progress continues, complete weights are left alone).
+	PullWeights(context.Context, *v1.PullWeightsRequest) (*v1.PullWeightsResponse, error)
+	// Downloads this agent knows of: in progress, finished or failed.
+	Weights(context.Context, *v1.WeightsRequest) (*v1.WeightsResponse, error)
 }
 
 // NewNodeServiceClient constructs a client for the oaf.node.v1.NodeService service. Multiple
@@ -219,6 +242,11 @@ type NodeServiceHandler interface {
 	// Ping sends pings out of one netdev and reports the link-layer address
 	// that answered for the target (the peer port on the cable).
 	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
+	// Start downloading a model's weights into its directory (idempotent: a
+	// download in progress continues, complete weights are left alone).
+	PullWeights(context.Context, *v1.PullWeightsRequest) (*v1.PullWeightsResponse, error)
+	// Downloads this agent knows of: in progress, finished or failed.
+	Weights(context.Context, *v1.WeightsRequest) (*v1.WeightsResponse, error)
 }
 
 // RegisterNodeServiceHandler registers svc as the oaf.node.v1.NodeService implementation on server.
@@ -237,6 +265,8 @@ func RegisterNodeServiceHandler(server *connect.Server, svc NodeServiceHandler) 
 		connect.Method{Spec: nodeServiceConfigureFabricSpec(), Handler: adapter.configureFabric},
 		connect.Method{Spec: nodeServiceProbeAddressSpec(), Handler: adapter.probeAddress},
 		connect.Method{Spec: nodeServicePingSpec(), Handler: adapter.ping},
+		connect.Method{Spec: nodeServicePullWeightsSpec(), Handler: adapter.pullWeights},
+		connect.Method{Spec: nodeServiceWeightsSpec(), Handler: adapter.weights},
 	)
 }
 
@@ -289,6 +319,14 @@ func (UnimplementedNodeServiceHandler) ProbeAddress(context.Context, *v1.ProbeAd
 
 func (UnimplementedNodeServiceHandler) Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.Ping is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) PullWeights(context.Context, *v1.PullWeightsRequest) (*v1.PullWeightsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.PullWeights is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) Weights(context.Context, *v1.WeightsRequest) (*v1.WeightsResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.Weights is not implemented")
 }
 
 type nodeServiceClient struct {
@@ -386,6 +424,22 @@ func (c *nodeServiceClient) ProbeAddress(ctx context.Context, req *v1.ProbeAddre
 func (c *nodeServiceClient) Ping(ctx context.Context, req *v1.PingRequest) (*v1.PingResponse, error) {
 	var res v1.PingResponse
 	if err := c.client.CallUnary(ctx, nodeServicePingSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) PullWeights(ctx context.Context, req *v1.PullWeightsRequest) (*v1.PullWeightsResponse, error) {
+	var res v1.PullWeightsResponse
+	if err := c.client.CallUnary(ctx, nodeServicePullWeightsSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) Weights(ctx context.Context, req *v1.WeightsRequest) (*v1.WeightsResponse, error) {
+	var res v1.WeightsResponse
+	if err := c.client.CallUnary(ctx, nodeServiceWeightsSpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -531,6 +585,30 @@ func (h nodeServiceHandler) ping(ctx context.Context, _ connect.Spec, stream con
 		return err
 	}
 	res, err := h.svc.Ping(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) pullWeights(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.PullWeightsRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.PullWeights(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) weights(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.WeightsRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.Weights(ctx, &req)
 	if err != nil {
 		return err
 	}

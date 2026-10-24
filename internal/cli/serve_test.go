@@ -46,7 +46,7 @@ func TestDeploymentState(t *testing.T) {
 		{[]reconcile.ProjectState{{Err: errors.New("dial")}}, "unreachable", "dial"},
 	}
 	for _, tc := range cases {
-		v := deploymentState(c, cat, d, tc.sts)
+		v := deploymentState(c, cat, d, tc.sts, nil)
 		if v.State != tc.state || v.Health != tc.health || v.Task != "chat" || len(v.Nodes) == 0 {
 			t.Errorf("%+v: got %s/%s", tc.sts, v.State, v.Health)
 		}

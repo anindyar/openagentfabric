@@ -7,6 +7,7 @@ package render
 import (
 	"errors"
 	"fmt"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
@@ -42,6 +43,34 @@ type Project struct {
 	Node  string
 	Name  string
 	Files []File
+	// Weights are the model files the project needs on its node: the agent
+	// downloads them and starts the project once they are complete.
+	Weights *Weights
+}
+
+// Weights is a model's weights on one node: a Hugging Face repo pinned at a
+// revision, downloaded into Dir.
+type Weights struct {
+	ModelID, Dir, Repo, Revision string
+	Include                      []string
+}
+
+// ModelWeights returns where a deployment's weights go on each of its nodes,
+// keyed by node; nil when the model is not downloaded from Hugging Face
+// (an entitled model arrives with its entitlement).
+func ModelWeights(c *config.Cluster, cat *config.Catalog, d config.ModelDeployment) map[string]*Weights {
+	m, ok := cat.Lookup(d.CatalogRef)
+	if !ok || m.Source.HuggingFace == nil {
+		return nil
+	}
+	out := map[string]*Weights{}
+	for _, name := range c.PlacementNodes(d.Placement) {
+		n, _ := c.Node(name)
+		hf := m.Source.HuggingFace
+		out[name] = &Weights{ModelID: m.ID, Dir: path.Join(modelsPath(n), m.ID), Repo: hf.Repo, Revision: hf.Revision,
+			Include: append([]string{}, hf.Include...)}
+	}
+	return out
 }
 
 // Project names.

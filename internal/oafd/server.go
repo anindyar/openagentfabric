@@ -58,6 +58,10 @@ type Config struct {
 	// Check renders a candidate cluster.yaml without applying it; apply
 	// refuses a plan whose change does not render. Optional.
 	Check func(ctx context.Context, doc []byte) error
+	// Prefetch starts downloading a deployment's weights on its nodes. A
+	// model added through the API starts downloading as soon as its plan is
+	// made, so it is ready sooner after approval. Optional.
+	Prefetch func(ctx context.Context, c *config.Cluster, d config.ModelDeployment)
 }
 
 // Server is the management API.

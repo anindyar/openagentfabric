@@ -38,6 +38,11 @@ service NodeService {
   // Ping sends pings out of one netdev and reports the link-layer address
   // that answered for the target (the peer port on the cable).
   rpc Ping(PingRequest) returns (PingResponse);
+  // Start downloading a model's weights into its directory (idempotent: a
+  // download in progress continues, complete weights are left alone).
+  rpc PullWeights(PullWeightsRequest) returns (PullWeightsResponse);
+  // Downloads this agent knows of: in progress, finished or failed.
+  rpc Weights(WeightsRequest) returns (WeightsResponse);
 }
 
 message InfoRequest {}
@@ -83,6 +88,46 @@ message ApplyProjectRequest {
   repeated File files = 2;
   // Report what would change without writing files or running compose.
   bool dry_run = 3;
+  // The model weights the project needs: the agent downloads them if they
+  // are not complete and starts the project only once they are.
+  WeightsSpec weights = 4;
+}
+
+// A model's weights: a Hugging Face repo pinned at a revision, downloaded
+// into dir (absolute, ending in model_id).
+message WeightsSpec {
+  string model_id = 1;
+  string dir = 2;
+  string repo = 3;
+  string revision = 4;
+  // Glob patterns of the files to fetch; empty fetches every file.
+  repeated string include = 5;
+}
+
+message PullWeightsRequest {
+  WeightsSpec weights = 1;
+}
+
+message PullWeightsResponse {
+  WeightsStatus status = 1;
+}
+
+message WeightsRequest {}
+
+message WeightsResponse {
+  repeated WeightsStatus weights = 1;
+}
+
+message WeightsStatus {
+  string model_id = 1;
+  string dir = 2;
+  // downloading | complete | failed
+  string state = 3;
+  int64 bytes_done = 4;
+  int64 bytes_total = 5;
+  double bytes_per_second = 6;
+  string error = 7;
+  string started_at = 8;
 }
 
 message File {
@@ -97,6 +142,8 @@ message ApplyProjectResponse {
   repeated Service services = 2;
   // Paths added, changed (content or mode) or removed, sorted.
   repeated string changed_paths = 3;
+  // The project waits for its weights to download; it starts by itself.
+  bool waiting_for_weights = 4;
 }
 
 message RemoveProjectRequest {

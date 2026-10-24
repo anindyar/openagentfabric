@@ -28,7 +28,7 @@ var (
 
 func phaseOf(sts ...reconcile.ProjectState) oafd.DeploymentView {
 	var dv oafd.DeploymentView
-	modelPhase(&dv, sts)
+	modelPhase(&dv, sts, nil)
 	return dv
 }
 

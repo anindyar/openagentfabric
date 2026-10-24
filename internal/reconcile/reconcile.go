@@ -229,6 +229,10 @@ func Apply(ctx context.Context, ns Nodes, desired []render.Project, plan Plan, p
 			errs = append(errs, fmt.Errorf("%s/%s: %w", s.Node, s.Project, err))
 			continue
 		}
+		if resp.GetWaitingForWeights() {
+			_, _ = fmt.Fprintf(progress, "%-9s %s/%s  downloading weights; starts when they are complete\n", applied(s.Action, resp.GetChanged()), s.Node, s.Project)
+			continue
+		}
 		_, _ = fmt.Fprintf(progress, "%-9s %s/%s  %s\n", applied(s.Action, resp.GetChanged()), s.Node, s.Project, summarize(resp.GetServices()))
 	}
 	return errors.Join(errs...)
@@ -366,11 +370,19 @@ func summarize(svcs []*nodev1.Service) string {
 }
 
 func applyRequest(p render.Project, dryRun bool) *nodev1.ApplyProjectRequest {
-	req := &nodev1.ApplyProjectRequest{Name: p.Name, DryRun: dryRun}
+	req := &nodev1.ApplyProjectRequest{Name: p.Name, DryRun: dryRun, Weights: WeightsSpec(p.Weights)}
 	for _, f := range p.Files {
 		req.Files = append(req.Files, &nodev1.File{Path: f.Path, Mode: f.Mode, Content: f.Content})
 	}
 	return req
+}
+
+// WeightsSpec is the agent's form of a project's weights (nil for none).
+func WeightsSpec(w *render.Weights) *nodev1.WeightsSpec {
+	if w == nil {
+		return nil
+	}
+	return &nodev1.WeightsSpec{ModelId: w.ModelID, Dir: w.Dir, Repo: w.Repo, Revision: w.Revision, Include: w.Include}
 }
 
 // applyOrder puts dependencies first: metrics and stores before the models,

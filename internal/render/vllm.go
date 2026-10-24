@@ -64,6 +64,7 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 		maxLen = d.MaxModelLen
 	}
 	var out []Project
+	pulls := ModelWeights(r.Cluster, r.Catalog, d)
 	for rank, nodeName := range nodes {
 		node, _ := r.Cluster.Node(nodeName)
 		env := newEnvFile()
@@ -141,6 +142,7 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 		if err != nil {
 			return nil, err
 		}
+		p.Weights = pulls[nodeName]
 		out = append(out, p)
 	}
 	return out, nil
