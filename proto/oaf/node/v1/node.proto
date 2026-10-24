@@ -110,6 +110,9 @@ message RemoveProjectResponse {
 
 message ProjectStatusRequest {
   string name = 1;
+  // Last log lines to return for each container that is not healthy yet
+  // (loading progress, the error of a crash loop); 0 returns none.
+  int32 log_lines = 2;
 }
 
 message ProjectStatusResponse {
@@ -122,6 +125,12 @@ message Service {
   string state = 2;
   string health = 3;
   string image = 4;
+  // When the container last started (RFC 3339) and how often it restarted.
+  string started_at = 5;
+  int32 restart_count = 6;
+  int32 exit_code = 7;
+  // The container's last log lines, when asked for and it is not healthy.
+  repeated string log_tail = 8;
 }
 
 message ListProjectsRequest {}

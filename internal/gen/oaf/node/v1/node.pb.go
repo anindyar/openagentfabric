@@ -626,8 +626,11 @@ func (x *RemoveProjectResponse) GetExisted() bool {
 }
 
 type ProjectStatusRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Last log lines to return for each container that is not healthy yet
+	// (loading progress, the error of a crash loop); 0 returns none.
+	LogLines      int32 `protobuf:"varint,2,opt,name=log_lines,json=logLines,proto3" json:"log_lines,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -667,6 +670,13 @@ func (x *ProjectStatusRequest) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *ProjectStatusRequest) GetLogLines() int32 {
+	if x != nil {
+		return x.LogLines
+	}
+	return 0
 }
 
 type ProjectStatusResponse struct {
@@ -722,11 +732,17 @@ func (x *ProjectStatusResponse) GetServices() []*Service {
 }
 
 type Service struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	State         string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
-	Health        string                 `protobuf:"bytes,3,opt,name=health,proto3" json:"health,omitempty"`
-	Image         string                 `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Name   string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	State  string                 `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	Health string                 `protobuf:"bytes,3,opt,name=health,proto3" json:"health,omitempty"`
+	Image  string                 `protobuf:"bytes,4,opt,name=image,proto3" json:"image,omitempty"`
+	// When the container last started (RFC 3339) and how often it restarted.
+	StartedAt    string `protobuf:"bytes,5,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	RestartCount int32  `protobuf:"varint,6,opt,name=restart_count,json=restartCount,proto3" json:"restart_count,omitempty"`
+	ExitCode     int32  `protobuf:"varint,7,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	// The container's last log lines, when asked for and it is not healthy.
+	LogTail       []string `protobuf:"bytes,8,rep,name=log_tail,json=logTail,proto3" json:"log_tail,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -787,6 +803,34 @@ func (x *Service) GetImage() string {
 		return x.Image
 	}
 	return ""
+}
+
+func (x *Service) GetStartedAt() string {
+	if x != nil {
+		return x.StartedAt
+	}
+	return ""
+}
+
+func (x *Service) GetRestartCount() int32 {
+	if x != nil {
+		return x.RestartCount
+	}
+	return 0
+}
+
+func (x *Service) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *Service) GetLogTail() []string {
+	if x != nil {
+		return x.LogTail
+	}
+	return nil
 }
 
 type ListProjectsRequest struct {
@@ -1980,17 +2024,23 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12%\n" +
 	"\x0eremove_volumes\x18\x02 \x01(\bR\rremoveVolumes\"1\n" +
 	"\x15RemoveProjectResponse\x12\x18\n" +
-	"\aexisted\x18\x01 \x01(\bR\aexisted\"*\n" +
+	"\aexisted\x18\x01 \x01(\bR\aexisted\"G\n" +
 	"\x14ProjectStatusRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"a\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
+	"\tlog_lines\x18\x02 \x01(\x05R\blogLines\"a\n" +
 	"\x15ProjectStatusResponse\x12\x16\n" +
 	"\x06exists\x18\x01 \x01(\bR\x06exists\x120\n" +
-	"\bservices\x18\x02 \x03(\v2\x14.oaf.node.v1.ServiceR\bservices\"a\n" +
+	"\bservices\x18\x02 \x03(\v2\x14.oaf.node.v1.ServiceR\bservices\"\xdd\x01\n" +
 	"\aService\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05state\x18\x02 \x01(\tR\x05state\x12\x16\n" +
 	"\x06health\x18\x03 \x01(\tR\x06health\x12\x14\n" +
-	"\x05image\x18\x04 \x01(\tR\x05image\"\x15\n" +
+	"\x05image\x18\x04 \x01(\tR\x05image\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x05 \x01(\tR\tstartedAt\x12#\n" +
+	"\rrestart_count\x18\x06 \x01(\x05R\frestartCount\x12\x1b\n" +
+	"\texit_code\x18\a \x01(\x05R\bexitCode\x12\x19\n" +
+	"\blog_tail\x18\b \x03(\tR\alogTail\"\x15\n" +
 	"\x13ListProjectsRequest\",\n" +
 	"\x14ListProjectsResponse\x12\x14\n" +
 	"\x05names\x18\x01 \x03(\tR\x05names\"\x0f\n" +

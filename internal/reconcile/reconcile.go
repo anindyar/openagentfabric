@@ -292,6 +292,18 @@ func (s ProjectState) Healthy() bool {
 	return true
 }
 
+// ModelLogLines is how much of a model container's log Status asks for while
+// it is not healthy.
+const ModelLogLines = 150
+
+// ModelProjectPrefix names the compose project of a model deployment.
+const ModelProjectPrefix = "model-"
+
+// IsModelProject reports whether a project serves a model deployment.
+func IsModelProject(name string) bool {
+	return len(name) > len(ModelProjectPrefix) && name[:len(ModelProjectPrefix)] == ModelProjectPrefix
+}
+
 // Status reports every desired project plus any extra project an agent
 // still runs. An unreachable node is reported per project, not as an error.
 func Status(ctx context.Context, ns Nodes, desired []render.Project) []ProjectState {
@@ -314,7 +326,11 @@ func Status(ctx context.Context, ns Nodes, desired []render.Project) []ProjectSt
 		var states []ProjectState
 		for _, name := range names {
 			st := ProjectState{Node: n, Project: name}
-			resp, err := cl.ProjectStatus(ctx, &nodev1.ProjectStatusRequest{Name: name})
+			req := &nodev1.ProjectStatusRequest{Name: name}
+			if IsModelProject(name) {
+				req.LogLines = ModelLogLines // loading progress, crash errors
+			}
+			resp, err := cl.ProjectStatus(ctx, req)
 			if err != nil {
 				st.Err = err
 			} else {

@@ -127,7 +127,7 @@ func (s *Server) ApplyProject(ctx context.Context, req *nodev1.ApplyProjectReque
 	paths := changedPaths(current, req.GetFiles())
 	changed := len(paths) > 0
 	if req.GetDryRun() {
-		services, err := s.services(ctx, req.GetName())
+		services, err := s.services(ctx, req.GetName(), 0)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +142,7 @@ func (s *Server) ApplyProject(ctx context.Context, req *nodev1.ApplyProjectReque
 	if err := s.Compose.Up(ctx, req.GetName(), dir); err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, "compose up: "+err.Error())
 	}
-	services, err := s.services(ctx, req.GetName())
+	services, err := s.services(ctx, req.GetName(), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -177,21 +177,38 @@ func (s *Server) ProjectStatus(ctx context.Context, req *nodev1.ProjectStatusReq
 	}
 	_, err := os.Stat(filepath.Join(s.projectsDir(), req.GetName(), ComposeFile))
 	exists := err == nil
-	services, err := s.services(ctx, req.GetName())
+	services, err := s.services(ctx, req.GetName(), int(min(req.GetLogLines(), maxLogLines)))
 	if err != nil {
 		return nil, err
 	}
 	return &nodev1.ProjectStatusResponse{Exists: exists, Services: services}, nil
 }
 
-func (s *Server) services(ctx context.Context, name string) ([]*nodev1.Service, error) {
+// maxLogLines bounds what a status request can ask for.
+const maxLogLines = 400
+
+// services lists the project's containers; logLines > 0 adds the log tail of
+// each one that is not healthy yet. Start time, restarts and logs are best
+// effort: a container that just went away still lists.
+func (s *Server) services(ctx context.Context, name string, logLines int) ([]*nodev1.Service, error) {
 	states, err := s.Compose.PS(ctx, name)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeUnavailable, "compose ps: "+err.Error())
 	}
 	out := make([]*nodev1.Service, 0, len(states))
 	for _, st := range states {
-		out = append(out, &nodev1.Service{Name: st.Service, State: st.State, Health: st.Health, Image: st.Image})
+		sv := &nodev1.Service{Name: st.Service, State: st.State, Health: st.Health, Image: st.Image, ExitCode: int32(st.ExitCode)}
+		if st.Name != "" {
+			if at, n, err := s.Compose.Started(ctx, st.Name); err == nil {
+				sv.StartedAt, sv.RestartCount = at, int32(n)
+			}
+		}
+		if logLines > 0 && (st.State != "running" || st.Health != "" && st.Health != "healthy") {
+			if lines, err := s.Compose.Logs(ctx, name, st.Service, logLines); err == nil {
+				sv.LogTail = lines
+			}
+		}
+		out = append(out, sv)
 	}
 	return out, nil
 }

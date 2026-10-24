@@ -2,6 +2,7 @@ package oafd
 
 import (
 	"strings"
+	"time"
 
 	"openagentfabric.dev/oaf/internal/config"
 )
@@ -20,6 +21,15 @@ type StatusView struct {
 	LicensesNeeded []config.NeededAcceptance `json:"licenses_needed"`
 	Deployments    []DeploymentView          `json:"deployments"`
 	Components     []ComponentView           `json:"components"`
+	// Applying is the plan being applied now, if any.
+	Applying *ApplyingView `json:"applying,omitempty"`
+}
+
+// ApplyingView is the plan being applied.
+type ApplyingView struct {
+	PlanID  string    `json:"plan_id"`
+	Summary string    `json:"summary"`
+	Since   time.Time `json:"since"`
 }
 
 // GroupView is a placement group: the boxes a multi-node model runs across
@@ -93,6 +103,16 @@ type DeploymentView struct {
 	GPUMemoryUtilization float64       `json:"gpu_memory_utilization,omitempty"`
 	MaxModelLen          int           `json:"max_model_len,omitempty"`
 	Guardrails           []string      `json:"guardrails"`
+	// Phase is what the console shows (status only): queued | starting |
+	// loading | ready | failed | removing | disabled. Progress (0-100) and
+	// Detail follow a load; Error is a failure's cause; Since is when the
+	// model's container last started; Restarts counts its restarts.
+	Phase    string `json:"phase,omitempty"`
+	Progress int    `json:"progress,omitempty"`
+	Detail   string `json:"detail,omitempty"`
+	Error    string `json:"error,omitempty"`
+	Since    string `json:"since,omitempty"`
+	Restarts int    `json:"restarts,omitempty"`
 }
 
 // PlacementView is a node or a group.

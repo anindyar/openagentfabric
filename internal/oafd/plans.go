@@ -63,6 +63,8 @@ type Plan struct {
 	// nothing that runs, so it is rebuilt on the current cluster.yaml when
 	// that changed, and applies while another plan is being applied.
 	rebase func(cur []byte) ([]byte, error)
+	// applyStarted is when the plan started applying.
+	applyStarted time.Time
 }
 
 // Step is one line of an apply's progress.
@@ -293,7 +295,7 @@ func (s *Server) applyPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.Status = PlanApplying
-	s.applying = p.ID
+	s.applying, p.applyStarted = p.ID, s.cfg.Now()
 	s.mu.Unlock()
 	s.publish(Event{Plan: p.ID, Status: PlanApplying, Message: "applying: " + p.Summary})
 	s.cfg.Log.Info("applying plan", "plan", p.ID, "summary", p.Summary, "app", r.Header.Get("X-OAF-App"))

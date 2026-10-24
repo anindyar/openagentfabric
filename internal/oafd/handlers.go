@@ -61,6 +61,14 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
+	if sv, ok := v.(StatusView); ok {
+		s.mu.Lock()
+		if p := s.plans[s.applying]; p != nil {
+			sv.Applying = &ApplyingView{PlanID: p.ID, Summary: p.Summary, Since: p.applyStarted}
+		}
+		s.mu.Unlock()
+		v = sv
+	}
 	writeJSON(w, http.StatusOK, v)
 }
 

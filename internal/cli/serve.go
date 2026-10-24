@@ -242,9 +242,28 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 		v.Nodes = append(v.Nodes, nv)
 	}
 	cat := s.catalog
+	deployed := map[string]bool{}
 	for _, d := range s.cluster.Spec.Models {
-		dv := deploymentState(s.cluster, cat, d, byProject["model-"+d.Name])
+		dv := deploymentState(s.cluster, cat, d, byProject[reconcile.ModelProjectPrefix+d.Name])
 		v.Deployments = append(v.Deployments, dv)
+		deployed[reconcile.ModelProjectPrefix+d.Name] = true
+	}
+	// A model removed from cluster.yaml whose containers an apply has not
+	// taken down yet.
+	removing := map[string][]string{}
+	for _, st := range states {
+		if reconcile.IsModelProject(st.Project) && !deployed[st.Project] && st.Exists {
+			removing[st.Project] = append(removing[st.Project], st.Node)
+		}
+	}
+	gone := make([]string, 0, len(removing))
+	for p := range removing {
+		gone = append(gone, p)
+	}
+	sort.Strings(gone)
+	for _, p := range gone {
+		v.Deployments = append(v.Deployments, oafd.DeploymentView{Name: strings.TrimPrefix(p, reconcile.ModelProjectPrefix),
+			Nodes: removing[p], Guardrails: []string{}, State: PhaseRemoving, Phase: PhaseRemoving, Detail: "Stopping and removing its containers"})
 	}
 	for _, st := range states {
 		if strings.HasPrefix(st.Project, "model-") {
@@ -278,6 +297,11 @@ func deploymentState(c *config.Cluster, cat *config.Catalog, d config.ModelDeplo
 		if m.IsEmbedding() {
 			dv.Task = "embedding"
 		}
+	}
+	if d.IsEnabled() {
+		modelPhase(&dv, sts)
+	} else {
+		dv.Phase = PhaseDisabled
 	}
 	switch {
 	case !d.IsEnabled():
