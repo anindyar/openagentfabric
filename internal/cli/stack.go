@@ -123,6 +123,10 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 		return err
 	}
 	plan.Write(out)
+	// Desktop mode first: a headless box frees memory before models start.
+	if err := reconcile.Desktop(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
+		return err
+	}
 	if dryRun {
 		return nil
 	}

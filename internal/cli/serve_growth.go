@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	nodev1 "openagentfabric.dev/oaf/internal/gen/oaf/node/v1"
+	"openagentfabric.dev/oaf/internal/reconcile"
 	"os"
 	"path/filepath"
+	"time"
 
 	"openagentfabric.dev/oaf/bundle"
 	"openagentfabric.dev/oaf/internal/config"
@@ -114,13 +117,46 @@ func clusterNodes(ctx context.Context, f *stackFlags) []join.NodeView {
 		}
 		return out
 	}
+	cur, _ := config.LoadCluster(f.cluster)
+	desktops := nodeDesktops(ctx, f, cur)
 	for _, n := range v.Nodes {
 		nv := join.NodeView{Name: n.Name, Address: n.Address, Roles: n.Roles, State: n.State, Health: n.Health}
 		if n.Hardware != nil {
 			nv.Hardware = &join.HardwareView{GPU: n.Hardware.GPU, MemoryGiB: n.Hardware.MemoryGiB,
 				MemoryFreeGiB: n.Hardware.MemoryFreeGiB, DiskFreeGiB: n.Hardware.DiskFreeGiB, Serial: n.Hardware.Serial}
 		}
+		nv.Desktop = desktops[n.Name]
+		if cur != nil {
+			for _, cn := range cur.Spec.Nodes {
+				if cn.Name == n.Name {
+					nv.Headless = cn.Headless
+				}
+			}
+		}
 		out = append(out, nv)
+	}
+	return out
+}
+
+// nodeDesktops asks each node's agent for its desktop state (a few seconds at
+// most; an unreachable agent just has none).
+func nodeDesktops(ctx context.Context, f *stackFlags, c *config.Cluster) map[string]*join.DesktopView {
+	out := map[string]*join.DesktopView{}
+	if c == nil {
+		return out
+	}
+	ns, err := reconcile.Dial(c, f.pkiDir)
+	if err != nil {
+		return out
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	for name, cl := range ns {
+		resp, err := cl.Desktop(ctx, &nodev1.DesktopRequest{})
+		if err != nil {
+			continue
+		}
+		out[name] = &join.DesktopView{Mode: resp.GetMode(), DisplayManagerActive: resp.GetDisplayManagerActive(), EstimatedMiB: resp.GetEstimatedMib()}
 	}
 	return out
 }

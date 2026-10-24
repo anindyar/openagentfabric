@@ -19,6 +19,18 @@ type NodeView struct {
 	Ports     []PortView      `json:"ports,omitempty"`
 	Preflight []PreflightView `json:"preflight,omitempty"`
 	JoinedAt  int64           `json:"joined_at,omitempty"`
+	// Desktop is the local desktop GUI as the node's agent reports it.
+	Desktop *DesktopView `json:"desktop,omitempty"`
+	// Headless is the cluster.yaml setting: true, false or unset (nil).
+	Headless *bool `json:"headless,omitempty"`
+}
+
+// DesktopView is a node's desktop GUI. EstimatedMiB is the display stack's
+// resident memory (an estimate from /proc): roughly what headless frees.
+type DesktopView struct {
+	Mode                 string `json:"mode"` // graphical | headless
+	DisplayManagerActive bool   `json:"display_manager_active"`
+	EstimatedMiB         int64  `json:"estimated_mib"`
 }
 
 // HardwareView is the hardware summary.

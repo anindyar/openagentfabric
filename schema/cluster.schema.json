@@ -193,6 +193,10 @@
           "description": "Optional expected hardware serial. Preflight fails if the discovered serial differs. Entitlements bind to serials.",
           "type": "string"
         },
+        "headless": {
+          "description": "true: stop the local desktop GUI (display manager) and boot without it, so its memory goes to models (GB10 memory is unified). false: bring the desktop back. Unset: leave the box as it is. Applied by oaf apply; never reboots.",
+          "type": "boolean"
+        },
         "roles": {
           "description": "control: runs oafd (exactly one node). gateway: agentgateway + vSR. observability: Langfuse stack, Prometheus, Grafana (exactly one node in v1). inference: may host vLLM.",
           "type": "array",

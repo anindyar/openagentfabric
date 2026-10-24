@@ -39,6 +39,8 @@ type Server struct {
 	PreflightOptions preflight.Options
 	// Bench runs ib_write_bw for RailBandwidth; nil disables it.
 	Bench hostexec.Runner
+	// Host makes host changes (the desktop mode); nil disables them.
+	Host hostexec.Runner
 
 	mu sync.Mutex // serialises project changes
 }
@@ -238,4 +240,20 @@ func (s *Server) RailBandwidth(ctx context.Context, req *nodev1.RailBandwidthReq
 		return nil, connect.NewError(connect.CodeUnavailable, err.Error())
 	}
 	return &nodev1.RailBandwidthResponse{Gbps: gbps}, nil
+}
+
+// Desktop implements NodeService.
+func (s *Server) Desktop(ctx context.Context, req *nodev1.DesktopRequest) (*nodev1.DesktopResponse, error) {
+	var st DesktopState
+	var err error
+	if req.GetSet() {
+		st, err = SetDesktop(ctx, s.Inspect, s.Host, req.GetHeadless(), req.GetDryRun())
+	} else {
+		st, err = DesktopReport(ctx, s.Inspect)
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, "desktop: "+err.Error())
+	}
+	return &nodev1.DesktopResponse{Mode: st.Mode, DisplayManagerActive: st.DisplayManagerActive,
+		EstimatedMib: st.EstimatedMiB, Changed: st.Changed, Warnings: st.Warnings}, nil
 }

@@ -612,6 +612,7 @@ sudo oaf keys issue garrison --admin --host host.docker.internal
 | GET, POST · PUT, DELETE | `guardrails` · `guardrails/{name}` | policies (`{"template":"basic"}`, `attach: {providers, models}`) |
 | GET, PUT | `routing` | mode, defaults, rules |
 | GET, POST · POST | `keys` · `keys/{name}/rotate` | app keys (the new key is in that reply only) |
+| PUT | `nodes/{name}/headless` | `{"headless": true|false}`: run the box without its desktop GUI, or bring it back (a plan) |
 | GET · POST | `plans/{id}` · `plans/{id}/apply` | follow a plan; apply it (409 if cluster.yaml changed since) |
 | GET | `events` | server-sent events: plan progress |
 
@@ -759,6 +760,29 @@ Port 1 is used by default: port 0 is often already in use. A port that already c
    rail from 10.200.0.0/16, a group, the large model and its routing rule) is reviewed, then
    applied: fabric bring-up (MTU 9000, GID detection, `ib_write_bw` per rail), weights copied over
    the fabric, deploy, acceptance.
+
+## 8b. Headless boxes (no desktop GUI)
+
+DGX OS boots into the GNOME desktop. On GB10 the GPU memory is the system memory, so the desktop
+(gdm, Xorg, gnome-shell and the session's services) holds memory a model could use: about 1.8 GiB
+measured on a fresh DGX Spark with a user logged in, more with apps open. To give it back:
+
+```yaml
+  nodes:
+    - name: spark-2
+      address: 192.0.2.12
+      roles: [inference]
+      headless: true      # false brings the desktop back; unset leaves the box as it is
+```
+
+`oaf apply` then switches the box through its agent, before any model starts:
+`systemctl set-default multi-user.target` and `systemctl stop display-manager` (headless), or
+`graphical.target` and `start` (desktop). It never reboots, it is idempotent, and SSH, the node agent
+and the console are unaffected; only the local screen stops showing a desktop, and anyone logged in
+there loses their session (the apply warns). `GET /api/v1/nodes` shows each box's `desktop`
+(`mode`, `display_manager_active`, `estimated_mib`: the display stack's resident memory, an estimate
+from `/proc`, since `nvidia-smi` reports no per-process memory on unified memory). The Add boxes
+plan can set new boxes headless (`"headless": true` on `POST /api/v1/topology/plan`).
 
 ## 9. Troubleshooting
 

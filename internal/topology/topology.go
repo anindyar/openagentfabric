@@ -331,6 +331,8 @@ type Choice struct {
 	Name  string `json:"name,omitempty"`
 	// NoModel adds the boxes and the fabric only.
 	NoModel bool `json:"no_model,omitempty"`
+	// Headless runs the new boxes without their desktop GUI.
+	Headless bool `json:"headless,omitempty"`
 }
 
 // ruleName makes a valid rule name (a DNS label) from a served model name.
@@ -430,7 +432,12 @@ func Plan(data []byte, in Input, ch Choice) ([]byte, config.Report, error) {
 				addr = p.Address
 			}
 		}
-		if err := e.Append(config.Node{Name: name, Address: addr, Roles: []string{config.RoleInference}}, "nodes"); err != nil {
+		nn := config.Node{Name: name, Address: addr, Roles: []string{config.RoleInference}}
+		if ch.Headless {
+			yes := true
+			nn.Headless = &yes
+		}
+		if err := e.Append(nn, "nodes"); err != nil {
 			return nil, config.Report{}, err
 		}
 	}

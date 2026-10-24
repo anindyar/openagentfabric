@@ -265,3 +265,36 @@ func BasicGuardrail() GuardrailPolicy {
 		Message:  "Blocked by the appliance's guardrails: the request contains a credential or private key.",
 	}
 }
+
+// SetNodeHeadless sets spec.nodes[name].headless, keeping comments and order.
+func SetNodeHeadless(data []byte, name string, headless bool) ([]byte, bool, error) {
+	doc, spec, err := editDoc(data)
+	if err != nil {
+		return nil, false, err
+	}
+	list := mappingChild(spec, "nodes")
+	if list == nil || list.Kind != yaml.SequenceNode {
+		return nil, false, fmt.Errorf("no node %q", name)
+	}
+	want := "false"
+	if headless {
+		want = "true"
+	}
+	for _, it := range list.Content {
+		if c := mappingChild(it, "name"); c == nil || c.Value != name {
+			continue
+		}
+		v := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: want}
+		if cur := mappingChild(it, "headless"); cur != nil {
+			if cur.Value == want {
+				return data, false, nil
+			}
+			*cur = *v
+		} else {
+			it.Content = append(it.Content, scalar("headless"), v)
+		}
+		out, err := finishEdit(doc, "setting headless on "+name)
+		return out, err == nil, err
+	}
+	return nil, false, fmt.Errorf("no node %q", name)
+}

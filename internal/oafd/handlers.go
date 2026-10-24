@@ -23,6 +23,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/v1/models", s.addModel)
 	m.HandleFunc("DELETE /api/v1/models/{name}", s.removeModel)
 	m.HandleFunc("PUT /api/v1/models/{name}/guardrails", s.setModelGuardrails)
+	m.HandleFunc("PUT /api/v1/nodes/{name}/headless", s.setNodeHeadless)
 
 	m.HandleFunc("GET /api/v1/providers", s.listProviders)
 	m.HandleFunc("POST /api/v1/providers", s.putProvider)
@@ -660,4 +661,32 @@ func findModel(c *config.Cluster, name string) (config.ModelDeployment, bool) {
 		}
 	}
 	return config.ModelDeployment{}, false
+}
+
+// setNodeHeadless plans switching a node's desktop GUI off (headless) or on.
+func (s *Server) setNodeHeadless(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Headless *bool `json:"headless"`
+	}
+	if err := readJSON(r, &req); err != nil || req.Headless == nil {
+		writeErr(w, http.StatusBadRequest, "invalid request: want {\"headless\": true|false}")
+		return
+	}
+	name := r.PathValue("name")
+	data, err := os.ReadFile(s.cfg.ClusterPath)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	out, _, err := config.SetNodeHeadless(data, name, *req.Headless)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, err.Error())
+		return
+	}
+	summary := "Run " + name + " headless (stop its desktop GUI)"
+	if !*req.Headless {
+		summary = "Bring back the desktop GUI on " + name
+	}
+	p, code := s.offer(r, data, out, summary)
+	writeJSON(w, code, s.view(p))
 }

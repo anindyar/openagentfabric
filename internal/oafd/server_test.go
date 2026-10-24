@@ -330,3 +330,24 @@ func TestUnifiedDiff(t *testing.T) {
 		t.Fatal("no-change diff is not empty")
 	}
 }
+
+// A node's desktop mode is a plan like any other change.
+func TestNodeHeadlessPlan(t *testing.T) {
+	f := newFixture(t)
+	c, plan := f.do(t, "PUT", "/api/v1/nodes/spark-1/headless", map[string]any{"headless": true}, token)
+	if c != 201 || !strings.Contains(plan["diff"].(string), "headless: true") {
+		t.Fatalf("headless plan: %d %v", c, plan)
+	}
+	if !strings.Contains(plan["summary"].(string), "headless") {
+		t.Fatalf("summary: %v", plan["summary"])
+	}
+	if c, _ := f.do(t, "PUT", "/api/v1/nodes/nope/headless", map[string]any{"headless": true}, token); c != 404 {
+		t.Fatalf("unknown node: %d", c)
+	}
+	if c, _ := f.do(t, "PUT", "/api/v1/nodes/spark-1/headless", map[string]any{}, token); c != 400 {
+		t.Fatalf("missing headless: %d", c)
+	}
+	if c, _ := f.do(t, "PUT", "/api/v1/nodes/spark-1/headless", map[string]any{"headless": true}, ""); c != 401 {
+		t.Fatalf("no token: %d", c)
+	}
+}
