@@ -95,6 +95,10 @@
             ]
           }
         },
+        "companionOf": {
+          "description": "A fast single-node model offered only when the cluster runs a model of this class on a pair (think): the pair takes the heavy work and the single box serves a quick model.",
+          "enum": ["think"]
+        },
         "profiles": {
           "type": "array",
           "minItems": 1,

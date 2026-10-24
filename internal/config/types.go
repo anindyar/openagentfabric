@@ -420,6 +420,10 @@ type CatalogModel struct {
 	Entitlement *Entitlement `yaml:"entitlement,omitempty"`
 	SizeGiB     float64      `yaml:"sizeGiB"`
 	Classes     []string     `yaml:"classes"`
+	// CompanionOf: a fast single-node model offered only beside a pair that
+	// runs a model of this class (think): the pair takes the heavy work, so
+	// the single box serves a quick model instead of a middle-ground one.
+	CompanionOf string `yaml:"companionOf,omitempty"`
 	// EmbeddingDimensions is the vector size of an embedding-class model.
 	EmbeddingDimensions int           `yaml:"embeddingDimensions,omitempty"`
 	Profiles            []ServingProf `yaml:"profiles"`
@@ -427,6 +431,30 @@ type CatalogModel struct {
 
 // ClassEmbedding marks a model that serves /v1/embeddings, not chat.
 const ClassEmbedding = "embedding"
+
+// HasClass reports whether the model is in the routing class.
+func (m *CatalogModel) HasClass(class string) bool {
+	for _, c := range m.Classes {
+		if c == class {
+			return true
+		}
+	}
+	return false
+}
+
+// PairModel returns the first enabled deployment placed on a group (a pair)
+// whose catalog model is in the class, and that group.
+func (c *Cluster) PairModel(cat *Catalog, class string) (deployment, group string, ok bool) {
+	for _, d := range c.Spec.Models {
+		if !d.IsEnabled() || d.Placement.Group == "" {
+			continue
+		}
+		if m, found := cat.Lookup(d.CatalogRef); found && m.HasClass(class) {
+			return d.Name, d.Placement.Group, true
+		}
+	}
+	return "", "", false
+}
 
 // IsEmbedding reports whether the model serves embeddings.
 func (m *CatalogModel) IsEmbedding() bool {

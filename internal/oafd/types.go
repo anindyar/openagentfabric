@@ -122,6 +122,13 @@ type CatalogModelView struct {
 	Profiles      []ProfileView `json:"profiles"`
 	License       string        `json:"license,omitempty"`
 	HFRepo        string        `json:"hf_repo,omitempty"`
+	Classes       []string      `json:"classes,omitempty"`
+	// Offered is false for a companion model while no pair runs the model it
+	// accompanies; Recommended marks the companions once one does. Note says
+	// why, for the add-model form.
+	Offered     bool   `json:"offered"`
+	Recommended bool   `json:"recommended,omitempty"`
+	Note        string `json:"note,omitempty"`
 }
 
 // ProfileView is a serving profile.

@@ -91,9 +91,28 @@ func (s *Server) catalog(w http.ResponseWriter, _ *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// The cluster decides which companion models are offered; without a
+	// readable cluster.yaml every model is listed as before.
+	pairDep, pairGroup := "", ""
+	if data, err := os.ReadFile(s.cfg.ClusterPath); err == nil {
+		if c, err := config.ParseCluster(data); err == nil {
+			pairDep, pairGroup, _ = c.PairModel(cat, "think")
+		}
+	}
 	out := []CatalogModelView{}
 	for _, m := range cat.Models {
-		v := CatalogModelView{ID: m.ID, Name: m.DisplayName, MemoryGiB: m.SizeGiB, Profiles: []ProfileView{}}
+		v := CatalogModelView{ID: m.ID, Name: m.DisplayName, MemoryGiB: m.SizeGiB, Profiles: []ProfileView{},
+			Classes: append([]string{}, m.Classes...), Offered: true}
+		switch {
+		case m.CompanionOf != "" && pairDep == "":
+			v.Offered = false
+			v.Note = "Offered once a pair runs a large (" + m.CompanionOf + ") model"
+		case m.CompanionOf != "":
+			v.Recommended = true
+			v.Note = "Fast model for a single box while " + pairDep + " on " + pairGroup + " takes the heavy work"
+		case pairDep != "" && m.HasClass("fast") && m.HasClass("think"):
+			v.Note = "Middle ground for a box on its own; beside " + pairDep + " a companion model is faster"
+		}
 		v.Task = "chat"
 		if m.IsEmbedding() {
 			v.Task = "embedding"

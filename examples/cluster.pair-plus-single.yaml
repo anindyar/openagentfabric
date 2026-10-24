@@ -23,11 +23,11 @@ spec:
   groups:
     - { name: pair-1, nodes: [spark-2, spark-3] }
   models:
-    - name: fast
-      catalogRef: qwen3-30b-a3b-instruct-2507-fp8
+    - name: fast                 # a companion: the pair takes the heavy work
+      catalogRef: qwen3-coder-30b-a3b-instruct-fp8
       placement: { node: spark-1 }
-      gpuMemoryUtilization: 0.30
-      maxModelLen: 32768
+      gpuMemoryUtilization: 0.35
+      maxModelLen: 65536
     - name: glm-5.3-flash
       catalogRef: glm-5.3-flash-nvfp4
       profile: pair-tp2

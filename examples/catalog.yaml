@@ -158,6 +158,51 @@ models:
         # No commandPrefix: vLLM's published images start with `vllm serve`
         # (ENTRYPOINT), unlike the community GB10 build.
 
+  # Companions: quick models for the single box beside a pair that runs a
+  # large (think) model such as GLM-5.3-Flash. The pair takes the heavy work,
+  # so the single box serves one of these instead of a middle-ground model like
+  # Qwen3.8 Flash-Next; the add-model form offers them only in that layout.
+  - id: qwen3-coder-30b-a3b-instruct-fp8
+    displayName: Qwen3-Coder 30B-A3B Instruct (FP8)
+    source:
+      huggingface:
+        repo: Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+        revision: dcaee4d4dfc5ee71ad501f01f530e5652438fde0
+    license: { spdx: Apache-2.0, gated: false, redistributable: true }
+    sizeGiB: 29.1
+    classes: [fast, code]
+    companionOf: think
+    profiles:
+      - name: single
+        nodes: 1
+        tensorParallel: 1
+        gpuMemoryUtilization: 0.35
+        maxModelLen: 65536
+        args: [--enable-chunked-prefill, --enable-prefix-caching, --max-num-seqs, "16",
+               --tool-call-parser, qwen3_coder, --enable-auto-tool-choice]
+
+  # Ornith 1.5 35B-A3B (NVFP4): 3B active, so it is quick. The flags are the
+  # ones it ran with on a GB10 (a community vLLM build); the published build
+  # is not verified with it yet.
+  - id: ornith-1.5-35b-a3b-nvfp4
+    displayName: Ornith 1.5 35B-A3B (NVFP4)
+    source:
+      huggingface:
+        repo: ornith-ai/Ornith-1.5-35B-A3B-NVFP4
+        revision: 0f0b1b59b879ccde1353e6ebd0fb10c204d4c544
+    license: { spdx: MIT, gated: false, redistributable: true }
+    sizeGiB: 21.8
+    classes: [fast]
+    companionOf: think
+    profiles:
+      - name: single
+        nodes: 1
+        tensorParallel: 1
+        gpuMemoryUtilization: 0.35
+        maxModelLen: 32768
+        args: [--trust-remote-code, --enable-chunked-prefill, --max-num-seqs, "16",
+               --tool-call-parser, qwen3_xml, --enable-auto-tool-choice]
+
   # Embeddings for the appliance's apps (vclocal memory search), served through
   # the gateway like every other model. Small: about 6.5 GiB on a GB10 in all,
   # nearly all of it vLLM's own overhead; the weights are 2.2 GiB.
