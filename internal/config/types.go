@@ -158,6 +158,7 @@ type ModelDeployment struct {
 	GPUMemoryUtilization float64           `yaml:"gpuMemoryUtilization"`
 	MaxModelLen          int               `yaml:"maxModelLen,omitempty"`
 	Port                 int               `yaml:"port,omitempty"`
+	Guardrails           []string          `yaml:"guardrails,omitempty"`
 	Args                 []string          `yaml:"args,omitempty"`
 	Env                  map[string]string `yaml:"env,omitempty"`
 }
@@ -179,12 +180,89 @@ const (
 
 // Routing is the OAF routing abstraction rendered into agentgateway and vSR.
 type Routing struct {
-	Mode     string          `yaml:"mode,omitempty"`
-	Gateway  *Gateway        `yaml:"gateway,omitempty"`
-	Keys     []APIKey        `yaml:"keys,omitempty"`
-	Defaults RoutingDefaults `yaml:"defaults,omitempty"`
-	Rules    []RoutingRule   `yaml:"rules,omitempty"`
+	Mode       string            `yaml:"mode,omitempty"`
+	Gateway    *Gateway          `yaml:"gateway,omitempty"`
+	Keys       []APIKey          `yaml:"keys,omitempty"`
+	Defaults   RoutingDefaults   `yaml:"defaults,omitempty"`
+	Rules      []RoutingRule     `yaml:"rules,omitempty"`
+	Providers  []Provider        `yaml:"providers,omitempty"`
+	Guardrails []GuardrailPolicy `yaml:"guardrails,omitempty"`
 }
+
+// Provider types (spec.routing.providers[].type).
+const (
+	ProviderOpenAI           = "openai"
+	ProviderAnthropic        = "anthropic"
+	ProviderGemini           = "gemini"
+	ProviderAzureOpenAI      = "azure-openai"
+	ProviderOpenAICompatible = "openai-compatible"
+)
+
+// Provider is an external model provider whose models the gateway serves
+// next to the local ones. Prompts sent to it leave the appliance.
+type Provider struct {
+	Name        string          `yaml:"name"`
+	Type        string          `yaml:"type"`
+	Endpoint    string          `yaml:"endpoint,omitempty"`
+	Azure       *AzureSettings  `yaml:"azure,omitempty"`
+	SecretRef   string          `yaml:"secretRef,omitempty"`
+	AllowEgress bool            `yaml:"allowEgress,omitempty"`
+	Guardrails  []string        `yaml:"guardrails,omitempty"`
+	Models      []ProviderModel `yaml:"models"`
+}
+
+// AzureSettings name an Azure OpenAI resource.
+type AzureSettings struct {
+	ResourceName string `yaml:"resourceName"`
+	APIVersion   string `yaml:"apiVersion,omitempty"`
+}
+
+// ProviderModel is one model a provider serves: the name clients send and
+// the provider's own id.
+type ProviderModel struct {
+	Name     string `yaml:"name"`
+	Upstream string `yaml:"upstream,omitempty"`
+}
+
+// UpstreamModel is the provider's id for m (its name when unset).
+func (m ProviderModel) UpstreamModel() string {
+	if m.Upstream != "" {
+		return m.Upstream
+	}
+	return m.Name
+}
+
+// GuardrailPolicy is a named set of agentgateway prompt guards, attached to
+// providers and model deployments.
+type GuardrailPolicy struct {
+	Name        string  `yaml:"name"`
+	Description string  `yaml:"description,omitempty"`
+	Request     []Guard `yaml:"request,omitempty"`
+	Response    []Guard `yaml:"response,omitempty"`
+	Message     string  `yaml:"message,omitempty"`
+}
+
+// Guard is one check: exactly one of its fields is set.
+type Guard struct {
+	Regex   *RegexGuard   `yaml:"regex,omitempty"`
+	Webhook *WebhookGuard `yaml:"webhook,omitempty"`
+}
+
+// RegexGuard matches built-in detectors and custom patterns.
+type RegexGuard struct {
+	Action   string   `yaml:"action"` // reject | mask | audit
+	Builtins []string `yaml:"builtins,omitempty"`
+	Patterns []string `yaml:"patterns,omitempty"`
+}
+
+// WebhookGuard asks an external guardrail service.
+type WebhookGuard struct {
+	Host string `yaml:"host"`
+}
+
+// GuardrailBuiltins are the built-in detectors of the pinned agentgateway
+// (v1.6.0 llm.models[].guardrails regex builtin enum).
+var GuardrailBuiltins = []string{"ssn", "creditCard", "phoneNumber", "email", "caSin"}
 
 // Gateway listener settings.
 type Gateway struct {

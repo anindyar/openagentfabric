@@ -473,6 +473,13 @@
         },
         "env": {
           "$ref": "#/$defs/stringMap"
+        },
+        "guardrails": {
+          "description": "Guardrail policies (spec.routing.guardrails) applied to this model's requests and responses.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
         }
       }
     },
@@ -567,6 +574,22 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/routingRule"
+          },
+          "default": []
+        },
+        "providers": {
+          "description": "External model providers (OpenAI, Anthropic, Gemini, Azure OpenAI, or any OpenAI-compatible endpoint). Their models are served by name next to the local ones. Prompts sent to them leave the appliance: each provider must set allowEgress, and one without a guardrail policy is warned about on every plan.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/provider"
+          },
+          "default": []
+        },
+        "guardrails": {
+          "description": "Named guardrail policies (agentgateway prompt guards), attached to providers and model deployments by name.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/guardrailPolicy"
           },
           "default": []
         }
@@ -734,11 +757,22 @@
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["name", "url"],
+                "required": [
+                  "name",
+                  "url"
+                ],
                 "properties": {
-                  "name": { "$ref": "#/$defs/name" },
-                  "url": { "type": "string", "pattern": "^https?://[^/]+(/.*)?$" },
-                  "insecureSkipVerify": { "type": "boolean", "default": false }
+                  "name": {
+                    "$ref": "#/$defs/name"
+                  },
+                  "url": {
+                    "type": "string",
+                    "pattern": "^https?://[^/]+(/.*)?$"
+                  },
+                  "insecureSkipVerify": {
+                    "type": "boolean",
+                    "default": false
+                  }
                 }
               }
             }
@@ -838,6 +872,186 @@
         "acceptedAt": {
           "type": "string",
           "format": "date-time"
+        }
+      }
+    },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type",
+        "models"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "type": {
+          "enum": [
+            "openai",
+            "anthropic",
+            "gemini",
+            "azure-openai",
+            "openai-compatible"
+          ]
+        },
+        "endpoint": {
+          "description": "Base URL. Required for openai-compatible; optional for openai (a proxy or regional endpoint). Not used for azure-openai (see azure).",
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        },
+        "azure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "resourceName"
+          ],
+          "properties": {
+            "resourceName": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]{1,64}$"
+            },
+            "apiVersion": {
+              "type": "string",
+              "pattern": "^[0-9A-Za-z.-]{1,32}$"
+            }
+          }
+        },
+        "secretRef": {
+          "description": "Secret holding the provider's API key. Never generated: set it through the API or `oaf secrets set`. Optional only for openai-compatible endpoints without a key.",
+          "$ref": "#/$defs/secretRef"
+        },
+        "allowEgress": {
+          "description": "Must be true: an explicit acknowledgement that prompts sent to this provider leave the appliance.",
+          "type": "boolean",
+          "default": false
+        },
+        "guardrails": {
+          "description": "Guardrail policies (spec.routing.guardrails) applied to every model of this provider.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
+        },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "description": "Served name clients send as `model`.",
+                "$ref": "#/$defs/servedModelName"
+              },
+              "upstream": {
+                "description": "The provider's model id. Defaults to name.",
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            }
+          }
+        }
+      }
+    },
+    "guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "regex": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "action"
+          ],
+          "properties": {
+            "action": {
+              "description": "reject: refuse the request (or response); mask: redact matches; audit: record only.",
+              "enum": [
+                "reject",
+                "mask",
+                "audit"
+              ]
+            },
+            "builtins": {
+              "description": "Built-in detectors of the pinned agentgateway.",
+              "type": "array",
+              "items": {
+                "enum": [
+                  "ssn",
+                  "creditCard",
+                  "phoneNumber",
+                  "email",
+                  "caSin"
+                ]
+              }
+            },
+            "patterns": {
+              "description": "Custom regular expressions.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              }
+            }
+          }
+        },
+        "webhook": {
+          "description": "Ask an external guardrail service (agentgateway webhook guard).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host"
+          ],
+          "properties": {
+            "host": {
+              "description": "host:port, or an https:// URL for TLS.",
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          }
+        }
+      }
+    },
+    "guardrailPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "request": {
+          "description": "Guards on prompts before they reach the model.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/guard"
+          }
+        },
+        "response": {
+          "description": "Guards on model responses before they reach the client.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/guard"
+          }
+        },
+        "message": {
+          "description": "Text returned (HTTP 403) when a guard rejects.",
+          "type": "string",
+          "maxLength": 500
         }
       }
     }

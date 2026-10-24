@@ -80,6 +80,33 @@ func (r *renderer) gateway(n config.Node) (Project, error) {
 		}
 		containerEnv["VLLM_API_KEY"] = env.ref("VLLM_API_KEY", key)
 	}
+	// Guardrails on local deployments; "auto" carries the fast model's.
+	byName := map[string][]string{}
+	for _, d := range r.Cluster.Spec.Models {
+		if d.IsEnabled() && len(d.Guardrails) > 0 {
+			byName[d.Name] = d.Guardrails
+		}
+	}
+	for _, m := range models {
+		name, _ := m["name"].(string)
+		policies := byName[name]
+		if name == AutoModel {
+			served, _ := m["params"].(map[string]any)["model"].(string)
+			policies = byName[served]
+		}
+		g, err := r.guardrailsFor(policies)
+		if err != nil {
+			return p, fmt.Errorf("model %s: %w", name, err)
+		}
+		if g != nil {
+			m["guardrails"] = g
+		}
+	}
+	external, err := r.providerModels(env, containerEnv)
+	if err != nil {
+		return p, err
+	}
+	models = append(models, external...)
 	llm["models"] = models
 	cfg["llm"] = llm
 
