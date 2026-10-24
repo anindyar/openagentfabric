@@ -120,11 +120,21 @@ func nodePhase(st reconcile.ProjectState, dl *oafd.DownloadView) oafd.Deployment
 		if prev := sv.GetLogTail()[:len(sv.GetLogTail())-len(run)]; len(prev) > 0 {
 			if e := failure(st.Node, prev); e != "" {
 				p.Error = "The previous start failed: " + e
+				// Failing again and again: it will not come up by itself.
+				if p.Restarts >= crashLoopRestarts {
+					p.Phase = PhaseFailed
+					p.Error = fmt.Sprintf("Keeps failing (restarted %d×): %s", p.Restarts, e)
+					p.Detail = "Retrying: " + strings.ToLower(p.Detail[:1]) + p.Detail[1:]
+				}
 			}
 		}
 	}
 	return p
 }
+
+// crashLoopRestarts is when a model that failed its last start counts as
+// failed, not loading: it keeps retrying, but will not come up by itself.
+const crashLoopRestarts = 3
 
 // currentRun is the log after the last run start.
 func currentRun(lines []string) []string {
