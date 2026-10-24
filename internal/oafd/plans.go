@@ -59,6 +59,10 @@ type Plan struct {
 
 	baseHash string
 	doc      []byte
+	// rebase marks a record-only plan (licence acceptances): it changes
+	// nothing that runs, so it is rebuilt on the current cluster.yaml when
+	// that changed, and applies while another plan is being applied.
+	rebase func(cur []byte) ([]byte, error)
 }
 
 // Step is one line of an apply's progress.
@@ -229,7 +233,7 @@ func (s *Server) applyPlan(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		writeErr(w, http.StatusConflict, "the plan is "+st)
 		return
-	case s.applying != "":
+	case s.applying != "" && p.rebase == nil:
 		s.mu.Unlock()
 		writeErr(w, http.StatusConflict, "another plan is being applied: "+s.applying)
 		return
@@ -239,6 +243,15 @@ func (s *Server) applyPlan(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if hashOf(cur) != p.baseHash && p.rebase != nil {
+		doc, err := p.rebase(cur)
+		if err != nil {
+			s.mu.Unlock()
+			writeErr(w, http.StatusConflict, "cluster.yaml changed and the plan could not be rebuilt on it: "+err.Error())
+			return
+		}
+		p.doc, p.baseHash = doc, hashOf(cur)
 	}
 	if hashOf(cur) != p.baseHash {
 		p.Status = PlanExpired
@@ -258,9 +271,25 @@ func (s *Server) applyPlan(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// A record-only plan reconciles only when something already deployed was
+	// waiting on it, and never while another apply runs (that one, or the
+	// next, deploys it).
+	waiting := p.rebase == nil || s.waitingOnLicences(cur)
 	if err := config.WriteFileAtomic(s.cfg.ClusterPath, p.doc); err != nil {
 		s.mu.Unlock()
 		writeErr(w, http.StatusInternalServerError, "writing cluster.yaml: "+err.Error())
+		return
+	}
+	if p.rebase != nil && (!waiting || s.applying != "") {
+		p.Status, p.Applied, p.doc = PlanApplied, s.cfg.Now(), nil
+		if waiting {
+			p.Log = append(p.Log, "recorded; what waited on these licences deploys when "+s.applying+" finishes or with the next apply")
+		}
+		s.mu.Unlock()
+		s.persist()
+		s.publish(Event{Plan: p.ID, Status: PlanApplied, Message: "applied: " + p.Summary})
+		s.cfg.Log.Info("plan recorded", "plan", p.ID, "summary", p.Summary, "app", r.Header.Get("X-OAF-App"))
+		writeJSON(w, http.StatusOK, s.view(p))
 		return
 	}
 	p.Status = PlanApplying
@@ -306,6 +335,20 @@ func (s *Server) runApply(p *Plan) {
 	}
 	s.publish(Event{Plan: p.ID, Status: st, Message: msg})
 	s.cfg.Log.Info("plan finished", "plan", p.ID, "status", st)
+}
+
+// waitingOnLicences reports whether the cluster in cur deploys something whose
+// licence nobody accepted yet (accepting it must then reconcile).
+func (s *Server) waitingOnLicences(cur []byte) bool {
+	c, err := config.ParseCluster(cur)
+	if err != nil || s.cfg.Versions == nil {
+		return true
+	}
+	cat, err := config.LoadCatalog(s.cfg.CatalogPath)
+	if err != nil {
+		return true
+	}
+	return len(config.NeededAcceptances(c, cat, s.cfg.Versions)) > 0
 }
 
 // lineWriter splits writes into lines.
