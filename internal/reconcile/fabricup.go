@@ -34,18 +34,21 @@ type railPlan struct {
 	bAddr      netip.Prefix
 }
 
-// endHosts are the addresses of a link's two ends in one /30: the first and
-// second host.
+// endHosts are the addresses of a link's two ends in one subnet: the first
+// and second host (on a /31, RFC 3021, its two addresses).
 func endHosts(subnet string) (netip.Prefix, netip.Prefix, error) {
 	p, err := netip.ParsePrefix(subnet)
 	if err != nil {
 		return netip.Prefix{}, netip.Prefix{}, fmt.Errorf("fabric subnet %q: %w", subnet, err)
 	}
 	p = p.Masked()
-	if !p.Addr().Is4() || p.Bits() > 30 {
+	if !p.Addr().Is4() || p.Bits() > 31 {
 		return netip.Prefix{}, netip.Prefix{}, fmt.Errorf("fabric subnet %q must be IPv4 with room for two hosts", subnet)
 	}
-	a := p.Addr().Next()
+	a := p.Addr()
+	if p.Bits() < 31 {
+		a = a.Next()
+	}
 	b := a.Next()
 	return netip.PrefixFrom(a, p.Bits()), netip.PrefixFrom(b, p.Bits()), nil
 }

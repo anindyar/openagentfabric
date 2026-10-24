@@ -271,3 +271,21 @@ func TestProbeCabling(t *testing.T) {
 		t.Fatalf("crossed cable: %+v %v", cables, err)
 	}
 }
+
+func TestEndHosts(t *testing.T) {
+	for subnet, want := range map[string]string{
+		"10.200.0.0/30": "10.200.0.1/30 10.200.0.2/30",
+		"10.200.0.8/31": "10.200.0.8/31 10.200.0.9/31",
+		"10.200.0.4/24": "10.200.0.1/24 10.200.0.2/24",
+	} {
+		a, b, err := endHosts(subnet)
+		if err != nil || a.String()+" "+b.String() != want {
+			t.Errorf("%s: %s %s %v, want %s", subnet, a, b, err, want)
+		}
+	}
+	for _, bad := range []string{"10.200.0.1/32", "fd00::/64", "nope"} {
+		if _, _, err := endHosts(bad); err == nil {
+			t.Errorf("%s: no error", bad)
+		}
+	}
+}

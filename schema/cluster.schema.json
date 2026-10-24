@@ -361,7 +361,7 @@
           "$ref": "#/$defs/linkEnd"
         },
         "subnets": {
-          "description": "Point-to-point subnets (/30 or /31) for rail 0 and rail 1, i.e. the port's two PCIe halves. Allocated automatically if omitted.",
+          "description": "Point-to-point subnets (/30 or /31) for rail 0 and rail 1, i.e. the port's two PCIe halves; end A takes the first host, end B the second. The topology planner fills them in. With subnets, `oaf apply` addresses the rails (netplan); without, the rails are addressed outside OAF and only checked.",
           "type": "array",
           "minItems": 2,
           "maxItems": 2,
