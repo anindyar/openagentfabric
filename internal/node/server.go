@@ -21,6 +21,7 @@ import (
 	nodev1 "openagentfabric.dev/oaf/internal/gen/oaf/node/v1"
 	"openagentfabric.dev/oaf/internal/gen/oaf/node/v1/nodev1connect"
 	"openagentfabric.dev/oaf/internal/hostexec"
+	"openagentfabric.dev/oaf/internal/join"
 	"openagentfabric.dev/oaf/internal/preflight"
 	"openagentfabric.dev/oaf/internal/version"
 )
@@ -43,6 +44,10 @@ type Server struct {
 	Host hostexec.Runner
 
 	mu sync.Mutex // serialises project changes
+
+	hwMu sync.Mutex
+	hw   join.Hardware
+	hwAt time.Time
 }
 
 var _ nodev1connect.NodeServiceHandler = (*Server)(nil)
@@ -50,9 +55,31 @@ var _ nodev1connect.NodeServiceHandler = (*Server)(nil)
 func (s *Server) projectsDir() string { return filepath.Join(s.StateDir, "projects") }
 
 // Info implements NodeService.
-func (s *Server) Info(context.Context, *nodev1.InfoRequest) (*nodev1.InfoResponse, error) {
+func (s *Server) Info(ctx context.Context, _ *nodev1.InfoRequest) (*nodev1.InfoResponse, error) {
 	host, _ := os.Hostname()
-	return &nodev1.InfoResponse{Hostname: host, Version: version.Version, Arch: runtime.GOARCH}, nil
+	resp := &nodev1.InfoResponse{Hostname: host, Version: version.Version, Arch: runtime.GOARCH}
+	if s.Inspect != nil {
+		h := s.hardware(ctx)
+		resp.Gpu, resp.Serial = h.GPU, h.Serial
+		resp.MemTotalGib, resp.MemAvailableGib = h.MemTotalGiB, h.MemAvailableGiB
+		resp.DiskFreeGib, resp.DiskTotalGib = h.DiskFreeGiB, h.DiskTotalGiB
+	}
+	return resp, nil
+}
+
+// hardware is join.Basics, cached for 30 s: the console polls Info.
+func (s *Server) hardware(ctx context.Context) join.Hardware {
+	s.hwMu.Lock()
+	defer s.hwMu.Unlock()
+	if time.Since(s.hwAt) < 30*time.Second {
+		return s.hw
+	}
+	path := s.PreflightOptions.DataPath
+	if path == "" {
+		path = "/var/lib/oaf"
+	}
+	s.hw, s.hwAt = join.Basics(ctx, s.Inspect, path), time.Now()
+	return s.hw
 }
 
 // Preflight implements NodeService.

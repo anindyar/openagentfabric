@@ -60,10 +60,18 @@ func (*InfoRequest) Descriptor() ([]byte, []int) {
 }
 
 type InfoResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Hostname      string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	Version       string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
-	Arch          string                 `protobuf:"bytes,3,opt,name=arch,proto3" json:"arch,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Hostname string                 `protobuf:"bytes,1,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	Version  string                 `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Arch     string                 `protobuf:"bytes,3,opt,name=arch,proto3" json:"arch,omitempty"`
+	// Hardware, from read-only reads (cached briefly by the agent).
+	Gpu             string  `protobuf:"bytes,4,opt,name=gpu,proto3" json:"gpu,omitempty"`
+	Serial          string  `protobuf:"bytes,5,opt,name=serial,proto3" json:"serial,omitempty"`
+	MemTotalGib     float64 `protobuf:"fixed64,6,opt,name=mem_total_gib,json=memTotalGib,proto3" json:"mem_total_gib,omitempty"`
+	MemAvailableGib float64 `protobuf:"fixed64,7,opt,name=mem_available_gib,json=memAvailableGib,proto3" json:"mem_available_gib,omitempty"`
+	// Free and total space where OAF keeps models and data.
+	DiskFreeGib   float64 `protobuf:"fixed64,8,opt,name=disk_free_gib,json=diskFreeGib,proto3" json:"disk_free_gib,omitempty"`
+	DiskTotalGib  float64 `protobuf:"fixed64,9,opt,name=disk_total_gib,json=diskTotalGib,proto3" json:"disk_total_gib,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -117,6 +125,48 @@ func (x *InfoResponse) GetArch() string {
 		return x.Arch
 	}
 	return ""
+}
+
+func (x *InfoResponse) GetGpu() string {
+	if x != nil {
+		return x.Gpu
+	}
+	return ""
+}
+
+func (x *InfoResponse) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+func (x *InfoResponse) GetMemTotalGib() float64 {
+	if x != nil {
+		return x.MemTotalGib
+	}
+	return 0
+}
+
+func (x *InfoResponse) GetMemAvailableGib() float64 {
+	if x != nil {
+		return x.MemAvailableGib
+	}
+	return 0
+}
+
+func (x *InfoResponse) GetDiskFreeGib() float64 {
+	if x != nil {
+		return x.DiskFreeGib
+	}
+	return 0
+}
+
+func (x *InfoResponse) GetDiskTotalGib() float64 {
+	if x != nil {
+		return x.DiskTotalGib
+	}
+	return 0
 }
 
 type PreflightRequest struct {
@@ -1394,11 +1444,17 @@ var File_oaf_node_v1_node_proto protoreflect.FileDescriptor
 const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\n" +
 	"\x16oaf/node/v1/node.proto\x12\voaf.node.v1\"\r\n" +
-	"\vInfoRequest\"X\n" +
+	"\vInfoRequest\"\x9c\x02\n" +
 	"\fInfoResponse\x12\x1a\n" +
 	"\bhostname\x18\x01 \x01(\tR\bhostname\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x12\n" +
-	"\x04arch\x18\x03 \x01(\tR\x04arch\"/\n" +
+	"\x04arch\x18\x03 \x01(\tR\x04arch\x12\x10\n" +
+	"\x03gpu\x18\x04 \x01(\tR\x03gpu\x12\x16\n" +
+	"\x06serial\x18\x05 \x01(\tR\x06serial\x12\"\n" +
+	"\rmem_total_gib\x18\x06 \x01(\x01R\vmemTotalGib\x12*\n" +
+	"\x11mem_available_gib\x18\a \x01(\x01R\x0fmemAvailableGib\x12\"\n" +
+	"\rdisk_free_gib\x18\b \x01(\x01R\vdiskFreeGib\x12$\n" +
+	"\x0edisk_total_gib\x18\t \x01(\x01R\fdiskTotalGib\"/\n" +
 	"\x10PreflightRequest\x12\x1b\n" +
 	"\tdata_path\x18\x01 \x01(\tR\bdataPath\"q\n" +
 	"\x11PreflightResponse\x12\x12\n" +

@@ -217,7 +217,12 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 			cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			if info, err := cl.Info(cctx, &nodev1.InfoRequest{}); err == nil {
 				nv.State, nv.Version = "joined", info.GetVersion()
-				nv.Hardware = &oafd.HardwareView{Arch: info.GetArch(), Serial: n.Serial}
+				serial := info.GetSerial()
+				if serial == "" {
+					serial = n.Serial
+				}
+				nv.Hardware = &oafd.HardwareView{Arch: info.GetArch(), Serial: serial, GPU: info.GetGpu(),
+					MemoryGiB: info.GetMemTotalGib(), MemoryFreeGiB: info.GetMemAvailableGib(), DiskFreeGiB: info.GetDiskFreeGib()}
 				nv.Health = "healthy"
 				if nodeBad[n.Name] {
 					nv.Health = "degraded"

@@ -58,6 +58,9 @@ type Service struct {
 	// Nodes lists the nodes in cluster.yaml with their state, for GET
 	// /api/v1/nodes (oafd fills it from the cluster and its agents).
 	Nodes func(ctx context.Context) []NodeView
+	// Desktop asks a box that joined but is not in cluster.yaml yet for its
+	// desktop state (optional).
+	Desktop func(ctx context.Context, name, address string) *DesktopView
 }
 
 // Event is one progress event for the UI. Type is join, preflight, link or
@@ -454,7 +457,11 @@ func (s *Service) listNodes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, p := range pend {
-		out = append(out, PendingView(p))
+		v := PendingView(p)
+		if s.Desktop != nil {
+			v.Desktop = s.Desktop(r.Context(), p.Name, v.Address)
+		}
+		out = append(out, v)
 	}
 	if out == nil {
 		out = []NodeView{}

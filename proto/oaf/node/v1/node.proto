@@ -35,6 +35,14 @@ message InfoResponse {
   string hostname = 1;
   string version = 2;
   string arch = 3;
+  // Hardware, from read-only reads (cached briefly by the agent).
+  string gpu = 4;
+  string serial = 5;
+  double mem_total_gib = 6;
+  double mem_available_gib = 7;
+  // Free and total space where OAF keeps models and data.
+  double disk_free_gib = 8;
+  double disk_total_gib = 9;
 }
 
 message PreflightRequest {

@@ -65,27 +65,8 @@ func (h Hardware) FreePorts() []int {
 func Collect(ctx context.Context, r hostexec.Runner, opts preflight.Options) Hardware {
 	ro := hostexec.ReadOnly{Inner: r}
 	rep := preflight.Run(ctx, r, opts)
-	h := Hardware{Hostname: rep.Host, DataPath: opts.DataPath, Ports: rep.Ports, Preflight: rep.Results, Worst: rep.Worst()}
-	if out, err := ro.Run(ctx, "uname", "-m"); err == nil {
-		h.Arch = strings.TrimSpace(string(out))
-	}
-	if out, err := ro.Run(ctx, "uname", "-r"); err == nil {
-		h.Kernel = strings.TrimSpace(string(out))
-	}
-	if out, err := ro.Run(ctx, "nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"); err == nil {
-		name, drv, _ := strings.Cut(strings.TrimSpace(string(out)), ",")
-		h.GPU, h.Driver = strings.TrimSpace(name), strings.TrimSpace(drv)
-	}
-	if out, err := ro.Run(ctx, "cat", "/sys/class/dmi/id/product_serial"); err == nil {
-		h.Serial = strings.TrimSpace(string(out))
-	}
-	if out, err := ro.Run(ctx, "cat", "/proc/meminfo"); err == nil {
-		kb := meminfo(string(out))
-		h.MemTotalGiB, h.MemAvailableGiB = round1(kb["MemTotal"]/(1<<20)), round1(kb["MemAvailable"]/(1<<20))
-	}
-	if opts.DataPath != "" {
-		h.DiskFreeGiB, h.DiskTotalGiB = disk(ctx, ro, opts.DataPath)
-	}
+	h := Basics(ctx, r, opts.DataPath)
+	h.Hostname, h.Ports, h.Preflight, h.Worst = rep.Host, rep.Ports, rep.Results, rep.Worst()
 	fabricDev := map[string]bool{}
 	for _, p := range h.Ports {
 		for _, nd := range p.Halves {
@@ -104,6 +85,34 @@ func Collect(ctx context.Context, r hostexec.Runner, opts preflight.Options) Har
 				}
 			}
 		}
+	}
+	return h
+}
+
+// Basics is the cheap part of Collect (no preflight): architecture, GPU,
+// serial, memory and disk. The node agent reports it on every Info.
+func Basics(ctx context.Context, r hostexec.Runner, dataPath string) Hardware {
+	ro := hostexec.ReadOnly{Inner: r}
+	h := Hardware{DataPath: dataPath}
+	if out, err := ro.Run(ctx, "uname", "-m"); err == nil {
+		h.Arch = strings.TrimSpace(string(out))
+	}
+	if out, err := ro.Run(ctx, "uname", "-r"); err == nil {
+		h.Kernel = strings.TrimSpace(string(out))
+	}
+	if out, err := ro.Run(ctx, "nvidia-smi", "--query-gpu=name,driver_version", "--format=csv,noheader"); err == nil {
+		name, drv, _ := strings.Cut(strings.TrimSpace(string(out)), ",")
+		h.GPU, h.Driver = strings.TrimSpace(name), strings.TrimSpace(drv)
+	}
+	if out, err := ro.Run(ctx, "cat", "/sys/class/dmi/id/product_serial"); err == nil {
+		h.Serial = strings.TrimSpace(string(out))
+	}
+	if out, err := ro.Run(ctx, "cat", "/proc/meminfo"); err == nil {
+		kb := meminfo(string(out))
+		h.MemTotalGiB, h.MemAvailableGiB = round1(kb["MemTotal"]/(1<<20)), round1(kb["MemAvailable"]/(1<<20))
+	}
+	if dataPath != "" {
+		h.DiskFreeGiB, h.DiskTotalGiB = disk(ctx, ro, dataPath)
 	}
 	return h
 }

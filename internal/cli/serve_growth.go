@@ -73,6 +73,11 @@ func mountGrowth(srv *oafd.Server, f *stackFlags, c *config.Cluster, stateDir st
 		},
 		Emit:  func(e join.Event) { srv.Publish(e.Type, e.Status, e.Message) },
 		Nodes: func(ctx context.Context) []join.NodeView { return clusterNodes(ctx, f) },
+		Desktop: func(ctx context.Context, name, address string) *join.DesktopView {
+			// A one-node cluster with just this box, to reach its agent.
+			one := &config.Cluster{Spec: config.ClusterSpec{Nodes: []config.Node{{Name: name, Address: address}}}}
+			return nodeDesktops(ctx, f, one)[name]
+		},
 	}
 	for p, h := range svc.PublicRoutes() {
 		srv.HandlePublic(p, h)
