@@ -24,7 +24,7 @@ import (
 func TestTokens(t *testing.T) {
 	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
 	s := &TokenStore{Path: filepath.Join(t.TempDir(), "join", "tokens.json"), Now: func() time.Time { return now }}
-	clear, tok, err := s.Create("rack 2", 0)
+	clear, tok, err := s.Create("rack 2", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,13 +50,23 @@ func TestTokens(t *testing.T) {
 	if _, err := s.Consume(clear, "spark-3"); !errors.Is(err, ErrTokenUsed) {
 		t.Fatalf("second use: %v", err)
 	}
-	c2, _, _ := s.Create("", 10*time.Minute)
+	c2, _, _ := s.Create("", 10*time.Minute, 1)
 	now = now.Add(11 * time.Minute)
 	if _, err := s.Check(c2); !errors.Is(err, ErrTokenExpired) {
 		t.Fatalf("expired: %v", err)
 	}
+	// One token for a pair: two enrolments, then used up.
+	c3, _, _ := s.Create("pair", time.Hour, 2)
+	for _, n := range []string{"a", "b"} {
+		if _, err := s.Consume(c3, n); err != nil {
+			t.Fatalf("use %s: %v", n, err)
+		}
+	}
+	if _, err := s.Consume(c3, "c"); !errors.Is(err, ErrTokenUsed) {
+		t.Fatalf("third use of a 2-box token: %v", err)
+	}
 	list, _ := s.List()
-	if len(list) != 2 || list[1].UsedBy != "spark-2" {
+	if len(list) != 3 || len(list[2].UsedBy) != 1 || list[2].UsedBy[0] != "spark-2" || list[0].Uses != 2 {
 		t.Fatalf("list %+v", list)
 	}
 }
@@ -98,7 +108,12 @@ func TestServiceFlow(t *testing.T) {
 		BinaryDir: dir,
 		Images:    testImages{},
 		Taken:     func() map[string]bool { return map[string]bool{"spark-1": true} },
+		Nodes: func(context.Context) []NodeView {
+			return []NodeView{{Name: "spark-1", Address: "192.0.2.11", Roles: []string{"control"}, State: "joined"}}
+		},
 	}
+	var events []Event
+	s.Emit = func(e Event) { events = append(events, e) }
 	mux := http.NewServeMux()
 	for p, h := range s.PublicRoutes() {
 		mux.Handle(p, h)
@@ -117,12 +132,15 @@ func TestServiceFlow(t *testing.T) {
 	admin := srv.Client()
 
 	// Admin: a token and the command.
-	resp, err := admin.Post(srv.URL+"/api/v1/nodes/join-tokens", "application/json", strings.NewReader(`{"label":"test"}`))
+	resp, err := admin.Post(srv.URL+"/api/v1/nodes/join-tokens", "application/json", strings.NewReader(`{"count":1,"ttl_minutes":30}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var tr TokenResponse
 	decode(t, resp, http.StatusCreated, &tr)
+	if d := tr.ExpiresAt - time.Now().Unix(); d < 29*60 || d > 31*60 || tr.Count != 1 {
+		t.Fatalf("token response %+v", tr)
+	}
 	if !strings.Contains(tr.Command, "--pinnedpubkey '"+pin+"'") || !strings.Contains(tr.Command, srv.URL+"/join.sh") || !strings.Contains(tr.Command, "--token "+tr.Token) {
 		t.Fatalf("command %q", tr.Command)
 	}
@@ -190,6 +208,17 @@ func TestServiceFlow(t *testing.T) {
 	if len(pend.Nodes) != 1 || pend.Nodes[0].Name != "spark-1-2" || pend.Nodes[0].Hardware.GPU != "NVIDIA GB10" || pend.Nodes[0].TokenID != tr.ID {
 		t.Fatalf("pending %+v", pend.Nodes)
 	}
+	resp, _ = admin.Get(srv.URL + "/api/v1/nodes")
+	var nodes struct {
+		Nodes []NodeView `json:"nodes"`
+	}
+	decode(t, resp, http.StatusOK, &nodes)
+	if len(nodes.Nodes) != 2 || nodes.Nodes[0].State != "joined" || nodes.Nodes[1].State != "pending" || nodes.Nodes[1].Hardware.GPU != "NVIDIA GB10" || nodes.Nodes[1].JoinedAt == 0 {
+		t.Fatalf("nodes %+v", nodes.Nodes)
+	}
+	if len(events) < 2 || events[0].Type != "join" || events[len(events)-1].Node != "spark-1-2" || events[len(events)-1].Status != "pending" {
+		t.Fatalf("events %+v", events)
+	}
 	req, _ = http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/nodes/pending/spark-1-2", nil)
 	if resp, _ := admin.Do(req); resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("remove pending: %d", resp.StatusCode)
@@ -226,7 +255,7 @@ func readAll(t *testing.T, resp *http.Response) string {
 }
 
 func TestNodeName(t *testing.T) {
-	for in, want := range map[string]string{"Spark-A23A": "spark-a23a", "gx10_lab.local": "gx10-lab-local", "1box": "n-1box", "": "node"} {
+	for in, want := range map[string]string{"Spark-B10X": "spark-b10x", "gx10_lab.local": "gx10-lab-local", "1box": "n-1box", "": "node"} {
 		if got := NodeName(in); got != want {
 			t.Errorf("NodeName(%q) = %q, want %q", in, got, want)
 		}

@@ -53,6 +53,34 @@ type Service struct {
 	// never takes one.
 	Taken func() map[string]bool
 	Now   func() time.Time
+	// Emit receives progress events (oafd forwards them on /api/v1/events).
+	Emit func(Event)
+	// Nodes lists the nodes in cluster.yaml with their state, for GET
+	// /api/v1/nodes (oafd fills it from the cluster and its agents).
+	Nodes func(ctx context.Context) []NodeView
+}
+
+// Event is one progress event for the UI. Type is join, preflight, link or
+// fabric (the wizard filters link tests by the link/fabric prefix).
+type Event struct {
+	Type    string `json:"type"`
+	Node    string `json:"node,omitempty"`
+	Status  string `json:"status,omitempty"`
+	Message string `json:"message"`
+	At      int64  `json:"at"`
+}
+
+func (s *Service) emit(e Event) {
+	if s.Emit == nil {
+		return
+	}
+	if e.At == 0 {
+		e.At = time.Now().Unix()
+		if s.Now != nil {
+			e.At = s.Now().Unix()
+		}
+	}
+	s.Emit(e)
 }
 
 // PublicRoutes are reachable by a box that holds a join token.
@@ -71,6 +99,7 @@ func (s *Service) AdminRoutes() map[string]http.Handler {
 	return map[string]http.Handler{
 		"POST /api/v1/nodes/join-tokens":      http.HandlerFunc(s.createToken),
 		"GET /api/v1/nodes/join-tokens":       http.HandlerFunc(s.listTokens),
+		"GET /api/v1/nodes":                   http.HandlerFunc(s.listNodes),
 		"GET /api/v1/nodes/pending":           http.HandlerFunc(s.listPending),
 		"DELETE /api/v1/nodes/pending/{name}": http.HandlerFunc(s.removePending),
 	}
@@ -270,21 +299,30 @@ func (s *Service) enrol(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.emit(Event{Type: "join", Node: name, Status: "pending", Message: fmt.Sprintf("%s joined from %s (%s, %.1f GiB): waiting for a topology", name, addr, orGPU(req.Hardware.GPU), req.Hardware.MemTotalGiB)})
+	for _, res := range req.Hardware.Preflight {
+		if res.Status != "pass" {
+			s.emit(Event{Type: "preflight", Node: name, Status: string(res.Status), Message: res.ID + ": " + res.Summary})
+		}
+	}
 	writeJSON(w, http.StatusOK, EnrolResponse{Name: name, Address: addr, CAPEM: string(s.CA.CertPEM), CertPEM: string(leaf.CertPEM), KeyPEM: string(leaf.KeyPEM)})
 }
 
-// TokenRequest asks for a join token.
+// TokenRequest asks for a join token: one token for the count boxes that
+// join in this round.
 type TokenRequest struct {
-	Label      string `json:"label,omitempty"`
+	Count      int    `json:"count,omitempty"`
 	TTLMinutes int    `json:"ttl_minutes,omitempty"`
+	Label      string `json:"label,omitempty"`
 }
 
-// TokenResponse is shown to the admin once.
+// TokenResponse is shown to the admin once. Times are epoch seconds.
 type TokenResponse struct {
-	ID        string    `json:"id"`
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Command   string    `json:"command"`
+	ID        string `json:"id"`
+	Token     string `json:"token"`
+	Count     int    `json:"count"`
+	ExpiresAt int64  `json:"expires_at"`
+	Command   string `json:"command"`
 }
 
 func (s *Service) createToken(w http.ResponseWriter, r *http.Request) {
@@ -299,12 +337,17 @@ func (s *Service) createToken(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "ttl_minutes must be between 1 and 1440")
 		return
 	}
-	clear, t, err := s.Tokens.Create(req.Label, time.Duration(req.TTLMinutes)*time.Minute)
+	if req.Count < 0 || req.Count > 8 {
+		fail(w, http.StatusBadRequest, "count must be between 1 and 8")
+		return
+	}
+	clear, t, err := s.Tokens.Create(req.Label, time.Duration(req.TTLMinutes)*time.Minute, req.Count)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusCreated, TokenResponse{ID: t.ID, Token: clear, ExpiresAt: t.ExpiresAt, Command: Command(s.ControlURL, s.Pin, clear)})
+	s.emit(Event{Type: "join", Status: "token", Message: fmt.Sprintf("join token %s created for %d box(es), valid until %s", t.ID, t.MaxUses, t.ExpiresAt.UTC().Format(time.RFC3339))})
+	writeJSON(w, http.StatusCreated, TokenResponse{ID: t.ID, Token: clear, Count: t.MaxUses, ExpiresAt: t.ExpiresAt.Unix(), Command: Command(s.ControlURL, s.Pin, clear)})
 }
 
 func (s *Service) listTokens(w http.ResponseWriter, _ *http.Request) {
@@ -314,15 +357,16 @@ func (s *Service) listTokens(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	type view struct {
-		ID        string    `json:"id"`
-		Label     string    `json:"label,omitempty"`
-		ExpiresAt time.Time `json:"expires_at"`
-		UsedBy    string    `json:"used_by,omitempty"`
-		UsedAt    time.Time `json:"used_at,omitzero"`
+		ID        string   `json:"id"`
+		Label     string   `json:"label,omitempty"`
+		Count     int      `json:"count"`
+		Uses      int      `json:"uses"`
+		ExpiresAt int64    `json:"expires_at"`
+		UsedBy    []string `json:"used_by,omitempty"`
 	}
 	out := make([]view, 0, len(ts))
 	for _, t := range ts {
-		out = append(out, view{ID: t.ID, Label: t.Label, ExpiresAt: t.ExpiresAt, UsedBy: t.UsedBy, UsedAt: t.UsedAt})
+		out = append(out, view{ID: t.ID, Label: t.Label, Count: max(t.MaxUses, 1), Uses: t.Uses, ExpiresAt: t.ExpiresAt.Unix(), UsedBy: t.UsedBy})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tokens": out})
 }
@@ -379,4 +423,30 @@ func (d DockerImages) Save(ctx context.Context, name string, w io.Writer) error 
 		}
 	}
 	return fmt.Errorf("no bundle image %q", name)
+}
+
+func orGPU(s string) string {
+	if s == "" {
+		return "unknown GPU"
+	}
+	return s
+}
+
+func (s *Service) listNodes(w http.ResponseWriter, r *http.Request) {
+	var out []NodeView
+	if s.Nodes != nil {
+		out = s.Nodes(r.Context())
+	}
+	pend, err := s.Pending.List()
+	if err != nil {
+		fail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, p := range pend {
+		out = append(out, PendingView(p))
+	}
+	if out == nil {
+		out = []NodeView{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": out})
 }

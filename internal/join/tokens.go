@@ -39,8 +39,12 @@ type Token struct {
 	Label     string    `json:"label,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
-	UsedAt    time.Time `json:"used_at,omitzero"`
-	UsedBy    string    `json:"used_by,omitempty"` // the node name it enrolled
+	// MaxUses is how many boxes may enrol with it (one per box joining in
+	// this round); Uses counts them.
+	MaxUses int       `json:"max_uses"`
+	Uses    int       `json:"uses"`
+	UsedAt  time.Time `json:"used_at,omitzero"`  // when it was used up
+	UsedBy  []string  `json:"used_by,omitempty"` // the node names it enrolled
 }
 
 // TokenStore keeps join tokens hashed in a file under the state dir.
@@ -97,11 +101,15 @@ func (s *TokenStore) save(ts []Token) error {
 	return os.Rename(tmp, s.Path)
 }
 
-// Create makes a token valid for ttl (DefaultTokenTTL when zero) and returns
-// it in clear: the only time it exists in clear.
-func (s *TokenStore) Create(label string, ttl time.Duration) (string, Token, error) {
+// Create makes a token valid for ttl (DefaultTokenTTL when zero) and for
+// uses enrolments (1 when zero), and returns it in clear: the only time it
+// exists in clear.
+func (s *TokenStore) Create(label string, ttl time.Duration, uses int) (string, Token, error) {
 	if ttl <= 0 {
 		ttl = DefaultTokenTTL
+	}
+	if uses <= 0 {
+		uses = 1
 	}
 	raw := make([]byte, 20)
 	if _, err := rand.Read(raw); err != nil {
@@ -110,7 +118,7 @@ func (s *TokenStore) Create(label string, ttl time.Duration) (string, Token, err
 	clear := TokenPrefix + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
 	h := hashToken(clear)
 	now := s.now()
-	t := Token{ID: h[:8], Hash: h, Label: label, CreatedAt: now, ExpiresAt: now.Add(ttl)}
+	t := Token{ID: h[:8], Hash: h, Label: label, CreatedAt: now, ExpiresAt: now.Add(ttl), MaxUses: uses}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ts, err := s.load()
@@ -135,7 +143,7 @@ func (s *TokenStore) find(ts []Token, clear string) int {
 
 func (s *TokenStore) check(t Token) error {
 	switch {
-	case !t.UsedAt.IsZero():
+	case t.Uses >= max(t.MaxUses, 1):
 		return ErrTokenUsed
 	case !s.now().Before(t.ExpiresAt):
 		return ErrTokenExpired
@@ -159,7 +167,7 @@ func (s *TokenStore) Check(clear string) (Token, error) {
 	return ts[i], s.check(ts[i])
 }
 
-// Consume uses a token up (enrolment): it can never be used again.
+// Consume counts one enrolment; after MaxUses the token is used up.
 func (s *TokenStore) Consume(clear, by string) (Token, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -174,7 +182,11 @@ func (s *TokenStore) Consume(clear, by string) (Token, error) {
 	if err := s.check(ts[i]); err != nil {
 		return ts[i], err
 	}
-	ts[i].UsedAt, ts[i].UsedBy = s.now(), by
+	ts[i].Uses++
+	ts[i].UsedBy = append(ts[i].UsedBy, by)
+	if ts[i].Uses >= max(ts[i].MaxUses, 1) {
+		ts[i].UsedAt = s.now()
+	}
 	return ts[i], s.save(ts)
 }
 
