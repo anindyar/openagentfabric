@@ -29,6 +29,9 @@ var (
 	// An error line: "ValueError: ...", "RuntimeError: ...", "torch.OutOfMemoryError: ...".
 	errLine = regexp.MustCompile(`\b([A-Za-z_.]*(?:Error|Exception)): (.+)$`)
 	logHead = regexp.MustCompile(`^\([^)]*\)\s+(?:ERROR|WARNING|INFO)\s+\S+\s+\S+\s+\[[^\]]*\]\s*`)
+	// Errors that only wrap the real one.
+	wrapperErr = regexp.MustCompile(`root cause|stack trace|Worker failed with error|initialization failed|EngineDeadError|BrokenPipe|ConnectionResetError`)
+	workerErr  = regexp.MustCompile(`Worker failed with error '(.+)', please`)
 )
 
 // modelPhase reads a deployment's containers (one per node) into what the
@@ -153,13 +156,24 @@ func failure(node string, lines []string) string {
 	if !crashed {
 		return ""
 	}
-	cause := ""
-	for i := len(lines) - 1; i >= 0 && cause == ""; i-- {
-		l := logHead.ReplaceAllString(lines[i], "")
-		if m := errLine.FindStringSubmatch(l); m != nil && !strings.Contains(m[2], "See root cause above") &&
-			!strings.HasPrefix(m[2], "Worker failed with error") && !strings.Contains(l, "Engine core initialization failed") {
+	// The root cause is the first error that is not a wrapper around another
+	// one ("... see root cause above"); a worker's wrapper quotes it.
+	cause, quoted := "", ""
+	for _, raw := range lines {
+		l := logHead.ReplaceAllString(raw, "")
+		m := errLine.FindStringSubmatch(l)
+		if m == nil {
+			continue
+		}
+		if q := workerErr.FindStringSubmatch(m[2]); q != nil && quoted == "" {
+			quoted = q[1]
+		}
+		if cause == "" && !wrapperErr.MatchString(l) {
 			cause = m[1] + ": " + m[2]
 		}
+	}
+	if cause == "" {
+		cause = quoted
 	}
 	all := strings.Join(lines, "\n")
 	switch {

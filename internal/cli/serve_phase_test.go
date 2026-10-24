@@ -67,6 +67,20 @@ func TestModelPhase(t *testing.T) {
 	if p := phaseOf(exited); p.Phase != PhaseFailed || !strings.Contains(p.Error, "weights are not (all) on spark-1") {
 		t.Fatalf("no weights: %+v", p)
 	}
+	// The root cause, not the wrappers around it (GLM on the published build).
+	glm := running("starting", 3, logStart, logTrace,
+		"(Worker_TP0 pid=378) ERROR 10-24 15:18:10 [multiproc_executor.py:944] ValueError: No valid attention backend found for cuda with AttentionSelectorConfig(head_size=512)",
+		"(EngineCore pid=300) ERROR 10-24 15:18:12 [core.py:1366] Exception: WorkerProc initialization failed due to an exception in a background process. See stack trace for root cause.",
+		logEngine)
+	if p := phaseOf(glm); p.Phase != PhaseFailed || !strings.HasPrefix(p.Error, "ValueError: No valid attention backend") {
+		t.Fatalf("root cause: %+v", p)
+	}
+	quoted := running("starting", 3, logStart, logTrace,
+		"(EngineCore pid=280) RuntimeError: Worker failed with error 'concat_and_cache_mla, pe_dim must be 64 for fp8_ds_mla', please check the stack trace above for the root cause",
+		logEngine)
+	if p := phaseOf(quoted); !strings.HasPrefix(p.Error, "concat_and_cache_mla, pe_dim must be 64") {
+		t.Fatalf("quoted worker error: %+v", p)
+	}
 	// A pair: as far as the slower node; failed when one node failed.
 	other := running("starting", 0, logStart)
 	other.Node = "spark-2"
