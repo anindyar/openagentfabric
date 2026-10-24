@@ -141,7 +141,7 @@ func TestServiceFlow(t *testing.T) {
 	if d := tr.ExpiresAt - time.Now().Unix(); d < 29*60 || d > 31*60 || tr.Count != 1 {
 		t.Fatalf("token response %+v", tr)
 	}
-	if !strings.Contains(tr.Command, "--pinnedpubkey '"+pin+"'") || !strings.Contains(tr.Command, srv.URL+"/join.sh") || !strings.Contains(tr.Command, "--token "+tr.Token) {
+	if !strings.Contains(tr.Command, "--pinnedpubkey '"+pin+"'") || !strings.Contains(tr.Command, srv.URL+"/join.sh") || !strings.Contains(tr.Command, "export "+TokenEnv+"="+tr.Token+";") || strings.Contains(tr.Command, "--token") {
 		t.Fatalf("command %q", tr.Command)
 	}
 
@@ -295,5 +295,25 @@ func TestHardwareParsing(t *testing.T) {
 	h := Collect(context.Background(), r, preflight.Options{})
 	if h.Hostname != "gx10-new" || h.Arch != "aarch64" || h.MemTotalGiB != 121.6 || len(h.Preflight) == 0 {
 		t.Fatalf("hardware %+v", h)
+	}
+}
+
+// join.sh keeps the token out of every command line (G7): it reads it from
+// the environment, sends it to curl on stdin, and hands it to oaf join in
+// the environment.
+func TestScriptKeepsTokenOffCommandLines(t *testing.T) {
+	sc := Script("https://192.0.2.10:8443", "sha256//pin")
+	for _, want := range []string{`TOKEN="${OAF_JOIN_TOKEN:-}"`, `-K - -o "$tmp"`, `header = "Authorization: Bearer $TOKEN"`, `export OAF_JOIN_TOKEN="$TOKEN"`} {
+		if !strings.Contains(sc, want) {
+			t.Errorf("join.sh lacks %q", want)
+		}
+	}
+	for _, bad := range []string{`--token "$TOKEN"`, `-H "Authorization: Bearer $TOKEN"`} {
+		if strings.Contains(sc, bad) {
+			t.Errorf("join.sh still has %q", bad)
+		}
+	}
+	if cmd := Command("https://192.0.2.10:8443", "sha256//pin", "oafj_x"); !strings.HasPrefix(cmd, "export OAF_JOIN_TOKEN=oafj_x; ") || strings.Count(cmd, "oafj_x") != 1 {
+		t.Errorf("command %q", cmd)
 	}
 }

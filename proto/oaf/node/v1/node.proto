@@ -27,6 +27,17 @@ service NodeService {
   // manager) runs, and with set=true switches it: headless stops the desktop
   // and boots without it; graphical brings it back. Never reboots.
   rpc Desktop(DesktopRequest) returns (DesktopResponse);
+  // ConfigureFabric makes this node's QSFP rails exactly the given set: it
+  // writes OAF's netplan file (/etc/netplan/40-oaf-fabric.yaml), applies it
+  // and waits for the addresses. An empty set removes OAF's file. It never
+  // touches a netdev that carries an address OAF did not assign.
+  rpc ConfigureFabric(ConfigureFabricRequest) returns (ConfigureFabricResponse);
+  // ProbeAddress adds or removes a temporary address on a free QSFP netdev
+  // (not persisted), for cabling discovery.
+  rpc ProbeAddress(ProbeAddressRequest) returns (ProbeAddressResponse);
+  // Ping sends pings out of one netdev and reports the link-layer address
+  // that answered for the target (the peer port on the cable).
+  rpc Ping(PingRequest) returns (PingResponse);
 }
 
 message InfoRequest {}
@@ -142,6 +153,7 @@ message FabricNetdev {
   repeated string addrs = 6;
   string rdma_dev = 7;
   repeated Gid gids = 8;
+  string mac = 9;
 }
 
 message Gid {
@@ -186,4 +198,61 @@ message DesktopResponse {
   int64 estimated_mib = 3;
   bool changed = 4;
   repeated string warnings = 5;
+}
+
+// One rail: a QSFP netdev with its address (CIDR) and MTU (0 means 9000).
+message FabricRail {
+  string netdev = 1;
+  string address = 2;
+  int32 mtu = 3;
+}
+
+message ConfigureFabricRequest {
+  // Every rail this node should have; rails not listed are removed from
+  // OAF's netplan file.
+  repeated FabricRail rails = 1;
+  // Report what would change; change nothing.
+  bool dry_run = 2;
+}
+
+message RailState {
+  string netdev = 1;
+  string address = 2;
+  // The address is on the netdev (after any change).
+  bool present = 3;
+  int32 mtu = 4;
+  string oper_state = 5;
+}
+
+message ConfigureFabricResponse {
+  bool changed = 1;
+  repeated RailState rails = 2;
+  repeated string warnings = 3;
+}
+
+message ProbeAddressRequest {
+  string netdev = 1;
+  // CIDR, inside the probe pool the caller uses.
+  string address = 2;
+  bool remove = 3;
+}
+
+message ProbeAddressResponse {}
+
+message PingRequest {
+  // The netdev the pings leave from.
+  string netdev = 1;
+  string target = 2;
+  int32 count = 3;
+  // ICMP payload size (0 = the default 56).
+  int32 size = 4;
+  // Do not fragment (to test the MTU end to end).
+  bool dont_fragment = 5;
+}
+
+message PingResponse {
+  bool ok = 1;
+  double rtt_ms = 2;
+  // The MAC that answered ARP for the target on this netdev, if any.
+  string neighbor_mac = 3;
 }

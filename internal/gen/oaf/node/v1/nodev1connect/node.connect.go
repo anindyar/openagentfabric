@@ -43,6 +43,13 @@ const (
 	NodeServiceRailBandwidthProcedure = "/oaf.node.v1.NodeService/RailBandwidth"
 	// NodeServiceDesktopProcedure is the procedure name of the NodeService's Desktop RPC.
 	NodeServiceDesktopProcedure = "/oaf.node.v1.NodeService/Desktop"
+	// NodeServiceConfigureFabricProcedure is the procedure name of the NodeService's ConfigureFabric
+	// RPC.
+	NodeServiceConfigureFabricProcedure = "/oaf.node.v1.NodeService/ConfigureFabric"
+	// NodeServiceProbeAddressProcedure is the procedure name of the NodeService's ProbeAddress RPC.
+	NodeServiceProbeAddressProcedure = "/oaf.node.v1.NodeService/ProbeAddress"
+	// NodeServicePingProcedure is the procedure name of the NodeService's Ping RPC.
+	NodeServicePingProcedure = "/oaf.node.v1.NodeService/Ping"
 )
 
 var (
@@ -109,6 +116,27 @@ var (
 			Procedure:  NodeServiceDesktopProcedure,
 		}
 	})
+	nodeServiceConfigureFabricSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("ConfigureFabric"),
+			Procedure:  NodeServiceConfigureFabricProcedure,
+		}
+	})
+	nodeServiceProbeAddressSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("ProbeAddress"),
+			Procedure:  NodeServiceProbeAddressProcedure,
+		}
+	})
+	nodeServicePingSpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("Ping"),
+			Procedure:  NodeServicePingProcedure,
+		}
+	})
 )
 
 // NodeServiceClient is a client for the oaf.node.v1.NodeService service.
@@ -136,6 +164,17 @@ type NodeServiceClient interface {
 	// manager) runs, and with set=true switches it: headless stops the desktop
 	// and boots without it; graphical brings it back. Never reboots.
 	Desktop(context.Context, *v1.DesktopRequest) (*v1.DesktopResponse, error)
+	// ConfigureFabric makes this node's QSFP rails exactly the given set: it
+	// writes OAF's netplan file (/etc/netplan/40-oaf-fabric.yaml), applies it
+	// and waits for the addresses. An empty set removes OAF's file. It never
+	// touches a netdev that carries an address OAF did not assign.
+	ConfigureFabric(context.Context, *v1.ConfigureFabricRequest) (*v1.ConfigureFabricResponse, error)
+	// ProbeAddress adds or removes a temporary address on a free QSFP netdev
+	// (not persisted), for cabling discovery.
+	ProbeAddress(context.Context, *v1.ProbeAddressRequest) (*v1.ProbeAddressResponse, error)
+	// Ping sends pings out of one netdev and reports the link-layer address
+	// that answered for the target (the peer port on the cable).
+	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
 }
 
 // NewNodeServiceClient constructs a client for the oaf.node.v1.NodeService service. Multiple
@@ -169,6 +208,17 @@ type NodeServiceHandler interface {
 	// manager) runs, and with set=true switches it: headless stops the desktop
 	// and boots without it; graphical brings it back. Never reboots.
 	Desktop(context.Context, *v1.DesktopRequest) (*v1.DesktopResponse, error)
+	// ConfigureFabric makes this node's QSFP rails exactly the given set: it
+	// writes OAF's netplan file (/etc/netplan/40-oaf-fabric.yaml), applies it
+	// and waits for the addresses. An empty set removes OAF's file. It never
+	// touches a netdev that carries an address OAF did not assign.
+	ConfigureFabric(context.Context, *v1.ConfigureFabricRequest) (*v1.ConfigureFabricResponse, error)
+	// ProbeAddress adds or removes a temporary address on a free QSFP netdev
+	// (not persisted), for cabling discovery.
+	ProbeAddress(context.Context, *v1.ProbeAddressRequest) (*v1.ProbeAddressResponse, error)
+	// Ping sends pings out of one netdev and reports the link-layer address
+	// that answered for the target (the peer port on the cable).
+	Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error)
 }
 
 // RegisterNodeServiceHandler registers svc as the oaf.node.v1.NodeService implementation on server.
@@ -184,6 +234,9 @@ func RegisterNodeServiceHandler(server *connect.Server, svc NodeServiceHandler) 
 		connect.Method{Spec: nodeServiceFabricSpec(), Handler: adapter.fabric},
 		connect.Method{Spec: nodeServiceRailBandwidthSpec(), Handler: adapter.railBandwidth},
 		connect.Method{Spec: nodeServiceDesktopSpec(), Handler: adapter.desktop},
+		connect.Method{Spec: nodeServiceConfigureFabricSpec(), Handler: adapter.configureFabric},
+		connect.Method{Spec: nodeServiceProbeAddressSpec(), Handler: adapter.probeAddress},
+		connect.Method{Spec: nodeServicePingSpec(), Handler: adapter.ping},
 	)
 }
 
@@ -224,6 +277,18 @@ func (UnimplementedNodeServiceHandler) RailBandwidth(context.Context, *v1.RailBa
 
 func (UnimplementedNodeServiceHandler) Desktop(context.Context, *v1.DesktopRequest) (*v1.DesktopResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.Desktop is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) ConfigureFabric(context.Context, *v1.ConfigureFabricRequest) (*v1.ConfigureFabricResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.ConfigureFabric is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) ProbeAddress(context.Context, *v1.ProbeAddressRequest) (*v1.ProbeAddressResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.ProbeAddress is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) Ping(context.Context, *v1.PingRequest) (*v1.PingResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.Ping is not implemented")
 }
 
 type nodeServiceClient struct {
@@ -297,6 +362,30 @@ func (c *nodeServiceClient) RailBandwidth(ctx context.Context, req *v1.RailBandw
 func (c *nodeServiceClient) Desktop(ctx context.Context, req *v1.DesktopRequest) (*v1.DesktopResponse, error) {
 	var res v1.DesktopResponse
 	if err := c.client.CallUnary(ctx, nodeServiceDesktopSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) ConfigureFabric(ctx context.Context, req *v1.ConfigureFabricRequest) (*v1.ConfigureFabricResponse, error) {
+	var res v1.ConfigureFabricResponse
+	if err := c.client.CallUnary(ctx, nodeServiceConfigureFabricSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) ProbeAddress(ctx context.Context, req *v1.ProbeAddressRequest) (*v1.ProbeAddressResponse, error) {
+	var res v1.ProbeAddressResponse
+	if err := c.client.CallUnary(ctx, nodeServiceProbeAddressSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) Ping(ctx context.Context, req *v1.PingRequest) (*v1.PingResponse, error) {
+	var res v1.PingResponse
+	if err := c.client.CallUnary(ctx, nodeServicePingSpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -406,6 +495,42 @@ func (h nodeServiceHandler) desktop(ctx context.Context, _ connect.Spec, stream 
 		return err
 	}
 	res, err := h.svc.Desktop(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) configureFabric(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.ConfigureFabricRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.ConfigureFabric(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) probeAddress(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.ProbeAddressRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.ProbeAddress(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) ping(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.PingRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.Ping(ctx, &req)
 	if err != nil {
 		return err
 	}

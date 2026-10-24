@@ -127,6 +127,11 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 	if err := reconcile.Desktop(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
 		return err
 	}
+	// Then the fabric: rails addressed and checked before models that span
+	// them start (backlog G1, G3).
+	if _, err := reconcile.FabricUp(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
+		return err
+	}
 	if dryRun {
 		return nil
 	}
@@ -255,8 +260,8 @@ func newInstallCmd() *cobra.Command {
 		Long: "Runs the read-only preflight on every node through its agent, then `oaf fabric check`\n" +
 			"(configuration and ib_write_bw on every link), and stops on any failure (--force\n" +
 			"continues past failures). Then it applies cluster.yaml like `oaf apply`.\n" +
-			"The node agents must already run (see docs/user-guide.md). Fabric links must already\n" +
-			"have addresses; OAF does not assign them yet.",
+			"The node agents must already run (see docs/user-guide.md). Before the check it\n" +
+			"addresses the rails of every fabric link that has subnets, as `oaf apply` does.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, cancel := context.WithTimeout(cmd.Context(), f.timeout)
@@ -270,6 +275,10 @@ func newInstallCmd() *cobra.Command {
 				return err
 			}
 			_, _ = fmt.Fprintln(out)
+			// The rails need their addresses before they can be checked.
+			if _, err := reconcile.FabricUp(ctx, s.nodes, s.cluster, false, out); err != nil && !force {
+				return err
+			}
 			if err := checkFabric(ctx, out, s.nodes, s.cluster, reconcile.FabricOptions{Bandwidth: true}); err != nil && !force {
 				return err
 			}

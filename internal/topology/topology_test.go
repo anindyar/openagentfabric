@@ -330,3 +330,32 @@ func TestRoutes(t *testing.T) {
 		t.Fatalf("diff:\n%s", pr.Diff)
 	}
 }
+
+// Two cables between the new boxes (found by the cabling probe): the plan
+// has one link per cable, each with its own two rail subnets, port 1 first.
+func TestPlanTwoCables(t *testing.T) {
+	data, c, cat := load(t)
+	zero, one := 0, 1
+	in := Input{Cluster: c, Catalog: cat, Pending: []join.PendingNode{gb10("spark-2", 2), gb10("spark-3", 3)},
+		Cabling: []Cable{
+			{A: config.LinkEnd{Node: "spark-2", Port: &zero}, B: config.LinkEnd{Node: "spark-3", Port: &zero}},
+			{A: config.LinkEnd{Node: "spark-3", Port: &one}, B: config.LinkEnd{Node: "spark-2", Port: &one}},
+		}}
+	cc := byID(Recommend(in))[OptionPairPlusSingle]
+	if len(cc.Cabling) != 2 || !cc.Cabling[0].Done || *cc.Cabling[0].A.Port != 1 || *cc.Cabling[1].A.Port != 0 || cc.Cabling[0].A.Node != "spark-2" {
+		t.Fatalf("cabling: %+v", cc.Cabling)
+	}
+	out, rep, err := Plan(data, in, Choice{Option: OptionPairPlusSingle, NoModel: true})
+	if err != nil {
+		t.Fatalf("plan: %v (%v)", err, rep.Errors())
+	}
+	next, err := config.ParseCluster(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ls := next.Spec.Fabric.Links
+	if len(ls) != 2 || *ls[0].A.Port != 1 || *ls[1].A.Port != 0 ||
+		strings.Join(ls[0].Subnets, ",") != "10.200.0.0/30,10.200.0.4/30" || strings.Join(ls[1].Subnets, ",") != "10.200.0.8/30,10.200.0.12/30" {
+		t.Fatalf("links: %+v", ls)
+	}
+}

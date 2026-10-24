@@ -113,7 +113,7 @@ per rail, for example port 1 of a pair:
 | 1 (`enP2p1s0f1np1`) | 192.168.41.2 | 192.168.41.1 | 192.168.41.0/30 |
 
 If a port already carries production traffic, leave it alone and cable the pair through the other port.
-OAF never reconfigures a port that has addresses.
+OAF never reconfigures a port that has addresses it did not assign.
 
 ## 4. Install, step by step
 
@@ -176,10 +176,53 @@ oaf version
 
 *(planned, M5: `curl -fsSL https://openagentfabric.dev/install.sh | bash` does this and every step below.)*
 
-### Step 2: address the fabric (pairs and triangles)
-OAF does not assign fabric addresses yet, so configure them in the OS on **both** nodes. On DGX
-OS this is netplan. Put this in `/etc/netplan/40-oaf-fabric.yaml` on node A, using your free port and
-the plan from §3:
+### Step 2: the fabric addresses (pairs and triangles)
+OAF addresses the rails itself. Give every link in `fabric.links` (Step 3) one subnet per rail; the
+console's topology planner fills them in from 10.200.0.0/16:
+
+```yaml
+links:
+  - { a: { node: spark-1, port: 1 }, b: { node: spark-2, port: 1 }, subnets: [10.200.0.0/30, 10.200.0.4/30] }
+```
+
+End A of each rail gets the first host of its subnet, end B the second. `oaf apply` and `oaf install`
+then, after the desktop mode and before any project:
+
+1. write `/etc/netplan/40-oaf-fabric.yaml` (mode 600) on every node of a link: the rails with MTU 9000
+   and no IPv6 link-local addresses. `netplan apply` runs only when the file or the live addresses
+   differ, and OAF waits for the addresses;
+2. ping every rail, and again at the full MTU with fragmentation off. A rail that fails stops the apply;
+3. on a link they just brought up, run `ib_write_bw` on each rail and on both rails together (as in
+   Step 7). A slow rail is a warning.
+
+```
+updated   spark-1/fabric  enp1s0f1np1 10.200.0.1/30, enP2p1s0f1np1 10.200.0.5/30
+updated   spark-2/fabric  enp1s0f1np1 10.200.0.2/30, enP2p1s0f1np1 10.200.0.6/30
+link  spark-1:enp1s0f1np1 ↔ spark-2:enp1s0f1np1  0.26 ms, MTU 9000 ok
+link  spark-1:enP2p1s0f1np1 ↔ spark-2:enP2p1s0f1np1  0.53 ms, MTU 9000 ok
+spark-1:1 ↔ spark-2:1  rail 0  10.200.0.1 → 10.200.0.2  104.6 Gb/s
+spark-1:1 ↔ spark-2:1  rail 1  10.200.0.5 → 10.200.0.6  111.6 Gb/s
+spark-1:1 ↔ spark-2:1  2 rails together  189.4 Gb/s
+```
+
+`oaf apply --dry-run` prints the `update` lines without changing anything. Notes:
+
+- OAF writes only that one file. It refuses a port whose netdev carries an address OAF did not assign
+  (another netplan file, a NetworkManager profile, an address added by hand) and names it: remove
+  the address or leave the port out of `fabric.links`. A file already at that path, as written by hand
+  below, is taken over. Dropping a link from cluster.yaml removes its rails from the file.
+- The first `netplan apply` briefly takes the rails down. Do not list a port that carries production
+  traffic.
+- The node agent writes the file, so its unit allows `/etc/netplan` (`ReadWritePaths=-/etc/netplan`
+  in `deploy/systemd/oaf-node.service`). An agent installed with an older unit cannot: install the new
+  unit and run `systemctl daemon-reload` and `systemctl restart oaf-node`.
+- `link-local: []` keeps IPv6 link-local addresses off the rails. OAF detects the RoCE GID index on
+  every run anyway, because the index moves when addresses are added, but this keeps the GID table
+  small and predictable.
+
+**Fallback: addressing by hand.** A link without `subnets` is yours: OAF writes and removes nothing on
+its nodes and only checks it (Step 7). Put this in `/etc/netplan/40-oaf-fabric.yaml` on node A, using
+your free port and the plan from §3:
 
 ```yaml
 network:
@@ -190,7 +233,8 @@ network:
     enP2p1s0f1np1: {dhcp4: false, dhcp6: false, link-local: [], mtu: 9000, addresses: [192.168.41.2/30]}
 ```
 
-Use the `.1` addresses on node B. Then apply it and check it on each node:
+Use the `.1` addresses on node B, with **MTU 9000 on both ends** (the fabric check fails without it).
+Then apply it and check it on each node:
 
 ```sh
 sudo chmod 600 /etc/netplan/40-oaf-fabric.yaml
@@ -198,13 +242,6 @@ sudo netplan apply
 ip -br addr show | grep -E 'enp1s0f1|enP2p1s0f1'     # both UP with their address
 ping -c1 192.168.31.1 && ping -c1 192.168.41.1       # from node A
 ```
-
-Notes:
-- **MTU 9000 on both ends.** The fabric check fails if it is missing on either side.
-- `link-local: []` keeps IPv6 link-local addresses off the rails. You do not have to: OAF detects the
-  RoCE GID index on every run, because the index moves when addresses are added. But it keeps
-  the GID table small and predictable.
-- `netplan apply` briefly takes the rails down. Do not run it on a port that carries production traffic.
 
 ### Step 3: write cluster.yaml
 Start from the example and edit the node names, addresses and links:
@@ -736,8 +773,10 @@ queries to the pair and simple ones stay local. Only the pair is cabled with QSF
                                          topology: pair-plus-single
 ```
 
-Port 1 is used by default: port 0 is often already in use. A port that already carries an address
-(configured by something else) is never chosen.
+Without a probe result (below), port 1 is used: port 0 is often already in use. When the probe
+finds both ports of a pair cabled to each other, the plan uses both cables: one link each, two rails
+each, four rails in all. A port that already carries an address configured by something else is
+never chosen.
 
 **Joining a box.** Nothing is deployed when a box joins; it waits until you choose a topology.
 
@@ -745,21 +784,26 @@ Port 1 is used by default: port 0 is often already in use. A port that already c
    {"count": 2}`). You get one command, valid for an hour and for that many boxes:
 
    ```sh
-   curl -fsSLk --pinnedpubkey 'sha256//…' https://<control>:8443/join.sh | sudo bash -s -- --token oafj_…
+   export OAF_JOIN_TOKEN=oafj_…; curl -fsSLk --pinnedpubkey 'sha256//…' https://<control>:8443/join.sh | sudo --preserve-env=OAF_JOIN_TOKEN bash -s
    ```
 
-   The pin is the control node's TLS key: the script refuses anything else on that address.
+   The pin is the control node's TLS key: the script refuses anything else on that address. The
+   token travels in the environment (and to curl on stdin), so it never appears in a command line
+   that other users can see in the process list.
 2. Run it on each new box (DGX OS, docker present). It downloads `oaf` and the bundle images from
    the control node (no internet needed; `--skip-images` defers the images to deploy time), runs the
    read-only preflight, enrols in the cluster PKI, and starts `oaf-node`. A box that fails a blocking
    check (wrong architecture, no GPU, no docker or GPU runtime) does not join; `--force` overrides.
-3. The box shows up as **pending** with its hardware, preflight and both QSFP ports. When a cable
-   is up, each rail sees the other box as a link-layer neighbour, so the console shows which port
-   goes where.
-4. Choose the option. The plan (a `cluster.yaml` diff: nodes, the pair's cable with one /30 per
+3. The box shows up as **pending** with its hardware, preflight and both QSFP ports.
+4. The console asks for a recommendation, and the control node probes the cabling of the pending
+   boxes: each up QSFP netdev that is free gets a temporary address from 198.18.0.0/24 (a range
+   reserved for benchmarking, never routed), pings the other boxes' probe addresses, and the MAC
+   that answers names the port at the other end. The addresses are removed straight after (about
+   5 seconds; cached for two minutes). Cables it found are shown as done.
+5. Choose the option. The plan (a `cluster.yaml` diff: nodes, one link per cable with one /30 per
    rail from 10.200.0.0/16, a group, the large model and its routing rule) is reviewed, then
-   applied: fabric bring-up (MTU 9000, GID detection, `ib_write_bw` per rail), weights copied over
-   the fabric, deploy, acceptance.
+   applied: fabric bring-up and check (§4 Step 2), weights copied over the fabric, deploy,
+   acceptance.
 
 ## 8b. Headless boxes (no desktop GUI)
 

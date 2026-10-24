@@ -16,7 +16,7 @@ func FabricToProto(ports []fabric.Port) []*nodev1.FabricPort {
 		for _, h := range p.Halves {
 			nd := &nodev1.FabricNetdev{
 				Name: h.Name, Pci: h.PCI, OperState: h.OperState,
-				Mtu: int32(h.MTU), SpeedMbps: int32(h.SpeedMbps), RdmaDev: h.RDMADev,
+				Mtu: int32(h.MTU), SpeedMbps: int32(h.SpeedMbps), RdmaDev: h.RDMADev, Mac: h.MAC,
 			}
 			for _, a := range h.Addrs {
 				nd.Addrs = append(nd.Addrs, a.String())
@@ -39,7 +39,7 @@ func FabricFromProto(ports []*nodev1.FabricPort) ([]fabric.Port, error) {
 		for _, nd := range fp.GetHalves() {
 			h := fabric.Netdev{
 				Name: nd.GetName(), PCI: nd.GetPci(), OperState: nd.GetOperState(),
-				MTU: int(nd.GetMtu()), SpeedMbps: int(nd.GetSpeedMbps()), RDMADev: nd.GetRdmaDev(),
+				MTU: int(nd.GetMtu()), SpeedMbps: int(nd.GetSpeedMbps()), RDMADev: nd.GetRdmaDev(), MAC: nd.GetMac(),
 			}
 			for _, a := range nd.GetAddrs() {
 				pfx, err := netip.ParsePrefix(a)

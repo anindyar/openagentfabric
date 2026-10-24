@@ -140,7 +140,7 @@ Requires=docker.service
 ExecStart=/usr/local/bin/oaf node serve --pki-dir /etc/oaf/pki --state-dir /var/lib/oaf
 Restart=on-failure
 RestartSec=5
-# Runs as root: it drives docker and (later) configures the QSFP fabric.
+# Runs as root: it drives docker and configures the QSFP fabric.
 NoNewPrivileges=yes
 ProtectSystem=full
 ProtectHome=read-only
@@ -149,6 +149,8 @@ PrivateTmp=yes
 StateDirectory=oaf
 StateDirectoryMode=0755
 ReadWritePaths=-/etc/oaf
+# The fabric: oaf-node writes only /etc/netplan/40-oaf-fabric.yaml there.
+ReadWritePaths=-/etc/netplan
 
 [Install]
 WantedBy=multi-user.target

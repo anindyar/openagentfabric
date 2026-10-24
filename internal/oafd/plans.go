@@ -257,7 +257,7 @@ func (s *Server) runApply(p *Plan) {
 			p.Log = p.Log[len(p.Log)-2000:]
 		}
 		s.mu.Unlock()
-		s.publish(Event{Plan: p.ID, Status: PlanApplying, Message: line})
+		s.publish(Event{Type: lineType(line), Plan: p.ID, Status: PlanApplying, Message: line})
 	}}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Minute)
 	defer cancel()
@@ -418,4 +418,17 @@ func (s *Server) knownPlan(id string) bool {
 		}
 	}
 	return false
+}
+
+// lineType classifies an apply output line for /events: fabric bring-up
+// ("<verb> <node>/fabric ...") and link checks ("link  ...") get their own
+// types, so the console's wizard can follow them.
+func lineType(line string) string {
+	switch {
+	case strings.HasPrefix(line, "link "):
+		return "link"
+	case strings.Contains(line, "/fabric "), strings.HasPrefix(line, "warning: link "):
+		return "fabric"
+	}
+	return "plan"
 }

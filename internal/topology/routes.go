@@ -23,6 +23,10 @@ type Deps struct {
 	// SavePlan stores a plan for POST /api/v1/plans/{id}/apply and returns
 	// its id (oafd's plan store). Without it, plan_id is empty.
 	SavePlan func(ctx context.Context, summary string, before, after []byte) (string, error)
+	// Probe finds the cables among joined boxes (temporary probe addresses
+	// on their free QSFP ports, removed afterwards). Optional; without it
+	// only cables seen in the hardware reports are known.
+	Probe func(ctx context.Context, nodes []string) ([]Cable, error)
 }
 
 // Routes are admin routes (oafd wraps them in its authentication).
@@ -147,6 +151,15 @@ func (d Deps) input(ctx context.Context) ([]byte, Input, error) {
 		hw[p.Name] = p.Hardware
 	}
 	in.Cabling = ObservedCables(hw)
+	if d.Probe != nil && len(in.Pending) > 0 {
+		var names []string
+		for _, p := range in.Pending {
+			names = append(names, p.Name)
+		}
+		if cs, err := d.Probe(ctx, names); err == nil {
+			in.Cabling = append(in.Cabling, cs...)
+		}
+	}
 	return data, in, nil
 }
 
