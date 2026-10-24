@@ -139,16 +139,17 @@ models:
         tensorParallel: 2
         gpuMemoryUtilization: 0.86
         # The published build has no FP8 KV cache for GLM's MLA on GB10
-        # ("pe_dim must be 64 for fp8_ds_mla"; the patched local build does),
-        # so the KV cache is BF16 and the context starts at 64K.
+        # ("pe_dim must be 64 for fp8_ds_mla"; the patched local build does).
+        # The checkpoint asks for FP8 KV, so BF16 must be forced, and the
+        # context starts at 64K.
         maxModelLen: 65536
-        args: [--trust-remote-code, --kv-cache-memory-bytes, "8589934592",
+        args: [--trust-remote-code, --kv-cache-dtype, bfloat16, --kv-cache-memory-bytes, "8589934592",
                --max-num-seqs, "6", --block-size, "2304", --moe-backend, marlin,
                --max-num-batched-tokens, "4096", --enable-chunked-prefill, --enable-prefix-caching,
                --disable-custom-all-reduce,
                --kernel-config, '{"enable_cutedsl_warmup":false,"enable_flashinfer_autotune":false}',
                --enforce-eager, --tool-call-parser, glm47, --enable-auto-tool-choice,
-               --language-model-only]
+               --reasoning-parser, glm45, --language-model-only]
         env:
           NCCL_NET: IB
           NCCL_CUMEM_ENABLE: "0"
