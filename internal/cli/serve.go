@@ -77,6 +77,9 @@ func newServeCmd() *cobra.Command {
 				Keys:          f.keyService(cmd.ErrOrStderr()),
 				Log:           log,
 			})
+			if err := mountGrowth(srv, &f, c, stateDir, log); err != nil {
+				log.Warn("adding boxes is unavailable", "err", err)
+			}
 			hs := &http.Server{Addr: listen, Handler: srv.Handler(), TLSConfig: tlsCfg, ReadHeaderTimeout: 10 * time.Second}
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()

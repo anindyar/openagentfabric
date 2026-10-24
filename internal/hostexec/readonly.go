@@ -20,7 +20,7 @@ var readOnly = map[string][][]string{
 	"ldconfig":    {{"-p"}},
 	"ss":          {{"-Hltn"}},
 	"timedatectl": {{"show"}},
-	"ip":          {{"-j", "addr", "show"}, {"-j", "link", "show"}},
+	"ip":          {{"-j", "addr", "show"}, {"-j", "link", "show"}, {"-j", "neigh", "show"}},
 	"rdma":        {{"-j", "link", "show"}},
 	"docker": {
 		{"version", "--format"},

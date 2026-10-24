@@ -91,6 +91,9 @@ const (
 	TopologyPair     = "pair"
 	TopologyTriangle = "triangle"
 	TopologyPairs    = "pairs"
+	// TopologyPairPlusSingle is one pair over ConnectX-7 (a TP=2 group) plus
+	// a node reached over the LAN only, which takes no fabric link.
+	TopologyPairPlusSingle = "pair-plus-single"
 )
 
 // NCCL transports.

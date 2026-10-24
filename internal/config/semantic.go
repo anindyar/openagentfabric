@@ -200,7 +200,7 @@ func (k *checker) nodesAndRoles() {
 // --- fabric --------------------------------------------------------------
 
 var topologyNodes = map[string]int{
-	TopologySingle: 1, TopologyPair: 2, TopologyTriangle: 3, TopologyPairs: 4,
+	TopologySingle: 1, TopologyPair: 2, TopologyTriangle: 3, TopologyPairs: 4, TopologyPairPlusSingle: 3,
 }
 
 func pairKey(a, b string) [2]string {
@@ -296,7 +296,31 @@ func (k *checker) topologyShape() {
 		}
 	case TopologyPairs:
 		k.checkPairs(names)
+	case TopologyPairPlusSingle:
+		k.checkPairPlusSingle(names)
 	}
+}
+
+// checkPairPlusSingle: exactly two of the three nodes are cabled to each
+// other (1 or 2 cables, the dual-rail pair); the third has no fabric link.
+func (k *checker) checkPairPlusSingle(names []string) {
+	linked := map[string]bool{}
+	for pk := range k.links {
+		linked[pk[0]], linked[pk[1]] = true, true
+	}
+	var pair, single []string
+	for _, n := range names {
+		if linked[n] {
+			pair = append(pair, n)
+		} else {
+			single = append(single, n)
+		}
+	}
+	if len(pair) != 2 || len(single) != 1 {
+		k.errorf("spec.fabric.links", "topology pair-plus-single needs links between exactly two nodes and none to the third (linked: %s)", strings.Join(pair, ", "))
+		return
+	}
+	k.checkPair(pair[0], pair[1])
 }
 
 func (k *checker) checkPair(a, b string) {

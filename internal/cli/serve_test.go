@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	nodev1 "openagentfabric.dev/oaf/internal/gen/oaf/node/v1"
 	"openagentfabric.dev/oaf/internal/config"
+	nodev1 "openagentfabric.dev/oaf/internal/gen/oaf/node/v1"
 	"openagentfabric.dev/oaf/internal/reconcile"
 )
 

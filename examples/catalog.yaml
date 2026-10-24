@@ -112,6 +112,48 @@ models:
           securityOpt: [seccomp=unconfined, apparmor=unconfined]   # io_uring weight loading
           caches: [/root/.cache/b12x, /root/.cache/vllm, /root/.cache/flashinfer, /root/.triton]
 
+  # GLM-5.3-Flash (NVFP4, NVIDIA): 320B MoE, 18B active, ~190 GiB of weights, so
+  # it needs a pair (TP=2). The recipe below was verified on a GB10 pair with a
+  # local arm64 vLLM build of the glm5_next architecture, which upstream vLLM at
+  # our pin cannot load. TODO: pin that GB10 build as a bundle component (by
+  # digest) and name it as this profile's engine; until then the profile names
+  # the existing GB10 component and will not load the model.
+  # On each GB10 at 0.86 with an 8 GiB fp8 KV cache and 512K context.
+  # --language-model-only is needed at 512K: without it the multimodal
+  # front-end runs the GB10 driver out of memory. NCCL interfaces, HCA and GID
+  # index come from the fabric (detected, never hardcoded); the env below adds
+  # what the recipe needs on top.
+  - id: glm-5.3-flash-nvfp4
+    displayName: GLM-5.3-Flash (NVFP4, NVIDIA)
+    source:
+      huggingface:
+        repo: nvidia/GLM-5.3-Flash-NVFP4
+        revision: da920bb0b9f4a06727223a349e55468e38352348
+    license: { spdx: MIT, gated: false, redistributable: true }
+    sizeGiB: 190.4
+    classes: [think]
+    profiles:
+      - name: pair-tp2
+        engine: vllm-spark-b12x
+        nodes: 2
+        tensorParallel: 2
+        gpuMemoryUtilization: 0.86
+        maxModelLen: 524288
+        args: [--trust-remote-code, --kv-cache-dtype, fp8, --kv-cache-memory-bytes, "8589934592",
+               --max-num-seqs, "6", --block-size, "2304", --moe-backend, marlin,
+               --max-num-batched-tokens, "4096", --enable-chunked-prefill, --enable-prefix-caching,
+               --disable-custom-all-reduce,
+               --kernel-config, '{"enable_cutedsl_warmup":false,"enable_flashinfer_autotune":false}',
+               --enforce-eager, --tool-call-parser, glm47, --enable-auto-tool-choice,
+               --language-model-only]
+        env:
+          NCCL_NET: IB
+          NCCL_CUMEM_ENABLE: "0"
+          NCCL_NVLS_ENABLE: "0"
+          NCCL_IB_ROCE_VERSION_NUM: "2"
+        container:
+          commandPrefix: [vllm, serve]
+
   # Embeddings for the appliance's apps (vclocal memory search), served through
   # the gateway like every other model. Small: about 6.5 GiB on a GB10 in all,
   # nearly all of it vLLM's own overhead; the weights are 2.2 GiB.

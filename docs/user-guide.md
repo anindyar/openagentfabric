@@ -79,6 +79,7 @@ There is no QSFP switch. Without one, 4 machines are two separate pairs, not a r
 | 2 | `pair` | 1 cable (2 rails), optionally a 2nd cable | one model with tensor parallelism across the pair (TP=2) |
 | 3 | `triangle` | 3 cables, each node to both others | pairs inside the triangle; NCCL over sockets |
 | 4 | `pairs` | two separate pairs, **no cable between them** | each pair runs its own models |
+| 3 | `pair-plus-single` | 1 cable between two nodes; the third is on the LAN only | the pair runs a large model (TP=2), the single node its own models |
 
 **Do not cable 4 machines as a ring.** NCCL needs direct links between nodes that a ring makes
 non-adjacent, and RDMA traffic cannot be forwarded through a node. A ring therefore breaks
@@ -656,6 +657,64 @@ disk and checksums, and benchmarks each model against its catalog baseline.)*
 - `uninstall` leaves the weights, secrets, certificates and agents in place. To remove an agent:
   `sudo systemctl disable --now oaf-node && sudo rm /etc/systemd/system/oaf-node.service && sudo rm -r /var/lib/oaf/projects`.
 - **Upgrades** *(planned, M5)*: a new OAF release bumps the pinned image digests in the bundle, and `oaf apply` rolls them out.
+
+## 8a. Adding boxes
+
+OAF grows in pairs of two (there is no switch). From a single box there are three ways to grow;
+the console (or `POST /api/v1/topology/recommend`) shows which are possible for the boxes you
+have, what then fits, and how queries are routed.
+
+**a) +1 box over ConnectX-7: a pair.** This box and the new one are joined by one QSFP cable
+(two rails, ~185 Gbps). Models too large for one box run across both (TP=2). This box's own
+models stay, so a pair model needs room next to them on this box.
+
+```
+  ┌─────────┐ port 1 ══QSFP══ port 1 ┌─────────┐
+  │ spark-1 │                        │ spark-2 │      topology: pair
+  └────┬────┘                        └────┬────┘
+       └───────────── LAN ───────────────┘
+```
+
+**b) +1 box over the LAN: high availability (1:1).** A second complete appliance with the same
+models takes over when this one fails; users fail over through an external load balancer.
+*Planned (ADR-0002 §6); the console describes it but cannot set it up yet.*
+
+**c) +1 pair: two new boxes cabled to each other.** This box keeps the stack and a small model;
+the pair runs a large model such as GLM-5.3-Flash (~190 GiB, TP=2); `model: auto` sends complex
+queries to the pair and simple ones stay local. Only the pair is cabled with QSFP.
+
+```
+  ┌─────────┐                ┌─────────┐ port 1 ══QSFP══ port 1 ┌─────────┐
+  │ spark-1 │                │ spark-2 │                        │ spark-3 │
+  └────┬────┘                └────┬────┘                        └────┬────┘
+       └─────────────────── LAN ──┴──────────────────────────────────┘
+                                         topology: pair-plus-single
+```
+
+Port 1 is used by default: port 0 is often already in use. A port that already carries an address
+(configured by something else) is never chosen.
+
+**Joining a box.** Nothing is deployed when a box joins; it waits until you choose a topology.
+
+1. In the console, choose how many boxes you add (or `POST /api/v1/nodes/join-tokens
+   {"count": 2}`). You get one command, valid for an hour and for that many boxes:
+
+   ```sh
+   curl -fsSLk --pinnedpubkey 'sha256//…' https://<control>:8443/join.sh | sudo bash -s -- --token oafj_…
+   ```
+
+   The pin is the control node's TLS key: the script refuses anything else on that address.
+2. Run it on each new box (DGX OS, docker present). It downloads `oaf` and the bundle images from
+   the control node (no internet needed; `--skip-images` defers the images to deploy time), runs the
+   read-only preflight, enrols in the cluster PKI, and starts `oaf-node`. A box that fails a blocking
+   check (wrong architecture, no GPU, no docker or GPU runtime) does not join; `--force` overrides.
+3. The box shows up as **pending** with its hardware, preflight and both QSFP ports. When a cable
+   is up, each rail sees the other box as a link-layer neighbour, so the console shows which port
+   goes where.
+4. Choose the option. The plan (a `cluster.yaml` diff: nodes, the pair's cable with one /30 per
+   rail from 10.200.0.0/16, a group, the large model and its routing rule) is reviewed, then
+   applied: fabric bring-up (MTU 9000, GID detection, `ib_write_bw` per rail), weights copied over
+   the fabric, deploy, acceptance.
 
 ## 9. Troubleshooting
 

@@ -10,6 +10,7 @@ import (
 const (
 	pairExample     = "../../examples/cluster.pair.yaml"
 	triangleExample = "../../examples/cluster.triangle.yaml"
+	ppsExample      = "../../examples/cluster.pair-plus-single.yaml"
 	catalogExample  = "../../examples/catalog.yaml"
 )
 
@@ -33,7 +34,7 @@ func mustCatalog(t *testing.T) *Catalog {
 
 func TestExamplesAreValid(t *testing.T) {
 	cat := mustCatalog(t)
-	for _, path := range []string{pairExample, triangleExample} {
+	for _, path := range []string{pairExample, triangleExample, ppsExample} {
 		t.Run(path, func(t *testing.T) {
 			r := Validate(mustCluster(t, path), cat, Options{})
 			if !r.OK() {

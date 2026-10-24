@@ -29,6 +29,25 @@ func TestSemanticRules(t *testing.T) {
 		{"duplicate address", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Nodes[1].Address = c.Spec.Nodes[0].Address
 		}, Options{}, "spec.nodes[1].address", "already used"},
+		{"pair-plus-single needs three nodes", pairExample, func(c *Cluster, _ *Catalog) {
+			c.Spec.Fabric.Topology = TopologyPairPlusSingle
+		}, Options{}, "spec.fabric.topology", "needs exactly 3 node(s)"},
+		{"pair-plus-single with the single cabled", ppsExample, func(c *Cluster, _ *Catalog) {
+			c.Spec.Fabric.Links = append(c.Spec.Fabric.Links, Link{A: LinkEnd{Node: "spark-1", Port: intp(1)}, B: LinkEnd{Node: "spark-2", Port: intp(0)}})
+		}, Options{}, "spec.fabric.links", "exactly two nodes and none to the third"},
+		{"pair-plus-single without its pair cable", ppsExample, func(c *Cluster, _ *Catalog) {
+			c.Spec.Fabric.Links = nil
+			c.Spec.Groups = nil
+			c.Spec.Models = c.Spec.Models[:1]
+			c.Spec.Routing.Rules = nil
+		}, Options{}, "spec.fabric.links", "exactly two nodes and none to the third"},
+		{"pair-plus-single group across the LAN", ppsExample, func(c *Cluster, _ *Catalog) {
+			c.Spec.Groups[0].Nodes = []string{"spark-1", "spark-2"}
+		}, Options{}, "spec.groups[0].nodes", "spark-1 and spark-2 are not directly linked"},
+		{"pair-plus-single three cables on the pair", ppsExample, func(c *Cluster, _ *Catalog) {
+			l := Link{A: LinkEnd{Node: "spark-2"}, B: LinkEnd{Node: "spark-3"}}
+			c.Spec.Fabric.Links = append(c.Spec.Fabric.Links, l, l)
+		}, Options{}, "spec.fabric.links", "only 2 QSFP ports"},
 		{"topology node count", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Fabric.Topology = TopologyTriangle
 		}, Options{}, "spec.fabric.topology", "needs exactly 3 node(s)"},

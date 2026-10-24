@@ -94,6 +94,28 @@ func (s *Server) Handler() http.Handler { return s.root }
 // same authentication.
 func (s *Server) Handle(pattern string, h http.Handler) { s.api.Handle(pattern, h) }
 
+// HandlePublic mounts a handler that does its own authentication (the join
+// flow: a join token, not a management token). A more specific pattern than
+// /api/v1/ wins over the authenticated tree.
+func (s *Server) HandlePublic(pattern string, h http.Handler) { s.root.Handle(pattern, h) }
+
+// Publish sends a progress event to /api/v1/events subscribers (join,
+// preflight, link and fabric progress from other packages).
+func (s *Server) Publish(typ, status, message string) {
+	s.publish(Event{Type: typ, Status: status, Message: message})
+}
+
+// SavePlan records a change built elsewhere (the topology planner) as a plan
+// against before, with the same validation as the API's own plans.
+func (s *Server) SavePlan(ctx context.Context, summary string, before, after []byte) (string, error) {
+	r, err := http.NewRequestWithContext(ctx, http.MethodPost, "/", nil)
+	if err != nil {
+		return "", err
+	}
+	p, _ := s.offer(r, before, after, summary)
+	return p.ID, nil
+}
+
 // auth requires a management token: the value of any oaf-admin-* secret.
 // Digests are compared in constant time; failures are slowed down.
 func (s *Server) auth(next http.Handler) http.Handler {
