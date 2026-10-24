@@ -58,7 +58,8 @@ func TestModelPhase(t *testing.T) {
 		t.Fatalf("crash loop: %+v", p)
 	}
 	// An earlier crash, then a new run that is loading: loading.
-	if p := phaseOf(running("starting", 1, logStart, logTrace, logMemory, logEngine, logStart, logShards)); p.Phase != PhaseLoading {
+	if p := phaseOf(running("starting", 1, logStart, logTrace, logMemory, logEngine, logStart, logShards)); p.Phase != PhaseLoading ||
+		!strings.HasPrefix(p.Error, "The previous start failed: Not enough free memory") {
 		t.Fatalf("restarted after a crash: %+v", p)
 	}
 	exited := reconcile.ProjectState{Node: "spark-1", Project: "model-m", Exists: true, Services: []*nodev1.Service{{

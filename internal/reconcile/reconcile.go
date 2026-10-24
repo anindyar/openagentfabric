@@ -294,7 +294,7 @@ func (s ProjectState) Healthy() bool {
 
 // ModelLogLines is how much of a model container's log Status asks for while
 // it is not healthy.
-const ModelLogLines = 150
+const ModelLogLines = 300
 
 // ModelProjectPrefix names the compose project of a model deployment.
 const ModelProjectPrefix = "model-"

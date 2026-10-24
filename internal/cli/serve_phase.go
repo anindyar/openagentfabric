@@ -92,6 +92,15 @@ func nodePhase(st reconcile.ProjectState) oafd.DeploymentView {
 		return p
 	}
 	p.Phase, p.Progress, p.Detail = loadProgress(run)
+	// Restarted before: say why the last attempt failed, when the log still
+	// holds it, so a crash loop does not look like a first load.
+	if p.Restarts > 0 {
+		if prev := sv.GetLogTail()[:len(sv.GetLogTail())-len(run)]; len(prev) > 0 {
+			if e := failure(st.Node, prev); e != "" {
+				p.Error = "The previous start failed: " + e
+			}
+		}
+	}
 	return p
 }
 
