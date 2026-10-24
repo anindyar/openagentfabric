@@ -475,6 +475,104 @@ the gateway exports the call as a child of the app's span. `oaf keys issue` prin
 `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` for this when Langfuse is on; the same keys read
 traces back through Langfuse's public API.
 
+### External models
+
+`spec.routing.providers` serves external models by name next to the local ones: `openai`,
+`anthropic`, `gemini`, `azure-openai` or any `openai-compatible` endpoint.
+
+```yaml
+spec:
+  routing:
+    providers:
+      - name: openai
+        type: openai
+        secretRef: provider-openai   # the API key; never generated
+        allowEgress: true            # required: prompts leave the appliance
+        guardrails: [basic]
+        models:
+          - name: gpt-4o             # what clients send as `model`
+            upstream: gpt-4o-2024-08-06
+      - name: lab
+        type: openai-compatible
+        endpoint: http://llm.example.internal:8010/v1   # no key needed: omit secretRef
+        allowEgress: true
+        guardrails: [basic]
+        models: [{ name: lab-model }]
+```
+
+Store the key, then apply: `printf %s "$OPENAI_API_KEY" | sudo oaf secrets set provider-openai`
+and `sudo oaf apply`. Keys reach the gateway through its env file, never through config.yaml.
+`azure-openai` takes `azure: { resourceName, apiVersion }` instead of an endpoint.
+
+**A provider without guardrails is allowed, and warned about on every validate and plan:**
+*External model without guardrails: prompts, code and data leave the appliance unfiltered. This is
+extremely dangerous; use with care.* Start with the `basic` policy below. External models are
+reached by explicit model name; `model: auto` uses one only when a routing rule names it.
+
+### Guardrails
+
+`spec.routing.guardrails` are named policies of agentgateway prompt guards, attached to providers
+(`providers[].guardrails`) and to local deployments (`models[].guardrails`; `auto` follows the
+fast model's).
+
+```yaml
+spec:
+  routing:
+    guardrails:
+      - name: basic
+        description: Recommended minimum for external models.
+        message: "Blocked by the appliance's guardrails: the request contains a credential or private key."
+        request:                     # prompts, before the model sees them
+          - regex:
+              action: reject         # reject | mask | audit
+              patterns:
+                - 'AKIA[0-9A-Z]{16}'                    # AWS access key id
+                - '-----BEGIN [A-Z ]*PRIVATE KEY-----'  # PEM private key
+                - 'gh[pousr]_[A-Za-z0-9]{36,}'          # GitHub token
+                - 'sk-[A-Za-z0-9_-]{20,}'               # OpenAI-style key
+                - 'xox[abprs]-[A-Za-z0-9-]{10,}'        # Slack token
+                - '[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:[^/\s@]+@'   # password in a URL
+                - '(?i)(password|passwd|secret|api[_-]?key)\s*[:=]\s*\S{6,}'
+        response:                    # model output, before the client sees it
+          - regex:
+              action: mask
+              builtins: [email, phoneNumber, creditCard]
+```
+
+Built-in detectors are those of the pinned agentgateway: `ssn`, `creditCard`, `phoneNumber`,
+`email`, `caSin`; any other name fails validation. Custom patterns must compile. A rejected request
+gets HTTP 403 with the policy's `message`; masked values come back as placeholders such as
+`<EMAIL_ADDRESS>`. A guard can also call an external service: `webhook: { host: guard:9000 }`.
+
+### Management API (oafd)
+
+`oaf serve` (`oaf-api.service`, port 8443 on the control node, installed by the bootstrap) is the
+API an app uses to run the platform: everything above, without editing files. It never keeps state
+of its own: every change is a **plan**, a diff of cluster.yaml with its validation warnings and
+errors, applied in a second step.
+
+```sh
+sudo oaf keys issue garrison --admin --host host.docker.internal
+# ... AGENT_GATEWAY_* and LANGFUSE_* as above, plus:
+# OAF_API_URL=https://host.docker.internal:8443
+# OAF_API_TOKEN=<management token, secret oaf-admin-garrison>
+# OAF_API_CERT_SHA256=<fingerprint of the API's certificate, to pin>
+```
+
+| Method | Path (`/api/v1/...`) | |
+|---|---|---|
+| GET | `status`, `config`, `catalog` | nodes, deployments and components; cluster.yaml and the rendered gateway config; the catalog |
+| GET, POST · DELETE | `models` · `models/{name}`; PUT `models/{name}/guardrails` | local deployments |
+| GET, POST · PUT, DELETE | `providers` · `providers/{name}` | external providers; `api_key` is stored once and never returned |
+| GET, POST · PUT, DELETE | `guardrails` · `guardrails/{name}` | policies (`{"template":"basic"}`, `attach: {providers, models}`) |
+| GET, PUT | `routing` | mode, defaults, rules |
+| GET, POST · POST | `keys` · `keys/{name}/rotate` | app keys (the new key is in that reply only) |
+| GET · POST | `plans/{id}` · `plans/{id}/apply` | follow a plan; apply it (409 if cluster.yaml changed since) |
+| GET | `events` | server-sent events: plan progress |
+
+Writes answer `201` with `{plan_id, summary, diff, warnings, errors}`, or `422` when the change does
+not validate (such a plan cannot be applied). Requests need `Authorization: Bearer $OAF_API_TOKEN`.
+
 ## 7. Models
 
 Each entry under `spec.models` is one served model:
@@ -652,7 +750,7 @@ the failing project's logs, and open an issue at <https://github.com/anindyar/op
 | 8000 + n | model n's OpenAI API (rank 0 node), unless `port:` is set | host network |
 | 29500 + n | model n's rendezvous between the nodes of a pair | host network |
 | 18515–18614 | `ib_write_bw` exchange, only during a fabric check | rail addresses |
-| 8443 | `oafd` API and UI *(planned)* | all interfaces |
+| 8443 | `oafd` management API (control node, HTTPS) | all interfaces |
 
 ### Memory limits per container
 
@@ -674,6 +772,7 @@ vLLM has no container limit: its share is set by `gpuMemoryUtilization`.
 ### Commands
 `oaf validate`, `oaf preflight [--ssh]`, `oaf pki init`, `oaf node serve`, `oaf fabric check`,
 `oaf install`, `oaf apply [--dry-run]`, `oaf status`, `oaf uninstall --yes [--purge]`,
-`oaf keys issue|rotate|list|serve`, `oaf models add`, `oaf version`.
+`oaf keys issue [--admin]|rotate|list|serve`, `oaf models add`, `oaf serve`, `oaf secrets set`,
+`oaf observability ...`, `oaf version`.
 Every command has `--help`. Commands that act on the cluster take `-f` (cluster.yaml),
 `--catalog`, `--pki-dir`, `--secrets-dir` and `--timeout`.

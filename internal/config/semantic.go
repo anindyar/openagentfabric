@@ -3,6 +3,7 @@ package config
 import (
 	"cmp"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -92,6 +93,8 @@ func Validate(c *Cluster, cat *Catalog, opts Options) Report {
 	k.groupsCheck()
 	k.models()
 	k.routing()
+	k.guardrails()
+	k.providers()
 	k.observability()
 	return Report{Issues: k.out}
 }
@@ -513,8 +516,16 @@ func (k *checker) routing() {
 			chatModels++
 		}
 	}
+	external := map[string]bool{}
+	for _, pr := range r.Providers {
+		for _, m := range pr.Models {
+			external[m.Name] = true
+		}
+	}
 	chatTarget := func(path, name string) {
 		switch {
+		case external[name] && strings.HasPrefix(path, "spec.routing.rules"):
+			// A rule may send matching requests to an external model.
 		case !served[name]:
 			k.errorf(path, "%q is not an enabled deployment", name)
 		case embedding[name]:
@@ -552,7 +563,7 @@ func (k *checker) routing() {
 
 	for i, key := range r.Keys {
 		for j, m := range key.Models {
-			if m != "auto" && !served[m] {
+			if m != "auto" && !served[m] && !external[m] {
 				k.warnf(fmt.Sprintf("spec.routing.keys[%d].models[%d]", i, j), "%q is not an enabled deployment", m)
 			}
 		}
@@ -566,4 +577,127 @@ func sortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 	}
 	slices.Sort(keys)
 	return keys
+}
+
+// NoGuardrailWarning is the warning for an external provider without any
+// guardrail policy (ADR-0002 §2). Apps show it as is.
+const NoGuardrailWarning = "External model without guardrails: prompts, code and data leave the appliance unfiltered. This is extremely dangerous; use with care."
+
+// --- guardrails and external providers ------------------------------------
+
+func (k *checker) guardrails() {
+	names := map[string]bool{}
+	builtin := map[string]bool{}
+	for _, b := range GuardrailBuiltins {
+		builtin[b] = true
+	}
+	for i, g := range k.c.Spec.Routing.Guardrails {
+		p := fmt.Sprintf("spec.routing.guardrails[%d]", i)
+		if names[g.Name] {
+			k.errorf(p+".name", "duplicate guardrail policy %q", g.Name)
+		}
+		names[g.Name] = true
+		if len(g.Request) == 0 && len(g.Response) == 0 {
+			k.errorf(p, "guardrail policy %q has no guards", g.Name)
+		}
+		check := func(side string, guards []Guard) {
+			for j, gd := range guards {
+				gp := fmt.Sprintf("%s.%s[%d]", p, side, j)
+				switch {
+				case (gd.Regex == nil) == (gd.Webhook == nil):
+					k.errorf(gp, "a guard sets exactly one of regex or webhook")
+				case gd.Regex != nil:
+					if len(gd.Regex.Builtins) == 0 && len(gd.Regex.Patterns) == 0 {
+						k.errorf(gp+".regex", "needs at least one builtin or pattern")
+					}
+					for x, b := range gd.Regex.Builtins {
+						if !builtin[b] {
+							k.errorf(fmt.Sprintf("%s.regex.builtins[%d]", gp, x), "unknown detector %q (this agentgateway has %s)", b, strings.Join(GuardrailBuiltins, ", "))
+						}
+					}
+					for x, pat := range gd.Regex.Patterns {
+						if _, err := regexp.Compile(pat); err != nil {
+							k.errorf(fmt.Sprintf("%s.regex.patterns[%d]", gp, x), "invalid regular expression: %v", err)
+						}
+					}
+					if side == "request" && gd.Regex.Action == "mask" {
+						k.warnf(gp+".regex.action", "mask on a request redacts the prompt before the model sees it; reject is the usual choice for prompts")
+					}
+				}
+			}
+		}
+		check("request", g.Request)
+		check("response", g.Response)
+	}
+	for i, d := range k.c.Spec.Models {
+		for j, name := range d.Guardrails {
+			if !names[name] {
+				k.errorf(fmt.Sprintf("spec.models[%d].guardrails[%d]", i, j), "no guardrail policy %q in spec.routing.guardrails", name)
+			}
+		}
+	}
+}
+
+func (k *checker) providers() {
+	r := k.c.Spec.Routing
+	policies := map[string]bool{}
+	for _, g := range r.Guardrails {
+		policies[g.Name] = true
+	}
+	taken := map[string]string{"auto": "vSR routing"}
+	for _, d := range k.c.Spec.Models {
+		taken[d.Name] = "model deployment " + d.Name
+	}
+	names := map[string]bool{}
+	for i, pr := range r.Providers {
+		p := fmt.Sprintf("spec.routing.providers[%d]", i)
+		if names[pr.Name] {
+			k.errorf(p+".name", "duplicate provider %q", pr.Name)
+		}
+		names[pr.Name] = true
+		if !pr.AllowEgress {
+			k.errorf(p+".allowEgress", "provider %q sends prompts outside the appliance: set allowEgress: true to confirm", pr.Name)
+		}
+		switch pr.Type {
+		case ProviderOpenAICompatible:
+			if pr.Endpoint == "" {
+				k.errorf(p+".endpoint", "an openai-compatible provider needs its endpoint")
+			}
+		case ProviderAzureOpenAI:
+			if pr.Azure == nil {
+				k.errorf(p+".azure", "an azure-openai provider needs azure.resourceName")
+			}
+			if pr.SecretRef == "" {
+				k.errorf(p+".secretRef", "provider %q needs the secret holding its API key", pr.Name)
+			}
+		default:
+			if pr.SecretRef == "" {
+				k.errorf(p+".secretRef", "provider %q needs the secret holding its API key", pr.Name)
+			}
+		}
+		if pr.Type != ProviderAzureOpenAI && pr.Azure != nil {
+			k.errorf(p+".azure", "azure settings apply to azure-openai providers only")
+		}
+		if pr.Type == ProviderAnthropic || pr.Type == ProviderGemini || pr.Type == ProviderAzureOpenAI {
+			if pr.Endpoint != "" {
+				k.errorf(p+".endpoint", "a %s provider uses the provider's own endpoint; endpoint is for openai and openai-compatible", pr.Type)
+			}
+		}
+		for j, g := range pr.Guardrails {
+			if !policies[g] {
+				k.errorf(fmt.Sprintf("%s.guardrails[%d]", p, j), "no guardrail policy %q in spec.routing.guardrails", g)
+			}
+		}
+		if len(pr.Guardrails) == 0 {
+			k.warnf(p+".guardrails", "%s", NoGuardrailWarning)
+		}
+		for j, m := range pr.Models {
+			mp := fmt.Sprintf("%s.models[%d].name", p, j)
+			if owner, ok := taken[m.Name]; ok {
+				k.errorf(mp, "model name %q is already used by %s", m.Name, owner)
+				continue
+			}
+			taken[m.Name] = "provider " + pr.Name
+		}
+	}
 }
