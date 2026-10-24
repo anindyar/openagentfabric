@@ -221,6 +221,8 @@ type SignalView struct {
 	Keywords      []string `json:"keywords,omitempty"`
 	Domains       []string `json:"domains,omitempty"`
 	CaseSensitive bool     `json:"case_sensitive,omitempty"`
+	// MinTokens: a context signal fires for prompts at least this long.
+	MinTokens int `json:"min_tokens,omitempty"`
 }
 
 // KeyView is an app key (never its value, except once on issue/rotate).
@@ -351,7 +353,7 @@ func routingView(r config.Routing) RoutingView {
 		}
 		for _, s := range rule.Match.Signals {
 			rr.Match.Signals = append(rr.Match.Signals, SignalView{Type: s.Type, Threshold: s.Threshold, Keywords: s.Keywords,
-				Domains: s.Domains, CaseSensitive: s.CaseSensitive})
+				Domains: s.Domains, CaseSensitive: s.CaseSensitive, MinTokens: s.MinTokens})
 		}
 		v.Rules = append(v.Rules, rr)
 	}
@@ -369,7 +371,7 @@ func (v RoutingView) toUpdate() config.RoutingUpdate {
 		}
 		for _, s := range r.Match.Signals {
 			rule.Match.Signals = append(rule.Match.Signals, config.Signal{Type: s.Type, Threshold: s.Threshold,
-				Keywords: s.Keywords, Domains: s.Domains, CaseSensitive: s.CaseSensitive})
+				Keywords: s.Keywords, Domains: s.Domains, CaseSensitive: s.CaseSensitive, MinTokens: s.MinTokens})
 		}
 		rules = append(rules, rule)
 	}
