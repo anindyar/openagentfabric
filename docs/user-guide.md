@@ -120,9 +120,49 @@ OAF never reconfigures a port that has addresses it did not assign.
 Run the steps on the **control node** unless a step says otherwise. Commands that change the
 system need `sudo`.
 
-### One box: `scripts/spark-bootstrap.sh`
+### One box, one command
+
+On a fresh DGX Spark / GX10 (DGX OS, a user with sudo, internet access):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/anindyar/openagentfabric/main/install.sh \
+  | bash -s -- --email you@company.com
+```
+
+That is the whole platform on this box: it checks the host, checks out OAF into `/opt/oaf/src` and
+runs `scripts/spark-bootstrap.sh` (below) with your options. It asks you to accept the NVIDIA and
+model licences on the terminal (`--accept-licences` when there is none, e.g. automation).
+
+**With the Garrison security console** on top (the appliance), give it read access to the Garrison
+repository in the environment, never on the command line:
+
+```sh
+export GARRISON_GIT_TOKEN=<token with read access to the Garrison repository>
+curl -fsSL https://raw.githubusercontent.com/anindyar/openagentfabric/main/install.sh \
+  | bash -s -- --email you@company.com --garrison
+```
+
+After OAF it checks Garrison out into `/opt/garrison`, runs its installer against OAF (Garrison uses
+OAF's gateway for its models and embeddings, and OAF's Grafana, Prometheus and Loki), then enrols
+this box's own Garrison agent and makes it a log collector, so the appliance shows in Systems and
+Observe like every other machine. The token reaches git through an askpass helper (not argv, the
+process list or `.git/config`). At the end it prints the console address; the admin password is in
+`/opt/garrison/.env` (`ADMIN_PASSWORD`).
+
+| Option | Use |
+|---|---|
+| `--garrison` | also install the Garrison console (needs `GARRISON_GIT_TOKEN`) |
+| `--no-self-enrol` | with `--garrison`: leave this box out of Garrison's systems |
+| `--ref REF` | the OAF version (git ref) to install, default `main` |
+| `--address IP`, `--name NAME` | management address and node name (defaults: default-route address, hostname) |
+| `--no-model`, `--util`, `--weights-from`, ... | passed to `spark-bootstrap.sh` (table below) |
+
+Re-run the same command after a failure: every step checks before it acts. More boxes join later
+from the console: §8a "Adding boxes".
+
+### One box from a checkout: `scripts/spark-bootstrap.sh`
 For a single GB10 running the whole stack, a chat model and the embedding model, one script does
-every step below. On the
+every step below. The installer above runs it; from a checkout on the
 new box:
 
 ```sh
