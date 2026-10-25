@@ -249,7 +249,11 @@ var notSlug = regexp.MustCompile(`[^a-z0-9-]+`)
 
 // modelProjectName maps a served model name (which may hold '.', '_' and '/')
 // to a valid project name. The node agent allows 40 characters.
-func modelProjectName(served string) string {
+func modelProjectName(served string) string { return ModelProjectName(served) }
+
+// ModelProjectName is the compose project serving a deployment (see
+// modelProjectName).
+func ModelProjectName(served string) string {
 	s := strings.Trim(notSlug.ReplaceAllString(served, "-"), "-")
 	name := modelProjectPrefix + s
 	if s == served && len(name) <= 40 {

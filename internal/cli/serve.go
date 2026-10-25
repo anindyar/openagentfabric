@@ -251,9 +251,9 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 	deployed := map[string]bool{}
 	for _, d := range s.cluster.Spec.Models {
 		dl := func(node string) *oafd.DownloadView { return byDownload[node+"/"+d.CatalogRef] }
-		dv := deploymentState(s.cluster, cat, d, byProject[reconcile.ModelProjectPrefix+d.Name], dl)
+		dv := deploymentState(s.cluster, cat, d, byProject[render.ModelProjectName(d.Name)], dl)
 		v.Deployments = append(v.Deployments, dv)
-		deployed[reconcile.ModelProjectPrefix+d.Name] = true
+		deployed[render.ModelProjectName(d.Name)] = true
 	}
 	// A model removed from cluster.yaml whose containers an apply has not
 	// taken down yet.
