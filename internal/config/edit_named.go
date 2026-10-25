@@ -298,3 +298,37 @@ func SetNodeHeadless(data []byte, name string, headless bool) ([]byte, bool, err
 	}
 	return nil, false, fmt.Errorf("no node %q", name)
 }
+
+// RenameModelRefs points routing (the fast and fallback defaults, rule
+// targets) and app keys' model lists at newName wherever they name old.
+func RenameModelRefs(data []byte, old, newName string) ([]byte, error) {
+	doc, spec, err := editDoc(data)
+	if err != nil {
+		return nil, err
+	}
+	routing := mappingChild(spec, "routing")
+	swap := func(n *yaml.Node) {
+		if n != nil && n.Kind == yaml.ScalarNode && n.Value == old {
+			n.Value = newName
+		}
+	}
+	if d := mappingChild(routing, "defaults"); d != nil {
+		swap(mappingChild(d, "fast"))
+		swap(mappingChild(d, "fallback"))
+	}
+	if rules := mappingChild(routing, "rules"); rules != nil && rules.Kind == yaml.SequenceNode {
+		for _, r := range rules.Content {
+			swap(mappingChild(r, "target"))
+		}
+	}
+	if keys := mappingChild(routing, "keys"); keys != nil && keys.Kind == yaml.SequenceNode {
+		for _, k := range keys.Content {
+			if ms := mappingChild(k, "models"); ms != nil && ms.Kind == yaml.SequenceNode {
+				for _, m := range ms.Content {
+					swap(m)
+				}
+			}
+		}
+	}
+	return finishEdit(doc, "renaming "+old)
+}

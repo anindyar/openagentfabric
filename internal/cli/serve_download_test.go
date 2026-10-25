@@ -30,6 +30,13 @@ func TestModelPhaseDownloading(t *testing.T) {
 	if dv.Phase != PhaseFailed || !strings.Contains(dv.Error, "not enough disk space") {
 		t.Fatalf("download failed: %+v", dv)
 	}
+	// Replaced by a model still downloading: the previous one serves.
+	dl = &oafd.DownloadView{Node: "spark-1", ModelID: "m", State: "downloading", BytesDone: 1, BytesTotal: 4}
+	dv = oafd.DeploymentView{}
+	modelPhase(&dv, []reconcile.ProjectState{running("healthy", 0)}, find)
+	if dv.Phase != PhaseReady || !strings.HasPrefix(dv.Detail, "Serving the previous model; switches when the new one has downloaded (25%)") {
+		t.Fatalf("replacement downloading: %+v", dv)
+	}
 	dl = &oafd.DownloadView{Node: "spark-1", ModelID: "m", State: "complete"}
 	dv = oafd.DeploymentView{}
 	modelPhase(&dv, []reconcile.ProjectState{waiting}, find)

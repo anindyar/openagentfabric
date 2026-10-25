@@ -99,6 +99,11 @@ func nodePhase(st reconcile.ProjectState, dl *oafd.DownloadView) oafd.Deployment
 	switch {
 	case sv.GetState() == "running" && (sv.GetHealth() == "" || sv.GetHealth() == "healthy"):
 		p.Phase, p.Progress = PhaseReady, 100
+		// Replaced by another model whose weights are still downloading: the
+		// previous model serves until the agent switches.
+		if d, ok := downloadPhase(st.Node, dl); ok && d.Phase == PhaseDownloading {
+			p.Detail = fmt.Sprintf("Serving the previous model; switches when the new one has downloaded (%d%%)", d.Progress)
+		}
 		return p
 	case sv.GetState() == "exited" || sv.GetState() == "dead" || sv.GetState() == "restarting":
 		p.Phase, p.Error = PhaseFailed, failure(st.Node, sv.GetLogTail())

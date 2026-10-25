@@ -25,6 +25,7 @@ func (s *Server) routes() {
 	m.HandleFunc("DELETE /api/v1/models/{name}", s.removeModel)
 	m.HandleFunc("PUT /api/v1/models/{name}/guardrails", s.setModelGuardrails)
 	m.HandleFunc("PUT /api/v1/models/{name}", s.updateModel)
+	m.HandleFunc("POST /api/v1/models/{name}/replace", s.replaceModel)
 	m.HandleFunc("PUT /api/v1/nodes/{name}/headless", s.setNodeHeadless)
 
 	m.HandleFunc("GET /api/v1/providers", s.listProviders)
