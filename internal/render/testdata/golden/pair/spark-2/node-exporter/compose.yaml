@@ -8,6 +8,7 @@ services:
     command:
       - --path.rootfs=/host
       - --web.listen-address=:9100
+      - --no-collector.cpufreq
     volumes:
       - /:/host:ro,rslave
     mem_limit: 96m

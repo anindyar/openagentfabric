@@ -427,7 +427,10 @@ func (r *renderer) nodeExporter(n config.Node) (Project, error) {
 	s := newService(img)
 	s.NetworkMode = "host"
 	s.PID = "host"
-	s.Command = []string{"--path.rootfs=/host", "--web.listen-address=:" + strconv.Itoa(config.PortNodeExporter)}
+	// cpufreq hangs on GB10 (DGX OS 2025-10): every scrape then waits until
+	// the exporter's 40 concurrent requests are used up and it answers 503,
+	// so no box metrics reach Prometheus.
+	s.Command = []string{"--path.rootfs=/host", "--web.listen-address=:" + strconv.Itoa(config.PortNodeExporter), "--no-collector.cpufreq"}
 	s.Volumes = []string{"/:/host:ro,rslave"}
 	return finish(p, r.Versions.Version, &composeFile{Services: map[string]*service{"node-exporter": s}}, newEnvFile())
 }
