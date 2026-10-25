@@ -204,27 +204,31 @@ models:
         args: [--trust-remote-code, --enable-chunked-prefill, --max-num-seqs, "16",
                --tool-call-parser, qwen3_xml, --enable-auto-tool-choice, --reasoning-parser, qwen3]
 
-  # Qwen3-Next 80B-A3B (NVFP4, NVIDIA): hybrid attention (Gated DeltaNet), so
-  # the KV cache is small; 3B active. The smartest of the companions, at
-  # about twice their memory.
-  - id: qwen3-next-80b-a3b-instruct-nvfp4
-    displayName: Qwen3-Next 80B-A3B Instruct (NVFP4, NVIDIA)
+  # Ornith 1.5 122B (NVFP4): 122B MoE, about 10B active, on one box. The
+  # same mixed build as the 35B (4-bit experts, FP8 attention), which runs on
+  # the published vLLM build. Only 12 of its 48 layers keep a KV cache (FP8,
+  # about 12 KiB a token), so the full 256K context costs about 3 GiB; the
+  # rest of the 0.80 share is weights (72 GiB) and activations. It thinks
+  # before answering, like the 35B. Vision is not served (--language-model-only
+  # keeps the multimodal front-end out of the box's memory).
+  - id: ornith-1.5-122b-nvfp4
+    displayName: Ornith 1.5 122B (NVFP4)
     source:
       huggingface:
-        repo: nvidia/Qwen3-Next-80B-A3B-Instruct-NVFP4
-        revision: 8fb2682f136cf94d932a498f18cb1e428832a912
-    license: { spdx: Apache-2.0, gated: false, redistributable: true }
-    sizeGiB: 47.3
-    classes: [fast]
-    companionOf: think
+        repo: ornith-ai/Ornith-1.5-122B-NVFP4
+        revision: f049036f794622db10bb69855bf9819207334626
+    license: { spdx: MIT, gated: false, redistributable: true }
+    sizeGiB: 72.3
+    classes: [think]
     profiles:
       - name: single
         nodes: 1
         tensorParallel: 1
-        gpuMemoryUtilization: 0.50
-        maxModelLen: 65536
-        args: [--enable-chunked-prefill, --enable-prefix-caching, --max-num-seqs, "16",
-               --tool-call-parser, hermes, --enable-auto-tool-choice]
+        gpuMemoryUtilization: 0.80
+        maxModelLen: 262144
+        args: [--trust-remote-code, --enable-chunked-prefill, --enable-prefix-caching, --max-num-seqs, "8",
+               --tool-call-parser, qwen3_xml, --enable-auto-tool-choice, --reasoning-parser, qwen3,
+               --language-model-only]
 
   # Embeddings for the appliance's apps (vclocal memory search), served through
   # the gateway like every other model. Small: about 6.5 GiB on a GB10 in all,
