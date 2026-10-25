@@ -577,4 +577,13 @@ func TestObservabilityOptions(t *testing.T) {
 	if cf.Services["grafana"].Environment["GF_AUTH_ANONYMOUS_ORG_ROLE"] != "Viewer" {
 		t.Fatal("anonymous viewer not enabled")
 	}
+
+	// bindAddress keeps the unauthenticated stores off the LAN.
+	in.Cluster.Spec.Observability.BindAddress = "172.17.0.1"
+	cf, _ = compose(in)
+	for svc, want := range map[string]string{"prometheus": "172.17.0.1:9090:9090", "loki": "172.17.0.1:3100:3100", "grafana": "172.17.0.1:3001:3000"} {
+		if !slices.Contains(cf.Services[svc].Ports, want) {
+			t.Fatalf("%s ports = %v, want %s", svc, cf.Services[svc].Ports, want)
+		}
+	}
 }

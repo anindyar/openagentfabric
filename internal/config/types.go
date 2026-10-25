@@ -332,10 +332,16 @@ type RuleRequires struct {
 
 // Observability settings.
 type Observability struct {
-	Langfuse *LangfuseSettings `yaml:"langfuse,omitempty"`
-	Metrics  *MetricsSettings  `yaml:"metrics,omitempty"`
-	Logs     *LogsSettings     `yaml:"logs,omitempty"`
-	Grafana  *GrafanaSettings  `yaml:"grafana,omitempty"`
+	// BindAddress publishes Prometheus, Loki and Grafana on this host address
+	// only (default: every address). Neither Prometheus nor Loki
+	// authenticates, so an app that reaches them from containers on the same
+	// host (through the docker bridge) sets the bridge's address and keeps
+	// them off the LAN.
+	BindAddress string            `yaml:"bindAddress,omitempty"`
+	Langfuse    *LangfuseSettings `yaml:"langfuse,omitempty"`
+	Metrics     *MetricsSettings  `yaml:"metrics,omitempty"`
+	Logs        *LogsSettings     `yaml:"logs,omitempty"`
+	Grafana     *GrafanaSettings  `yaml:"grafana,omitempty"`
 }
 
 // LangfuseSettings control tracing.

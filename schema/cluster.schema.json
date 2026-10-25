@@ -746,6 +746,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "bindAddress": {
+          "description": "Publish Prometheus, Loki and Grafana on this host address only (default: every address), e.g. the docker bridge's 172.17.0.1 for an app on the same host. Neither Prometheus nor Loki authenticates.",
+          "type": "string"
+        },
         "langfuse": {
           "type": "object",
           "additionalProperties": false,

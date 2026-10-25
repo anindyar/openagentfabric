@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -19,7 +20,7 @@ var observabilityFeatures = map[string][]string{
 
 func newObservabilityCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "observability", Short: "Turn optional observability features on or off in cluster.yaml"}
-	cmd.AddCommand(newObservabilitySetCmd("enable", true), newObservabilitySetCmd("disable", false), newObservabilityScrapeCmd(), newObservabilityGrafanaURLCmd())
+	cmd.AddCommand(newObservabilitySetCmd("enable", true), newObservabilitySetCmd("disable", false), newObservabilityScrapeCmd(), newObservabilityGrafanaURLCmd(), newObservabilityBindCmd())
 	return cmd
 }
 
@@ -122,6 +123,45 @@ func newObservabilityGrafanaURLCmd() *cobra.Command {
 				return err
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "grafana rootUrl set; run `oaf apply` to deploy\n")
+			return err
+		},
+	}
+	cmd.Flags().StringVarP(&clusterPath, "file", "f", DefaultClusterPath, "path to cluster.yaml")
+	return cmd
+}
+
+func newObservabilityBindCmd() *cobra.Command {
+	var clusterPath string
+	cmd := &cobra.Command{
+		Use:   "bind <address|all>",
+		Short: "Publish Prometheus, Loki and Grafana on one host address only (\"all\": every address)",
+		Long: "Prometheus and Loki have no authentication. An app that reaches them from containers on\n" +
+			"the same host binds them to the docker bridge (e.g. 172.17.0.1), so the LAN cannot read\n" +
+			"or write metrics and logs. Run `oaf apply` afterwards.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			addr := args[0]
+			if addr == "all" {
+				addr = ""
+			} else if net.ParseIP(addr) == nil {
+				return fmt.Errorf("%q is not an IP address (or \"all\")", addr)
+			}
+			data, err := os.ReadFile(clusterPath)
+			if err != nil {
+				return err
+			}
+			out, changed, err := config.SetSpecString(data, addr, "observability", "bindAddress")
+			if err != nil {
+				return err
+			}
+			if !changed {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s: nothing to change\n", clusterPath)
+				return err
+			}
+			if err := config.WriteFileAtomic(clusterPath, out); err != nil {
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "observability bindAddress set; run `oaf apply` to deploy\n")
 			return err
 		},
 	}

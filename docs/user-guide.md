@@ -544,9 +544,21 @@ An app's own `/metrics` joins with `sudo oaf observability scrape <app> https://
 [--insecure]` (job `app-<app>`, label `app`; `--insecure` accepts the app's self-signed certificate).
 
 An app adds dashboards by writing JSON files to `/var/lib/oaf/grafana/apps/<app>/`; Grafana shows
-each subdirectory as a folder and picks up changes within 30 seconds. Prometheus and Loki have no
-authentication, so keep them on a trusted network, or put an authenticating proxy in front (Garrison
-does: its endpoint collectors push through its own TLS endpoint).
+each subdirectory as a folder and picks up changes within 30 seconds.
+
+Prometheus and Loki have no authentication: anyone who reaches ports 9090 and 3100 can read every
+metric and log line, and push their own. By default they (and Grafana) are published on every
+address of the observability node. An app that reaches them only from containers on the same host
+binds them to the docker bridge instead, so the LAN cannot reach them:
+
+```sh
+sudo oaf observability bind 172.17.0.1    # the docker0 address; "all" restores the default
+sudo oaf apply
+```
+
+Containers reach them at `host.docker.internal` (`extra_hosts: host.docker.internal:host-gateway`).
+Remote collectors then push through an authenticating proxy (Garrison's endpoint collectors push
+through its own TLS endpoint).
 
 ### Apps: their own key, rotated by the app
 

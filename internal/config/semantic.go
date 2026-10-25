@@ -3,6 +3,7 @@ package config
 import (
 	"cmp"
 	"fmt"
+	"net"
 	"regexp"
 	"slices"
 	"sort"
@@ -118,6 +119,9 @@ func (k *checker) images() {
 }
 
 func (k *checker) observability() {
+	if b := k.c.Spec.Observability.BindAddress; b != "" && net.ParseIP(b) == nil {
+		k.errorf("spec.observability.bindAddress", "%q is not an IP address", b)
+	}
 	m := k.c.Spec.Observability.Metrics
 	if m == nil {
 		return

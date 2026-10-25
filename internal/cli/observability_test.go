@@ -76,4 +76,19 @@ func TestObservabilityEnable(t *testing.T) {
 	if _, err = runCLI(t, "observability", "enable", "tracing", "-f", cluster); err == nil {
 		t.Fatal("unknown feature accepted")
 	}
+	if out, err = runCLI(t, "observability", "bind", "172.17.0.1", "-f", cluster); err != nil {
+		t.Fatalf("bind: %v\n%s", err, out)
+	}
+	if c, _ = config.LoadCluster(cluster); c.Spec.Observability.BindAddress != "172.17.0.1" {
+		t.Fatalf("bindAddress = %q", c.Spec.Observability.BindAddress)
+	}
+	if _, err = runCLI(t, "observability", "bind", "lan", "-f", cluster); err == nil {
+		t.Fatal("bind accepted a non-address")
+	}
+	if out, err = runCLI(t, "observability", "bind", "all", "-f", cluster); err != nil {
+		t.Fatalf("bind all: %v\n%s", err, out)
+	}
+	if c, _ = config.LoadCluster(cluster); c.Spec.Observability.BindAddress != "" {
+		t.Fatal("bindAddress not cleared")
+	}
 }

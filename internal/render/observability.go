@@ -194,7 +194,7 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 	if m := r.Cluster.Spec.Observability.Metrics; m != nil && m.RemoteWrite {
 		prom.Command = append(prom.Command, "--web.enable-remote-write-receiver")
 	}
-	prom.Ports = []string{portMap(config.PortPrometheus, 9090)}
+	prom.Ports = []string{r.obsPort(config.PortPrometheus, 9090)}
 	prom.Volumes = []string{"./prometheus.yml:/etc/prometheus/prometheus.yml:ro", "prometheus-data:/prometheus"}
 	if r.hasModels() {
 		key, err := r.secret(SecretVLLMAPIKey)
@@ -236,7 +236,7 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 			}
 		}
 	}
-	graf.Ports = []string{portMap(config.PortGrafana, 3000)}
+	graf.Ports = []string{r.obsPort(config.PortGrafana, 3000)}
 	graf.Volumes = []string{
 		"grafana-data:/var/lib/grafana",
 		"./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/oaf.yaml:ro",
@@ -267,7 +267,7 @@ func (r *renderer) metrics(n config.Node) (Project, error) {
 		}
 		loki := newService(lokiImg)
 		loki.Command = []string{"-config.file=/etc/loki/config.yaml"}
-		loki.Ports = []string{portMap(config.PortLoki, 3100)}
+		loki.Ports = []string{r.obsPort(config.PortLoki, 3100)}
 		loki.Volumes = []string{"./loki.yaml:/etc/loki/config.yaml:ro", "loki-data:/loki"}
 		cf.Services["loki"] = loki
 		cf.Volumes["loki-data"] = map[string]string{}
@@ -503,6 +503,15 @@ func volumes(names ...string) map[string]map[string]string {
 func hostPort(host string, port int) string { return net.JoinHostPort(host, strconv.Itoa(port)) }
 
 func portMap(host, container int) string { return fmt.Sprintf("%d:%d", host, container) }
+
+// obsPort publishes an observability port on spec.observability.bindAddress
+// when one is set: Prometheus and Loki have no authentication of their own.
+func (r *renderer) obsPort(host, container int) string {
+	if b := r.Cluster.Spec.Observability.BindAddress; b != "" {
+		return fmt.Sprintf("%s:%d:%d", b, host, container)
+	}
+	return portMap(host, container)
+}
 
 // registry runs the image registry on the control node, on the host network
 // with TLS from OAF's CA; images live under /var/lib/oaf/registry.
