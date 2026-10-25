@@ -49,3 +49,11 @@ Status: **open**, **in progress**, **done (commit)**.
 | A1 | Deployed by `git bundle` + scp + `deployments/dgx-spark/install.sh` | .242 | Single-command install from the signed bundle (with OAF) | open |
 | A2 | Installer prints the admin password at the end of its log | .242 | Print it once to the terminal only, never to a log file | open |
 | A3 | Old vclocal Grafana/Prometheus/Loki/Tempo containers removed when moving to OAF's stack | .242 | Done by the installer (it removes them; volumes kept) | done |
+
+## 2026-10-25: GLM-5.3-Flash on the pair never came up
+
+- **Hand fix:** restarted the follower rank (`docker restart` on spark-a98a) while the leader waited for it.
+  **Automated:** `a2e4cf4`, follower ranks run under a rank guard and restart themselves when the leader restarts.
+- **Cause 2:** FlashInfer's kernel compile (one nvcc per core) was OOM-killed beside the loaded weights.
+  **Automated:** `04bcbb5`, the catalog profile sets `MAX_JOBS=4` and keeps `/root/.cache/flashinfer` as a volume.
+  Verified: healthy at 22:21 UTC, answered through the gateway.
