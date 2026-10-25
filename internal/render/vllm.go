@@ -19,8 +19,9 @@ import (
 // no Ray).
 func (r *renderer) models() ([]Project, error) {
 	var out []Project
+	unpinned := UnpinnedLocal(r.Cluster, r.Catalog, r.Versions)
 	for i, d := range r.Cluster.Spec.Models {
-		if !d.IsEnabled() {
+		if !d.IsEnabled() || unpinned[d.Name] != "" {
 			continue
 		}
 		ps, err := r.model(i, d)

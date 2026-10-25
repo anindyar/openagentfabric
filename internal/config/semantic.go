@@ -100,11 +100,23 @@ func Validate(c *Cluster, cat *Catalog, opts Options) Report {
 	k.guardrails()
 	k.providers()
 	k.observability()
+	k.images()
 	return Report{Issues: k.out}
 }
 
 // observability: app scrape targets become Prometheus jobs, whose names
 // must be unique.
+// pinnedImage is <registry>/<repo>@sha256:<digest>, as `oaf images push` writes it.
+var pinnedImage = regexp.MustCompile(`^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$`)
+
+func (k *checker) images() {
+	for comp, ref := range k.c.Spec.Images {
+		if !pinnedImage.MatchString(ref) {
+			k.errorf("spec.images."+comp, "%q must be pinned by digest: <registry>/<repo>@sha256:<digest> (oaf images push writes it)", ref)
+		}
+	}
+}
+
 func (k *checker) observability() {
 	m := k.c.Spec.Observability.Metrics
 	if m == nil {

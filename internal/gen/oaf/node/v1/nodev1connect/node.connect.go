@@ -54,6 +54,8 @@ const (
 	NodeServicePullWeightsProcedure = "/oaf.node.v1.NodeService/PullWeights"
 	// NodeServiceWeightsProcedure is the procedure name of the NodeService's Weights RPC.
 	NodeServiceWeightsProcedure = "/oaf.node.v1.NodeService/Weights"
+	// NodeServiceTrustRegistryProcedure is the procedure name of the NodeService's TrustRegistry RPC.
+	NodeServiceTrustRegistryProcedure = "/oaf.node.v1.NodeService/TrustRegistry"
 )
 
 var (
@@ -155,6 +157,13 @@ var (
 			Procedure:  NodeServiceWeightsProcedure,
 		}
 	})
+	nodeServiceTrustRegistrySpec = sync.OnceValue(func() connect.Spec {
+		return connect.Spec{
+			StreamType: connect.StreamTypeUnary,
+			Schema:     v1.File_oaf_node_v1_node_proto.Services().ByName("NodeService").Methods().ByName("TrustRegistry"),
+			Procedure:  NodeServiceTrustRegistryProcedure,
+		}
+	})
 )
 
 // NodeServiceClient is a client for the oaf.node.v1.NodeService service.
@@ -198,6 +207,9 @@ type NodeServiceClient interface {
 	PullWeights(context.Context, *v1.PullWeightsRequest) (*v1.PullWeightsResponse, error)
 	// Downloads this agent knows of: in progress, finished or failed.
 	Weights(context.Context, *v1.WeightsRequest) (*v1.WeightsResponse, error)
+	// Make docker trust OAF's CA for the control node's image registry
+	// (/etc/docker/certs.d/<host>/ca.crt); no daemon restart needed.
+	TrustRegistry(context.Context, *v1.TrustRegistryRequest) (*v1.TrustRegistryResponse, error)
 }
 
 // NewNodeServiceClient constructs a client for the oaf.node.v1.NodeService service. Multiple
@@ -247,6 +259,9 @@ type NodeServiceHandler interface {
 	PullWeights(context.Context, *v1.PullWeightsRequest) (*v1.PullWeightsResponse, error)
 	// Downloads this agent knows of: in progress, finished or failed.
 	Weights(context.Context, *v1.WeightsRequest) (*v1.WeightsResponse, error)
+	// Make docker trust OAF's CA for the control node's image registry
+	// (/etc/docker/certs.d/<host>/ca.crt); no daemon restart needed.
+	TrustRegistry(context.Context, *v1.TrustRegistryRequest) (*v1.TrustRegistryResponse, error)
 }
 
 // RegisterNodeServiceHandler registers svc as the oaf.node.v1.NodeService implementation on server.
@@ -267,6 +282,7 @@ func RegisterNodeServiceHandler(server *connect.Server, svc NodeServiceHandler) 
 		connect.Method{Spec: nodeServicePingSpec(), Handler: adapter.ping},
 		connect.Method{Spec: nodeServicePullWeightsSpec(), Handler: adapter.pullWeights},
 		connect.Method{Spec: nodeServiceWeightsSpec(), Handler: adapter.weights},
+		connect.Method{Spec: nodeServiceTrustRegistrySpec(), Handler: adapter.trustRegistry},
 	)
 }
 
@@ -327,6 +343,10 @@ func (UnimplementedNodeServiceHandler) PullWeights(context.Context, *v1.PullWeig
 
 func (UnimplementedNodeServiceHandler) Weights(context.Context, *v1.WeightsRequest) (*v1.WeightsResponse, error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.Weights is not implemented")
+}
+
+func (UnimplementedNodeServiceHandler) TrustRegistry(context.Context, *v1.TrustRegistryRequest) (*v1.TrustRegistryResponse, error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, "oaf.node.v1.NodeService.TrustRegistry is not implemented")
 }
 
 type nodeServiceClient struct {
@@ -440,6 +460,14 @@ func (c *nodeServiceClient) PullWeights(ctx context.Context, req *v1.PullWeights
 func (c *nodeServiceClient) Weights(ctx context.Context, req *v1.WeightsRequest) (*v1.WeightsResponse, error) {
 	var res v1.WeightsResponse
 	if err := c.client.CallUnary(ctx, nodeServiceWeightsSpec(), req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+func (c *nodeServiceClient) TrustRegistry(ctx context.Context, req *v1.TrustRegistryRequest) (*v1.TrustRegistryResponse, error) {
+	var res v1.TrustRegistryResponse
+	if err := c.client.CallUnary(ctx, nodeServiceTrustRegistrySpec(), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil
@@ -609,6 +637,18 @@ func (h nodeServiceHandler) weights(ctx context.Context, _ connect.Spec, stream 
 		return err
 	}
 	res, err := h.svc.Weights(ctx, &req)
+	if err != nil {
+		return err
+	}
+	return stream.Send(res)
+}
+
+func (h nodeServiceHandler) trustRegistry(ctx context.Context, _ connect.Spec, stream connect.ServerStream) error {
+	var req v1.TrustRegistryRequest
+	if err := stream.Receive(&req); err != nil {
+		return err
+	}
+	res, err := h.svc.TrustRegistry(ctx, &req)
 	if err != nil {
 		return err
 	}

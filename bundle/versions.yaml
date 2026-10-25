@@ -64,13 +64,15 @@ components:
         - { name: NVIDIA CUDA Toolkit EULA, url: "https://docs.nvidia.com/cuda/eula/index.html" }
       acceptUrl: "https://docs.nvidia.com/cuda/eula/index.html"
 
-  # vLLM's own build for GLM-5.3-Flash (the glm5_next architecture is not in a
-  # vLLM release at our pin). vLLM publishes it per model; this is the arm64
-  # CUDA 13 build, a single arm64 manifest (no index), so the pin is the
-  # manifest digest. Same NVIDIA CUDA terms as the upstream image.
+  # GLM-5.3-Flash needs a patched vLLM build: vLLM's published glm53 images
+  # have no attention backend for its sparse MLA on GB10 (SM121), with FP8 or
+  # BF16 KV. The patched build (glm53:v9) is obtained separately, pushed to
+  # the control node's registry with `oaf images push glm53:v9 --component
+  # vllm-glm53`, and pinned by digest in cluster.yaml spec.images. Same
+  # vLLM code and NVIDIA CUDA terms as the upstream image.
   - name: vllm-glm53
     thirdParty: vLLM
-    image: docker.io/vllm/vllm-openai:glm53-flash-arm64-cu130@sha256:b0501f99fec5136f248f78d5850977a2ec32d55cd9a665f4a9ffef24cbdf7fe5
+    local: true
     platforms: [linux/arm64]
     upstream: { repo: vllm-project/vllm, ref: v0.31.0 }
     license:
@@ -80,6 +82,17 @@ components:
       includedTerms:
         - { name: NVIDIA CUDA Toolkit EULA, url: "https://docs.nvidia.com/cuda/eula/index.html" }
       acceptUrl: "https://docs.nvidia.com/cuda/eula/index.html"
+
+  # The image registry on the control node: images that have no published
+  # build (local components) and, later, images for boxes without internet.
+  # TLS with a certificate from OAF's CA; every node's docker trusts that CA
+  # for this registry only (/etc/docker/certs.d), no daemon restart.
+  - name: registry
+    thirdParty: Distribution (Docker registry)
+    image: docker.io/library/registry:3.0.0@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: distribution/distribution, ref: v3.0.0 }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: cb5e8e7e5f4a3988e1063c142c60dc2df75605f4c46515e776e3aca6df976e14 }
 
   # --- observability: Langfuse and its stores ----------------------------
   - name: langfuse-web

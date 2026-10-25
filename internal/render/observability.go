@@ -500,3 +500,26 @@ func volumes(names ...string) map[string]map[string]string {
 func hostPort(host string, port int) string { return net.JoinHostPort(host, strconv.Itoa(port)) }
 
 func portMap(host, container int) string { return fmt.Sprintf("%d:%d", host, container) }
+
+// registry runs the image registry on the control node, on the host network
+// with TLS from OAF's CA; images live under /var/lib/oaf/registry.
+func (r *renderer) registry(n config.Node) (Project, error) {
+	p := Project{Node: n.Name, Name: ProjectRegistry}
+	img, err := r.image("registry")
+	if err != nil {
+		return p, err
+	}
+	s := newService(img)
+	s.NetworkMode = "host"
+	s.Environment = map[string]string{
+		"REGISTRY_HTTP_ADDR":                        ":" + strconv.Itoa(config.PortRegistry),
+		"REGISTRY_HTTP_TLS_CERTIFICATE":             "/certs/registry.crt",
+		"REGISTRY_HTTP_TLS_KEY":                     "/certs/registry.key",
+		"REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY": "/var/lib/registry",
+		"OTEL_TRACES_EXPORTER":                      "none",
+	}
+	s.Volumes = []string{"/var/lib/oaf/registry:/var/lib/registry", "./registry.crt:/certs/registry.crt:ro", "./registry.key:/certs/registry.key:ro"}
+	return finish(p, r.Versions.Version, &composeFile{Services: map[string]*service{"registry": s}}, newEnvFile(),
+		File{Path: "registry.crt", Mode: 0o644, Content: r.Registry.Cert},
+		File{Path: "registry.key", Mode: 0o600, Content: r.Registry.Key})
+}

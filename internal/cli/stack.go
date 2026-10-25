@@ -47,6 +47,10 @@ type stack struct {
 	catalog  *config.Catalog
 	versions *config.Versions
 	nodes    reconcile.Nodes
+	// registry is the image registry's certificate (control node only) and
+	// caPEM the CA the nodes trust it with.
+	registry *render.RegistryTLS
+	caPEM    []byte
 }
 
 func (f *stackFlags) load(out io.Writer) (*stack, error) {
@@ -69,7 +73,11 @@ func (f *stackFlags) load(out io.Writer) (*stack, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &stack{cluster: c, catalog: cat, versions: v, nodes: nodes}, nil
+	reg, caPEM, err := registryTLS(f.pkiDir, c)
+	if err != nil {
+		_, _ = fmt.Fprintf(out, "warning: no image registry: %v\n", err)
+	}
+	return &stack{cluster: c, catalog: cat, versions: v, nodes: nodes, registry: reg, caPEM: caPEM}, nil
 }
 
 // render discovers the fabric (when a deployment spans nodes) and renders.
@@ -79,7 +87,7 @@ func (s *stack) render(ctx context.Context, src secrets.Source) ([]render.Projec
 		return nil, err
 	}
 	// Entitlement verification arrives in M5; until then no features are granted.
-	return render.Render(render.Input{Cluster: s.cluster, Catalog: s.catalog, Versions: s.versions, Secrets: src, Fabric: fab})
+	return render.Render(render.Input{Cluster: s.cluster, Catalog: s.catalog, Versions: s.versions, Secrets: src, Fabric: fab, Registry: s.registry})
 }
 
 func newApplyCmd() *cobra.Command {
@@ -118,6 +126,9 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 	if err != nil {
 		return err
 	}
+	for d, comp := range render.UnpinnedLocal(s.cluster, s.catalog, s.versions) {
+		_, _ = fmt.Fprintf(out, "warning: model %s not started: %s has no published image; push it with `oaf images push <image> --component %s`\n", d, comp, comp)
+	}
 	plan, err := reconcile.PlanApply(ctx, s.nodes, projects)
 	if err != nil {
 		return err
@@ -136,6 +147,10 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 		return nil
 	}
 	_, _ = fmt.Fprintln(out)
+	// Every node trusts the registry before anything pulls from it.
+	if err := s.trustRegistry(ctx, out); err != nil {
+		return err
+	}
 	if err := reconcile.Apply(ctx, s.nodes, projects, plan, out); err != nil {
 		return err
 	}

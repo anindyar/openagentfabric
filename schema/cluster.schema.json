@@ -87,6 +87,14 @@
           },
           "default": []
         },
+        "images": {
+          "description": "Images of local bundle components, pinned in the control node's registry: component -> <registry>/oaf/<component>@sha256:<digest>. Written by oaf images push.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$"
+          }
+        },
         "licenseAcceptances": {
           "description": "Licences the user accepted through the upstream page (docs/licence-audit.md \u00a73.7). OAF will not fetch or deploy an artefact that needs acceptance unless it has an entry here.",
           "type": "array",

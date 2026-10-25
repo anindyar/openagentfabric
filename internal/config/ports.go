@@ -17,6 +17,7 @@ const (
 	PortNodeAgent        = 7701
 	PortKeyService       = 7702 // oaf keys serve, on the control node
 	PortRouter           = 8899 // Envoy in front of vSR (model: auto), on the gateway node
+	PortRegistry         = 5050 // the image registry, on the control node (TLS, OAF's CA)
 
 	// DefaultModelPortBase + index in spec.models is a deployment's port when it
 	// sets none.
@@ -115,4 +116,15 @@ func Profile(d ModelDeployment, m *CatalogModel, nodes int) (*ServingProf, error
 		return nil, fmt.Errorf("model %q has no profile %q", m.ID, d.Profile)
 	}
 	return nil, fmt.Errorf("model %q has no serving profile for %d node(s)", m.ID, nodes)
+}
+
+// RegistryHost is the control node's image registry, host:port ("" without
+// a control node).
+func (c *Cluster) RegistryHost() string {
+	for _, n := range c.Spec.Nodes {
+		if n.HasRole(RoleControl) {
+			return fmt.Sprintf("%s:%d", n.Address, PortRegistry)
+		}
+	}
+	return ""
 }

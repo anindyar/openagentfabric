@@ -151,6 +151,8 @@ StateDirectoryMode=0755
 ReadWritePaths=-/etc/oaf
 # The fabric: oaf-node writes only /etc/netplan/40-oaf-fabric.yaml there.
 ReadWritePaths=-/etc/netplan
+# Docker's trust for OAF's image registry: only /etc/docker/certs.d/<registry>/ca.crt.
+ReadWritePaths=-/etc/docker
 
 [Install]
 WantedBy=multi-user.target

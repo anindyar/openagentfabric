@@ -2348,6 +2348,104 @@ func (x *PingResponse) GetNeighborMac() string {
 	return ""
 }
 
+type TrustRegistryRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// host:port of the registry.
+	Host string `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	// The CA certificate (PEM) the registry's certificate chains to.
+	CaPem         []byte `protobuf:"bytes,2,opt,name=ca_pem,json=caPem,proto3" json:"ca_pem,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrustRegistryRequest) Reset() {
+	*x = TrustRegistryRequest{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrustRegistryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrustRegistryRequest) ProtoMessage() {}
+
+func (x *TrustRegistryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrustRegistryRequest.ProtoReflect.Descriptor instead.
+func (*TrustRegistryRequest) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *TrustRegistryRequest) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *TrustRegistryRequest) GetCaPem() []byte {
+	if x != nil {
+		return x.CaPem
+	}
+	return nil
+}
+
+type TrustRegistryResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Changed       bool                   `protobuf:"varint,1,opt,name=changed,proto3" json:"changed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrustRegistryResponse) Reset() {
+	*x = TrustRegistryResponse{}
+	mi := &file_oaf_node_v1_node_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrustRegistryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrustRegistryResponse) ProtoMessage() {}
+
+func (x *TrustRegistryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_oaf_node_v1_node_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrustRegistryResponse.ProtoReflect.Descriptor instead.
+func (*TrustRegistryResponse) Descriptor() ([]byte, []int) {
+	return file_oaf_node_v1_node_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *TrustRegistryResponse) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
 var File_oaf_node_v1_node_proto protoreflect.FileDescriptor
 
 const file_oaf_node_v1_node_proto_rawDesc = "" +
@@ -2515,7 +2613,12 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\fPingResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x15\n" +
 	"\x06rtt_ms\x18\x02 \x01(\x01R\x05rttMs\x12!\n" +
-	"\fneighbor_mac\x18\x03 \x01(\tR\vneighborMac2\xd9\b\n" +
+	"\fneighbor_mac\x18\x03 \x01(\tR\vneighborMac\"A\n" +
+	"\x14TrustRegistryRequest\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x15\n" +
+	"\x06ca_pem\x18\x02 \x01(\fR\x05caPem\"1\n" +
+	"\x15TrustRegistryResponse\x12\x18\n" +
+	"\achanged\x18\x01 \x01(\bR\achanged2\xb1\t\n" +
 	"\vNodeService\x12;\n" +
 	"\x04Info\x12\x18.oaf.node.v1.InfoRequest\x1a\x19.oaf.node.v1.InfoResponse\x12J\n" +
 	"\tPreflight\x12\x1d.oaf.node.v1.PreflightRequest\x1a\x1e.oaf.node.v1.PreflightResponse\x12S\n" +
@@ -2530,7 +2633,8 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\fProbeAddress\x12 .oaf.node.v1.ProbeAddressRequest\x1a!.oaf.node.v1.ProbeAddressResponse\x12;\n" +
 	"\x04Ping\x12\x18.oaf.node.v1.PingRequest\x1a\x19.oaf.node.v1.PingResponse\x12P\n" +
 	"\vPullWeights\x12\x1f.oaf.node.v1.PullWeightsRequest\x1a .oaf.node.v1.PullWeightsResponse\x12D\n" +
-	"\aWeights\x12\x1b.oaf.node.v1.WeightsRequest\x1a\x1c.oaf.node.v1.WeightsResponseB\xa3\x01\n" +
+	"\aWeights\x12\x1b.oaf.node.v1.WeightsRequest\x1a\x1c.oaf.node.v1.WeightsResponse\x12V\n" +
+	"\rTrustRegistry\x12!.oaf.node.v1.TrustRegistryRequest\x1a\".oaf.node.v1.TrustRegistryResponseB\xa3\x01\n" +
 	"\x0fcom.oaf.node.v1B\tNodeProtoP\x01Z7openagentfabric.dev/oaf/internal/gen/oaf/node/v1;nodev1\xa2\x02\x03ONX\xaa\x02\vOaf.Node.V1\xca\x02\vOaf\\Node\\V1\xe2\x02\x17Oaf\\Node\\V1\\GPBMetadata\xea\x02\rOaf::Node::V1b\x06proto3"
 
 var (
@@ -2545,7 +2649,7 @@ func file_oaf_node_v1_node_proto_rawDescGZIP() []byte {
 	return file_oaf_node_v1_node_proto_rawDescData
 }
 
-var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
+var file_oaf_node_v1_node_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_oaf_node_v1_node_proto_goTypes = []any{
 	(*InfoRequest)(nil),             // 0: oaf.node.v1.InfoRequest
 	(*InfoResponse)(nil),            // 1: oaf.node.v1.InfoResponse
@@ -2585,6 +2689,8 @@ var file_oaf_node_v1_node_proto_goTypes = []any{
 	(*ProbeAddressResponse)(nil),    // 35: oaf.node.v1.ProbeAddressResponse
 	(*PingRequest)(nil),             // 36: oaf.node.v1.PingRequest
 	(*PingResponse)(nil),            // 37: oaf.node.v1.PingResponse
+	(*TrustRegistryRequest)(nil),    // 38: oaf.node.v1.TrustRegistryRequest
+	(*TrustRegistryResponse)(nil),   // 39: oaf.node.v1.TrustRegistryResponse
 }
 var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	4,  // 0: oaf.node.v1.PreflightResponse.results:type_name -> oaf.node.v1.CheckResult
@@ -2614,22 +2720,24 @@ var file_oaf_node_v1_node_proto_depIdxs = []int32{
 	36, // 24: oaf.node.v1.NodeService.Ping:input_type -> oaf.node.v1.PingRequest
 	7,  // 25: oaf.node.v1.NodeService.PullWeights:input_type -> oaf.node.v1.PullWeightsRequest
 	9,  // 26: oaf.node.v1.NodeService.Weights:input_type -> oaf.node.v1.WeightsRequest
-	1,  // 27: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
-	3,  // 28: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
-	13, // 29: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
-	15, // 30: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
-	17, // 31: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
-	20, // 32: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
-	22, // 33: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
-	27, // 34: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
-	29, // 35: oaf.node.v1.NodeService.Desktop:output_type -> oaf.node.v1.DesktopResponse
-	33, // 36: oaf.node.v1.NodeService.ConfigureFabric:output_type -> oaf.node.v1.ConfigureFabricResponse
-	35, // 37: oaf.node.v1.NodeService.ProbeAddress:output_type -> oaf.node.v1.ProbeAddressResponse
-	37, // 38: oaf.node.v1.NodeService.Ping:output_type -> oaf.node.v1.PingResponse
-	8,  // 39: oaf.node.v1.NodeService.PullWeights:output_type -> oaf.node.v1.PullWeightsResponse
-	10, // 40: oaf.node.v1.NodeService.Weights:output_type -> oaf.node.v1.WeightsResponse
-	27, // [27:41] is the sub-list for method output_type
-	13, // [13:27] is the sub-list for method input_type
+	38, // 27: oaf.node.v1.NodeService.TrustRegistry:input_type -> oaf.node.v1.TrustRegistryRequest
+	1,  // 28: oaf.node.v1.NodeService.Info:output_type -> oaf.node.v1.InfoResponse
+	3,  // 29: oaf.node.v1.NodeService.Preflight:output_type -> oaf.node.v1.PreflightResponse
+	13, // 30: oaf.node.v1.NodeService.ApplyProject:output_type -> oaf.node.v1.ApplyProjectResponse
+	15, // 31: oaf.node.v1.NodeService.RemoveProject:output_type -> oaf.node.v1.RemoveProjectResponse
+	17, // 32: oaf.node.v1.NodeService.ProjectStatus:output_type -> oaf.node.v1.ProjectStatusResponse
+	20, // 33: oaf.node.v1.NodeService.ListProjects:output_type -> oaf.node.v1.ListProjectsResponse
+	22, // 34: oaf.node.v1.NodeService.Fabric:output_type -> oaf.node.v1.FabricResponse
+	27, // 35: oaf.node.v1.NodeService.RailBandwidth:output_type -> oaf.node.v1.RailBandwidthResponse
+	29, // 36: oaf.node.v1.NodeService.Desktop:output_type -> oaf.node.v1.DesktopResponse
+	33, // 37: oaf.node.v1.NodeService.ConfigureFabric:output_type -> oaf.node.v1.ConfigureFabricResponse
+	35, // 38: oaf.node.v1.NodeService.ProbeAddress:output_type -> oaf.node.v1.ProbeAddressResponse
+	37, // 39: oaf.node.v1.NodeService.Ping:output_type -> oaf.node.v1.PingResponse
+	8,  // 40: oaf.node.v1.NodeService.PullWeights:output_type -> oaf.node.v1.PullWeightsResponse
+	10, // 41: oaf.node.v1.NodeService.Weights:output_type -> oaf.node.v1.WeightsResponse
+	39, // 42: oaf.node.v1.NodeService.TrustRegistry:output_type -> oaf.node.v1.TrustRegistryResponse
+	28, // [28:43] is the sub-list for method output_type
+	13, // [13:28] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
 	13, // [13:13] is the sub-list for extension extendee
 	0,  // [0:13] is the sub-list for field type_name
@@ -2646,7 +2754,7 @@ func file_oaf_node_v1_node_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_oaf_node_v1_node_proto_rawDesc), len(file_oaf_node_v1_node_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   38,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

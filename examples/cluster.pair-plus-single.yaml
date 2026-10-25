@@ -44,6 +44,10 @@ spec:
           signals:
             - { type: reasoning, threshold: 0.6 }
         target: glm-5.3-flash
+  # GLM needs the patched vLLM build, pushed to the control node's registry
+  # with `oaf images push glm53:v9 --component vllm-glm53` (placeholder digest).
+  images:
+    vllm-glm53: 192.0.2.11:5050/oaf/vllm-glm53@sha256:0000000000000000000000000000000000000000000000000000000000000000
   licenseAcceptances:
     - subject: image/vllm
       url: https://docs.nvidia.com/cuda/eula/index.html

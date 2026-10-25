@@ -28,6 +28,14 @@ type Input struct {
 	// Fabric is the discovered QSFP state of each node. Only deployments that
 	// span nodes need it.
 	Fabric map[string][]fabric.Port
+	// Registry is the image registry's TLS certificate (from OAF's CA); with
+	// it the registry runs on the control node.
+	Registry *RegistryTLS
+}
+
+// RegistryTLS is the registry's certificate and key (PEM).
+type RegistryTLS struct {
+	Cert, Key []byte
 }
 
 // File is one file of a project, relative to the project directory.
@@ -80,6 +88,7 @@ const (
 	ProjectRouter       = "router" // vSR + Envoy for model: auto, when routing has active rules
 	ProjectLangfuse     = "langfuse"
 	ProjectMetrics      = "metrics"
+	ProjectRegistry     = "registry" // images without a published build, on the control node
 	modelProjectPrefix  = "model-"
 )
 
@@ -116,9 +125,16 @@ func Render(in Input) ([]Project, error) {
 		}
 		return nil, fmt.Errorf("cluster.yaml is not valid:%s", b.String())
 	}
-	r := &renderer{Input: in, images: map[string]string{}}
+	r := &renderer{Input: in, images: map[string]string{}, local: map[string]bool{}}
 	for _, c := range in.Versions.Components {
 		r.images[c.Name] = c.Image
+		r.local[c.Name] = c.Local
+	}
+	for comp, ref := range in.Cluster.Spec.Images {
+		if _, ok := r.images[comp]; !ok {
+			return nil, fmt.Errorf("cluster.yaml spec.images pins %q, which bundle %s does not have", comp, in.Versions.Version)
+		}
+		r.images[comp] = ref
 	}
 
 	var out []Project
@@ -132,6 +148,11 @@ func Render(in Input) ([]Project, error) {
 	for _, n := range in.Cluster.Spec.Nodes {
 		if err := add(r.nodeExporter(n)); err != nil {
 			return nil, err
+		}
+		if n.HasRole(config.RoleControl) && in.Registry != nil {
+			if err := add(r.registry(n)); err != nil {
+				return nil, err
+			}
 		}
 		if n.HasRole(config.RoleGateway) {
 			if err := add(r.gateway(n)); err != nil {
@@ -173,7 +194,8 @@ func Render(in Input) ([]Project, error) {
 type renderer struct {
 	Input
 	images map[string]string
-	used   []string // components rendered, for the licence check
+	local  map[string]bool // components with no published image
+	used   []string        // components rendered, for the licence check
 }
 
 // image returns the pinned image of a bundle component.
@@ -181,6 +203,9 @@ func (r *renderer) image(component string) (string, error) {
 	img, ok := r.images[component]
 	if !ok {
 		return "", fmt.Errorf("bundle %s pins no %q component", r.Versions.Version, component)
+	}
+	if img == "" && r.local[component] {
+		return "", fmt.Errorf("%s has no published image: push it to the control node's registry with `oaf images push <image> --component %s` (then apply again)", component, component)
 	}
 	r.used = append(r.used, component)
 	return img, nil
@@ -283,4 +308,33 @@ func contains(list []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// UnpinnedLocal lists the enabled deployments whose engine is a local
+// component nobody has pushed and pinned yet (deployment -> component).
+// They are not rendered: the rest of the cluster still applies, and status
+// says what to push.
+func UnpinnedLocal(c *config.Cluster, cat *config.Catalog, v *config.Versions) map[string]string {
+	local := map[string]bool{}
+	for _, comp := range v.Components {
+		local[comp.Name] = comp.Local && comp.Image == ""
+	}
+	out := map[string]string{}
+	for _, d := range c.Spec.Models {
+		if !d.IsEnabled() {
+			continue
+		}
+		m, ok := cat.Lookup(d.CatalogRef)
+		if !ok {
+			continue
+		}
+		prof, err := config.Profile(d, m, len(c.PlacementNodes(d.Placement)))
+		if err != nil {
+			continue
+		}
+		if comp := prof.EngineComponent(); local[comp] && c.Spec.Images[comp] == "" {
+			out[d.Name] = comp
+		}
+	}
+	return out
 }

@@ -122,7 +122,6 @@
       "required": [
         "name",
         "thirdParty",
-        "image",
         "platforms",
         "upstream",
         "license"
@@ -137,8 +136,12 @@
           "type": "string",
           "minLength": 1
         },
+        "local": {
+          "description": "No published image works: it is pushed to the control node's registry (oaf images push) and cluster.yaml spec.images pins it.",
+          "type": "boolean"
+        },
         "image": {
-          "description": "registry/repo:tag@sha256:digest. The digest is mandatory (CLAUDE.md rule 6).",
+          "description": "registry/repo:tag@sha256:digest. The digest is mandatory (CLAUDE.md rule 6). Omitted for a local component.",
           "type": "string",
           "pattern": "^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$"
         },

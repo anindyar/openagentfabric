@@ -249,9 +249,14 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 		byDownload[d.Node+"/"+d.ModelID] = &v.Downloads[i]
 	}
 	deployed := map[string]bool{}
+	unpinned := render.UnpinnedLocal(s.cluster, cat, s.versions)
 	for _, d := range s.cluster.Spec.Models {
 		dl := func(node string) *oafd.DownloadView { return byDownload[node+"/"+d.CatalogRef] }
 		dv := deploymentState(s.cluster, cat, d, byProject[render.ModelProjectName(d.Name)], dl)
+		if comp := unpinned[d.Name]; comp != "" {
+			dv.Phase, dv.Detail = PhaseFailed, ""
+			dv.Error = fmt.Sprintf("%s has no published image: push it to the control node's registry with `oaf images push <image> --component %s`; it starts after the next apply", comp, comp)
+		}
 		v.Deployments = append(v.Deployments, dv)
 		deployed[render.ModelProjectName(d.Name)] = true
 	}

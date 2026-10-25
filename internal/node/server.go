@@ -53,6 +53,8 @@ type Server struct {
 	// FabricWait bounds how long ConfigureFabric waits for addresses.
 	FabricWait time.Duration
 
+	// DockerCertsDir overrides DockerCertsDir (tests).
+	DockerCertsDir string
 	// Downloads fetches model weights (PullWeights, models waiting for them);
 	// nil disables downloads.
 	Downloads *Weights

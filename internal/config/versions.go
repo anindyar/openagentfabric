@@ -27,6 +27,9 @@ func ValidateVersions(v *Versions, thirdPartyMD string) Report {
 		if c.License.NeedsAcceptance() && c.License.AcceptURL == "" {
 			add(p+".license.acceptUrl", "required: %s needs user acceptance", c.Name)
 		}
+		if c.Image == "" && !c.Local {
+			add(p+".image", "required unless the component is local")
+		}
 	}
 	for i, a := range v.Artifacts {
 		p := fmt.Sprintf("artifacts[%d]", i)

@@ -33,8 +33,12 @@ type ClusterSpec struct {
 	Observability      Observability       `yaml:"observability,omitempty"`
 	Entitlements       []EntitlementRef    `yaml:"entitlements,omitempty"`
 	LicenseAcceptances []LicenseAcceptance `yaml:"licenseAcceptances,omitempty"`
-	Apps               []map[string]any    `yaml:"apps,omitempty"`
-	Agents             []map[string]any    `yaml:"agents,omitempty"`
+	// Images pins the images of bundle components built locally (local:
+	// true in the bundle), by component: <registry>/oaf/<component>@sha256:...
+	// in the control node's registry. `oaf images push` writes them.
+	Images map[string]string `yaml:"images,omitempty"`
+	Apps   []map[string]any  `yaml:"apps,omitempty"`
+	Agents []map[string]any  `yaml:"agents,omitempty"`
 }
 
 // Bundle selects the pinned component set.
@@ -604,12 +608,16 @@ func (v *Versions) Artifact(name string) (Artifact, bool) {
 
 // Component is one pinned upstream image.
 type Component struct {
-	Name       string           `yaml:"name"`
-	ThirdParty string           `yaml:"thirdParty"`
-	Image      string           `yaml:"image"`
-	Platforms  []string         `yaml:"platforms"`
-	Upstream   Upstream         `yaml:"upstream"`
-	License    ComponentLicense `yaml:"license"`
+	Name       string `yaml:"name"`
+	ThirdParty string `yaml:"thirdParty"`
+	Image      string `yaml:"image,omitempty"`
+	// Local: no published image works; the image is built (or obtained)
+	// locally and pushed to the control node's registry with `oaf images
+	// push`, and cluster.yaml spec.images pins it.
+	Local     bool             `yaml:"local,omitempty"`
+	Platforms []string         `yaml:"platforms"`
+	Upstream  Upstream         `yaml:"upstream"`
+	License   ComponentLicense `yaml:"license"`
 }
 
 // Upstream is the source repo and tag an image is built from.

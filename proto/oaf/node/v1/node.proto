@@ -43,6 +43,9 @@ service NodeService {
   rpc PullWeights(PullWeightsRequest) returns (PullWeightsResponse);
   // Downloads this agent knows of: in progress, finished or failed.
   rpc Weights(WeightsRequest) returns (WeightsResponse);
+  // Make docker trust OAF's CA for the control node's image registry
+  // (/etc/docker/certs.d/<host>/ca.crt); no daemon restart needed.
+  rpc TrustRegistry(TrustRegistryRequest) returns (TrustRegistryResponse);
 }
 
 message InfoRequest {}
@@ -311,4 +314,15 @@ message PingResponse {
   double rtt_ms = 2;
   // The MAC that answered ARP for the target on this netdev, if any.
   string neighbor_mac = 3;
+}
+
+message TrustRegistryRequest {
+  // host:port of the registry.
+  string host = 1;
+  // The CA certificate (PEM) the registry's certificate chains to.
+  bytes ca_pem = 2;
+}
+
+message TrustRegistryResponse {
+  bool changed = 1;
 }
