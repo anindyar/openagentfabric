@@ -157,7 +157,14 @@ models:
           FLASHINFER_DISABLE_VERSION_CHECK: "1"
           PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True"
           VLLM_ENGINE_READY_TIMEOUT_S: "3600"
-        # No commandPrefix: the image's ENTRYPOINT is `vllm serve`.
+          # FlashInfer compiles its FP4 GEMM kernels after the weights are in
+          # memory (~88 GiB of 121 per box). One nvcc job per core (20) ran the
+          # box out of memory and every job was killed (exit 137); 4 fit.
+          MAX_JOBS: "4"
+        # No commandPrefix: the image's ENTRYPOINT is `vllm serve`. The
+        # compiled kernels are kept, so only the first start compiles them.
+        container:
+          caches: [/root/.cache/flashinfer]
 
   # Companions: quick models for the single box beside a pair that runs a
   # large (think) model such as GLM-5.3-Flash. The pair takes the heavy work,
