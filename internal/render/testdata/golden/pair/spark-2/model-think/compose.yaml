@@ -10,7 +10,48 @@ services:
       - /dev/infiniband:/dev/infiniband
     ulimits:
       memlock: -1
+    entrypoint:
+      - python3
+      - -c
+      - |
+        import os, signal, socket, struct, subprocess, sys, time
+        host, port = sys.argv[1], int(sys.argv[2])
+        cmd = sys.argv[3:]
+        want4 = "%08X:%04X" % (struct.unpack("<I", socket.inet_aton(host))[0], port)
+        def connected():
+            for f in ("/proc/net/tcp", "/proc/net/tcp6"):
+                try:
+                    for line in open(f).readlines()[1:]:
+                        p = line.split()
+                        if p[3] == "01" and p[2].endswith(want4):  # tcp6 holds IPv4 as ::ffff:a.b.c.d
+                            return True
+                except OSError:
+                    pass
+            return False
+        child = subprocess.Popen(cmd)
+        for s in (signal.SIGTERM, signal.SIGINT):
+            signal.signal(s, lambda n, f: child.send_signal(n))
+        seen, lost = False, None
+        while child.poll() is None:
+            time.sleep(5)
+            if connected():
+                seen, lost = True, None
+            elif seen:
+                lost = lost or time.time()
+                if time.time() - lost > 45:
+                    print("rank guard: lost the leader at %s:%d; stopping so docker restarts this rank" % (host, port), flush=True)
+                    child.terminate()
+                    try:
+                        child.wait(30)
+                    except subprocess.TimeoutExpired:
+                        child.kill()
+                    sys.exit(1)
+        sys.exit(child.returncode)
+      - 10.10.0.1
+      - "29501"
     command:
+      - vllm
+      - serve
       - /models/gpt-oss-120b
       - --served-model-name
       - think

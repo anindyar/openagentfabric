@@ -139,6 +139,13 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 
 		cf := &composeFile{Services: map[string]*service{"vllm": s}}
 		applyContainer(cf, s, prof.Container)
+		if rank > 0 {
+			var prefix []string
+			if prof.Container != nil {
+				prefix = prof.Container.CommandPrefix
+			}
+			guardFollower(s, prefix, ranks[0].ip.String(), config.MasterPort(i))
+		}
 		p, err := finish(Project{Node: nodeName, Name: modelProjectName(d.Name)}, v, cf, env)
 		if err != nil {
 			return nil, err
