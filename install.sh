@@ -155,6 +155,6 @@ if $self_enrol; then
 fi
 
 step "Done"
-info "Garrison:  https://$address:8080   (admin: $email; the password is in $GARRISON_DIR/.env, ADMIN_PASSWORD)"
+info "Garrison:  https://$address/   (admin: $email; the password is in $GARRISON_DIR/.env, ADMIN_PASSWORD)"
 info "Platform:  sudo oaf status"
 info "Add boxes from Garrison: Cluster -> Add boxes (docs/user-guide.md, \"Adding boxes\")."
