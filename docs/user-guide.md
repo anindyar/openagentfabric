@@ -133,26 +133,11 @@ That is the whole platform on this box: it checks the host, checks out OAF into 
 runs `scripts/spark-bootstrap.sh` (below) with your options. It asks you to accept the NVIDIA and
 model licences on the terminal (`--accept-licences` when there is none, e.g. automation).
 
-**With the Garrison security console** on top (the appliance), give it read access to the Garrison
-repository in the environment, never on the command line:
-
-```sh
-export GARRISON_GIT_TOKEN=<token with read access to the Garrison repository>
-curl -fsSL https://raw.githubusercontent.com/anindyar/openagentfabric/main/install.sh \
-  | bash -s -- --email you@company.com --garrison
-```
-
-After OAF it checks Garrison out into `/opt/garrison`, runs its installer against OAF (Garrison uses
-OAF's gateway for its models and embeddings, and OAF's Grafana, Prometheus and Loki), then enrols
-this box's own Garrison agent and makes it a log collector, so the appliance shows in Systems and
-Observe like every other machine. The token reaches git through an askpass helper (not argv, the
-process list or `.git/config`). At the end it prints the console address; the admin password is in
-`/opt/garrison/.env` (`ADMIN_PASSWORD`).
+Commercial apps built on OAF (Garrison, for example) come with their own installer, which runs this
+one first and then installs the app on top.
 
 | Option | Use |
 |---|---|
-| `--garrison` | also install the Garrison console (needs `GARRISON_GIT_TOKEN`) |
-| `--no-self-enrol` | with `--garrison`: leave this box out of Garrison's systems |
 | `--ref REF` | the OAF version (git ref) to install, default `main` |
 | `--address IP`, `--name NAME` | management address and node name (defaults: default-route address, hostname) |
 | `--no-model`, `--util`, `--weights-from`, ... | passed to `spark-bootstrap.sh` (table below) |

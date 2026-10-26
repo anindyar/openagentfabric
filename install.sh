@@ -5,13 +5,9 @@
 #   curl -fsSL https://raw.githubusercontent.com/anindyar/openagentfabric/main/install.sh \
 #     | bash -s -- --email you@company.com
 #
-# OAF only (the AI platform: gateway, models, routing, observability). With
-# --garrison it also installs the Garrison security console on top, enrols
-# this box's own Garrison agent and makes it a log collector:
-#
-#   export GARRISON_GIT_TOKEN=<read access to the Garrison repository>
-#   curl -fsSL https://raw.githubusercontent.com/anindyar/openagentfabric/main/install.sh \
-#     | bash -s -- --email you@company.com --garrison
+# The AI platform: models, gateway, routing, keys, observability. Apps (such
+# as commercial products built on OAF) bring their own installers and run
+# this one first.
 #
 # Run as a user with sudo on DGX OS (docker present). Every step checks before
 # it acts, so re-running after a failure continues where it stopped. More
@@ -20,15 +16,10 @@ set -euo pipefail
 
 OAF_REPO=${OAF_REPO:-https://github.com/anindyar/openagentfabric.git}
 OAF_REF=${OAF_REF:-main}
-GARRISON_REPO=${GARRISON_REPO:-https://github.com/anindyar/vclocal.git}
-GARRISON_REF=${GARRISON_REF:-garrison}
 SRC=/opt/oaf/src
-GARRISON_DIR=/opt/garrison
 
 email=""
 address=""
-garrison=false
-self_enrol=true
 bootstrap_args=()
 
 usage() {
@@ -36,9 +27,6 @@ usage() {
 Usage: install.sh --email you@company.com [options]
 
   --email ADDR        who accepts the licences (recorded in cluster.yaml); required
-  --garrison          also install the Garrison security console (needs
-                      GARRISON_GIT_TOKEN in the environment: read access to its repository)
-  --no-self-enrol     with --garrison: do not enrol this box's own Garrison agent
   --address IP        management address (default: the source address of the default route)
   --name NAME         node name (default: the hostname)
   --no-model          install the platform only, no chat model
@@ -51,8 +39,6 @@ EOF
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--email) email=$2; bootstrap_args+=(--email "$2"); shift 2 ;;
-	--garrison) garrison=true; shift ;;
-	--no-self-enrol) self_enrol=false; shift ;;
 	--ref) OAF_REF=$2; shift 2 ;;
 	-h | --help) usage; exit 0 ;;
 	--address) address=$2; bootstrap_args+=(--address "$2"); shift 2 ;;
@@ -82,14 +68,10 @@ docker compose version >/dev/null 2>&1 || sudo docker compose version >/dev/null
 free_gib=$(df -BG --output=avail /var/lib 2>/dev/null | tail -1 | tr -dc 0-9)
 [ "${free_gib:-0}" -ge 150 ] || die "/var/lib has ${free_gib:-0} GiB free; models and images need at least 150 GiB"
 # Never take over a box that already runs something else.
-others=$(sudo docker ps --format '{{.Names}}' | grep -vE '^(oaf-|vclocal-)' || true)
+others=$(sudo docker ps --format '{{.Names}}' | grep -vE '^oaf-' || true)
 if [ -n "$others" ]; then
 	info "containers not managed here are running: $(echo "$others" | tr '\n' ' ')"
 	info "they are left alone; make sure they leave room (memory, ports 3000-3100, 4000, 8000+, 8080, 8443, 9090)"
-fi
-if $garrison; then
-	[ -n "${GARRISON_GIT_TOKEN:-}" ] || git ls-remote "$GARRISON_REPO" >/dev/null 2>&1 ||
-		die "--garrison needs read access to $GARRISON_REPO: export GARRISON_GIT_TOKEN=<token> (it is passed to git through GIT_ASKPASS, never on a command line)"
 fi
 info "ok: $(uname -m), ${free_gib} GiB free, $(docker --version | cut -d, -f1)"
 
@@ -124,37 +106,6 @@ else
 	"$SRC/scripts/spark-bootstrap.sh" "${bootstrap_args[@]}" </dev/null
 fi
 
-$garrison || {
-	step "Done"
-	info "OAF is running on this box. Status: sudo oaf status"
-	info "Add boxes later from the console, or see docs/user-guide.md, \"Adding boxes\"."
-	exit 0
-}
-
-# ----------------------------------------------------------------- Garrison
-step "Garrison ($GARRISON_REF)"
-# The token reaches git through an askpass helper: never in argv, the process
-# list, shell history or .git/config.
-askpass=""
-if [ -n "${GARRISON_GIT_TOKEN:-}" ]; then
-	askpass=$(mktemp)
-	chmod 700 "$askpass"
-	printf '#!/bin/sh\ncase "$1" in Username*) echo x-access-token ;; *) echo "$GARRISON_GIT_TOKEN" ;; esac\n' >"$askpass"
-	export GIT_ASKPASS=$askpass GIT_TERMINAL_PROMPT=0
-	trap 'rm -f "$askpass"' EXIT
-fi
-fetch "$GARRISON_REPO" "$GARRISON_REF" "$GARRISON_DIR"
-[ -n "$askpass" ] && { rm -f "$askpass"; unset GIT_ASKPASS; }
-
-sudo "$GARRISON_DIR/deployments/dgx-spark/install.sh" --host-ip "$address" --oaf --admin-email "$email" --yes
-
-# --------------------------------------------------- this box into Garrison
-if $self_enrol; then
-	step "This box into Garrison (agent and log collector)"
-	"$GARRISON_DIR/deployments/dgx-spark/self-enrol.sh" "https://$address:8080"
-fi
-
 step "Done"
-info "Garrison:  https://$address/   (admin: $email; the password is in $GARRISON_DIR/.env, ADMIN_PASSWORD)"
-info "Platform:  sudo oaf status"
-info "Add boxes from Garrison: Cluster -> Add boxes (docs/user-guide.md, \"Adding boxes\")."
+info "OAF is running on this box. Status: sudo oaf status"
+info "Add boxes later from the console, or see docs/user-guide.md, \"Adding boxes\"."
