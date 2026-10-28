@@ -1,0 +1,63 @@
+name: release
+# A tag vX.Y.Z publishes that version: the same checks as ci, then the oaf
+# binaries (arm64 built natively, amd64) with their checksums on a GitHub
+# release. install.sh installs the latest release unless told otherwise.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - run: make generate-check
+      - run: make lint
+      - run: make guard
+      - run: make test
+      - run: make licenses
+      - run: make license-drift
+      - run: make integration
+  build:
+    needs: check
+    strategy:
+      matrix:
+        include:
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+          - { arch: amd64, runner: ubuntu-24.04 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - if: matrix.arch == 'arm64'
+        run: make test
+      - run: make build-${{ matrix.arch }} VERSION=${{ github.ref_name }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: oaf-linux-${{ matrix.arch }}
+          path: bin/oaf-linux-${{ matrix.arch }}
+          if-no-files-found: error
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
+      - working-directory: dist
+        run: sha256sum oaf-linux-* > SHA256SUMS && cat SHA256SUMS
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: >
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+          $(case "$TAG" in *-*) echo --prerelease ;; esac)

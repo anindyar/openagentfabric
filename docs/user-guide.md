@@ -129,8 +129,10 @@ curl -fsSL https://raw.githubusercontent.com/anindyar/openagentfabric/main/insta
   | bash -s -- --email you@company.com
 ```
 
-That is the whole platform on this box: it checks the host, checks out OAF into `/opt/oaf/src` and
-runs `scripts/spark-bootstrap.sh` (below) with your options. It asks you to accept the NVIDIA and
+That is the whole platform on this box: it checks the host, installs the latest OAF release (its
+`oaf` binary from the [releases](https://github.com/anindyar/openagentfabric/releases), checked
+against the release's `SHA256SUMS`, and the matching source in `/opt/oaf/src`) and runs
+`scripts/spark-bootstrap.sh` (below) with your options. It asks you to accept the NVIDIA and
 model licences on the terminal (`--accept-licences` when there is none, e.g. automation).
 
 Commercial apps built on OAF (Garrison, for example) come with their own installer, which runs this
@@ -138,7 +140,7 @@ one first and then installs the app on top.
 
 | Option | Use |
 |---|---|
-| `--ref REF` | the OAF version (git ref) to install, default `main` |
+| `--ref REF` | the OAF version: a release tag such as `v0.1.0` (default: the latest release), or a branch or commit, which builds `oaf` on the box |
 | `--address IP`, `--name NAME` | management address and node name (defaults: default-route address, hostname) |
 | `--no-model`, `--util`, `--weights-from`, ... | passed to `spark-bootstrap.sh` (table below) |
 

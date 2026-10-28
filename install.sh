@@ -15,7 +15,10 @@
 set -euo pipefail
 
 OAF_REPO=${OAF_REPO:-https://github.com/anindyar/openagentfabric.git}
-OAF_REF=${OAF_REF:-main}
+OAF_RELEASES=${OAF_RELEASES:-https://github.com/anindyar/openagentfabric/releases}
+# Empty: the latest release. A tag (vX.Y.Z) installs that release; a branch
+# or commit installs from source (the binary is then built on the box).
+OAF_REF=${OAF_REF:-}
 SRC=/opt/oaf/src
 
 email=""
@@ -30,7 +33,8 @@ Usage: install.sh --email you@company.com [options]
   --address IP        management address (default: the source address of the default route)
   --name NAME         node name (default: the hostname)
   --no-model          install the platform only, no chat model
-  --ref REF           OAF version (git ref) to install (default: $OAF_REF)
+  --ref REF           OAF version to install: a release tag (default: the latest release),
+                      or a branch/commit to build from source
 
 Anything else is passed to scripts/spark-bootstrap.sh (see its --help).
 EOF
@@ -75,13 +79,35 @@ if [ -n "$others" ]; then
 fi
 info "ok: $(uname -m), ${free_gib} GiB free, $(docker --version | cut -d, -f1)"
 
+# ------------------------------------------------------------------ version
+if [ -z "$OAF_REF" ]; then
+	# releases/latest redirects to releases/tag/<latest tag>.
+	OAF_REF=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$OAF_RELEASES/latest" 2>/dev/null | sed -n 's#.*/tag/##p')
+	[ -n "$OAF_REF" ] || die "could not find the latest OAF release at $OAF_RELEASES; pass --ref"
+fi
+# A release ships its oaf binary: download and check it instead of building.
+case "$OAF_REF" in
+v[0-9]*)
+	case "$(uname -m)" in aarch64 | arm64) arch=arm64 ;; *) arch=amd64 ;; esac
+	bin_dir=$(mktemp -d)
+	trap 'rm -rf "$bin_dir"' EXIT
+	curl -fsSL -o "$bin_dir/oaf-linux-$arch" "$OAF_RELEASES/download/$OAF_REF/oaf-linux-$arch" &&
+		curl -fsSL -o "$bin_dir/SHA256SUMS" "$OAF_RELEASES/download/$OAF_REF/SHA256SUMS" ||
+		die "could not download the oaf $OAF_REF binary from $OAF_RELEASES"
+	(cd "$bin_dir" && grep " oaf-linux-$arch\$" SHA256SUMS | sha256sum -c --quiet) ||
+		die "the downloaded oaf binary does not match the release checksum"
+	chmod 0755 "$bin_dir/oaf-linux-$arch"
+	bootstrap_args+=(--oaf-bin "$bin_dir/oaf-linux-$arch")
+	;;
+esac
+
 # --------------------------------------------------------------- source tree
 fetch() { # repo ref dir
 	local repo=$1 ref=$2 dir=$3
 	sudo install -d -o "$(id -u)" -g "$(id -g)" "$(dirname "$dir")"
 	if [ -d "$dir/.git" ]; then
 		git -C "$dir" fetch -q origin "$ref"
-		git -C "$dir" checkout -q -B "$ref" FETCH_HEAD
+		git -C "$dir" checkout -q --detach FETCH_HEAD
 	else
 		git clone -q --branch "$ref" "$repo" "$dir"
 	fi
