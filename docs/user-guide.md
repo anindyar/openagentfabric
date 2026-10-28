@@ -768,6 +768,7 @@ disk and checksums, and benchmarks each model against its catalog baseline.)*
 | Logs of a project | `sudo docker compose -p oaf-langfuse logs -f --tail 100` |
 | Remove the stack, keep data | `sudo oaf uninstall --yes` |
 | Remove the stack and its data | `sudo oaf uninstall --yes --purge` (deletes all traces, metrics and dashboards) |
+| Return a box to before OAF | `sudo oaf reset --yes` on each box (below) |
 
 - `apply` is always safe to re-run. Unchanged projects are only converged, which also restarts
   anything that stopped. Projects that are no longer in `cluster.yaml` are removed (their volumes are kept).
@@ -775,6 +776,11 @@ disk and checksums, and benchmarks each model against its catalog baseline.)*
   volumes. If you lose `/etc/oaf/secrets`, the existing Langfuse data cannot be decrypted with new secrets.
 - `uninstall` leaves the weights, secrets, certificates and agents in place. To remove an agent:
   `sudo systemctl disable --now oaf-node && sudo rm /etc/systemd/system/oaf-node.service && sudo rm -r /var/lib/oaf/projects`.
+- `reset` works on one box, without the control node: run it on every box, joined boxes first. It
+  removes every `oaf-*` container with its volumes, networks and images, the agents and their
+  systemd units, the fabric addresses (`/etc/netplan/40-oaf-fabric.yaml`), the registry CA,
+  `/etc/oaf`, `/var/lib/oaf` (the model weights too, unless `--keep-weights`), `/opt/oaf` and the
+  `oaf` binary. Other containers stay; the desktop mode is left as it is. It cannot be undone.
 - **Upgrades** *(planned, M5)*: a new OAF release bumps the pinned image digests in the bundle, and `oaf apply` rolls them out.
 
 ## 8a. Adding boxes
@@ -984,7 +990,7 @@ vLLM has no container limit: its share is set by `gpuMemoryUtilization`.
 
 ### Commands
 `oaf validate`, `oaf preflight [--ssh]`, `oaf pki init`, `oaf node serve`, `oaf fabric check`,
-`oaf install`, `oaf apply [--dry-run]`, `oaf status`, `oaf uninstall --yes [--purge]`,
+`oaf install`, `oaf apply [--dry-run]`, `oaf status`, `oaf uninstall --yes [--purge]`, `oaf reset --yes [--keep-weights] [--keep-images]`,
 `oaf keys issue [--admin]|rotate|list|serve`, `oaf models add`, `oaf serve`, `oaf secrets set`,
 `oaf observability ...`, `oaf version`.
 Every command has `--help`. Commands that act on the cluster take `-f` (cluster.yaml),
