@@ -255,12 +255,13 @@ func TestRoutes(t *testing.T) {
 	dir := t.TempDir()
 	pending := &join.PendingStore{Path: filepath.Join(dir, "pending.json")}
 	var saved []byte
+	store := SavedPlan{ID: "plan-1"}
 	d := Deps{
 		Load:    func(context.Context) ([]byte, *config.Cluster, *config.Catalog, error) { return data, c, cat, nil },
 		Pending: pending,
-		SavePlan: func(_ context.Context, _ string, _, after []byte) (string, error) {
+		SavePlan: func(_ context.Context, _ string, _, after []byte) (SavedPlan, error) {
 			saved = after
-			return "plan-1", nil
+			return store, nil
 		},
 	}
 	mux := http.NewServeMux()
@@ -328,6 +329,18 @@ func TestRoutes(t *testing.T) {
 	}
 	if !strings.Contains(pr.Diff, "-    topology: single") || !strings.Contains(pr.Diff, "+    topology: pair-plus-single") {
 		t.Fatalf("diff:\n%s", pr.Diff)
+	}
+
+	// A plan the store refuses (a licence to accept first) is not offered as
+	// valid: 422, with what to accept, so the console can ask for it.
+	cuda := config.NeededAcceptance{Subject: "image/vllm-glm53", Kind: "image", Title: "NVIDIA CUDA Toolkit EULA"}
+	store = SavedPlan{ID: "plan-2", Errors: []string{"vllm-glm53 needs NVIDIA CUDA Toolkit EULA accepted first"}, NeedsAcceptance: []config.NeededAcceptance{cuda}}
+	pr = PlanResponse{}
+	if code := post("/api/v1/topology/plan", `{"option":"c","nodes":["spark-2","spark-3"]}`, &pr); code != 422 {
+		t.Fatalf("plan needing a licence: %d %+v", code, pr)
+	}
+	if pr.PlanID != "plan-2" || len(pr.NeedsAcceptance) != 1 || pr.NeedsAcceptance[0].Subject != "image/vllm-glm53" || len(pr.Errors) != 1 {
+		t.Fatalf("plan needing a licence: %+v", pr)
 	}
 }
 

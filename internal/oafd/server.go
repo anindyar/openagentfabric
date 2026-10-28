@@ -26,6 +26,7 @@ import (
 	"openagentfabric.dev/oaf/internal/config"
 	"openagentfabric.dev/oaf/internal/keys"
 	"openagentfabric.dev/oaf/internal/secrets"
+	"openagentfabric.dev/oaf/internal/topology"
 )
 
 // AdminSecretPrefix names an app's management token: oaf-admin-<app>.
@@ -115,14 +116,19 @@ func (s *Server) Publish(typ, status, message string) {
 }
 
 // SavePlan records a change built elsewhere (the topology planner) as a plan
-// against before, with the same validation as the API's own plans.
-func (s *Server) SavePlan(ctx context.Context, summary string, before, after []byte) (string, error) {
+// against before, with the same validation as the API's own plans, and
+// returns what that validation found.
+func (s *Server) SavePlan(ctx context.Context, summary string, before, after []byte) (topology.SavedPlan, error) {
 	r, err := http.NewRequestWithContext(ctx, http.MethodPost, "/", nil)
 	if err != nil {
-		return "", err
+		return topology.SavedPlan{}, err
 	}
 	p, _ := s.offer(r, before, after, summary)
-	return p.ID, nil
+	saved := topology.SavedPlan{ID: p.ID, NeedsAcceptance: p.NeedsAcceptance}
+	for _, e := range p.Errors {
+		saved.Errors = append(saved.Errors, e.Message)
+	}
+	return saved, nil
 }
 
 // auth requires a management token: the value of any oaf-admin-* secret.

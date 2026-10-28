@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"openagentfabric.dev/oaf/internal/config"
@@ -20,13 +21,22 @@ type Deps struct {
 	Pending *join.PendingStore
 	// Current is the hardware of the nodes in cluster.yaml (optional).
 	Current func(ctx context.Context) map[string]join.Hardware
-	// SavePlan stores a plan for POST /api/v1/plans/{id}/apply and returns
-	// its id (oafd's plan store). Without it, plan_id is empty.
-	SavePlan func(ctx context.Context, summary string, before, after []byte) (string, error)
+	// SavePlan stores a plan for POST /api/v1/plans/{id}/apply (oafd's plan
+	// store, which validates it like any other plan). Without it, plan_id is
+	// empty.
+	SavePlan func(ctx context.Context, summary string, before, after []byte) (SavedPlan, error)
 	// Probe finds the cables among joined boxes (temporary probe addresses
 	// on their free QSFP ports, removed afterwards). Optional; without it
 	// only cables seen in the hardware reports are known.
 	Probe func(ctx context.Context, nodes []string) ([]Cable, error)
+}
+
+// SavedPlan is what the plan store found: a plan with errors (a licence to
+// accept first, a missing secret) is stored but cannot be applied.
+type SavedPlan struct {
+	ID              string
+	Errors          []string
+	NeedsAcceptance []config.NeededAcceptance
 }
 
 // Routes are admin routes (oafd wraps them in its authentication).
@@ -241,6 +251,9 @@ type PlanResponse struct {
 	Diff     string   `json:"diff"`
 	Warnings []string `json:"warnings,omitempty"`
 	Errors   []string `json:"errors,omitempty"`
+	// NeedsAcceptance: licences to accept before the plan can apply, as on
+	// every other plan (POST /api/v1/licenses/accept).
+	NeedsAcceptance []config.NeededAcceptance `json:"needs_acceptance,omitempty"`
 }
 
 var letters = map[string]string{"a": OptionPair, "b": OptionHA, "c": OptionPairPlusSingle}
@@ -292,8 +305,17 @@ func (d Deps) plan(w http.ResponseWriter, r *http.Request) {
 	resp.Diff = UnifiedDiff("cluster.yaml", data, out)
 	resp.Summary = summary(in, opt, req)
 	if err == nil && d.SavePlan != nil {
-		if resp.PlanID, err = d.SavePlan(r.Context(), resp.Summary, data, out); err != nil {
+		saved, err := d.SavePlan(r.Context(), resp.Summary, data, out)
+		if err != nil {
 			resp.Errors = append(resp.Errors, "saving the plan: "+err.Error())
+		}
+		resp.PlanID, resp.NeedsAcceptance = saved.ID, saved.NeedsAcceptance
+		// The store validates the plan again: add what only it checks
+		// (licences, secrets) without repeating what the planner found.
+		for _, e := range saved.Errors {
+			if !slices.ContainsFunc(resp.Errors, func(x string) bool { return strings.Contains(x, e) || strings.Contains(e, x) }) {
+				resp.Errors = append(resp.Errors, e)
+			}
 		}
 	}
 	code := http.StatusOK
