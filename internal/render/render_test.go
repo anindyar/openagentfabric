@@ -356,8 +356,9 @@ func TestRenderErrors(t *testing.T) {
 			}
 			// Only a rail without an address is "not brought up yet", which
 			// the pre-apply check of a plan that adds a cable accepts.
-			if errors.Is(err, fabric.ErrNotAddressed) != (tc.name == "rail without address") {
-				t.Fatalf("errors.Is(%v, ErrNotAddressed) = %v", err, !(tc.name == "rail without address"))
+			want := tc.name == "rail without address"
+			if errors.Is(err, fabric.ErrNotAddressed) != want {
+				t.Fatalf("errors.Is(%v, ErrNotAddressed) should be %v", err, want)
 			}
 		})
 	}

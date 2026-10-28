@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-// ErrNotAddressed: a rail has no address (yet). Fabric bring-up gives it
+// ErrNotAddressed means a rail has no address (yet). Fabric bring-up gives it
 // one, so a plan that adds a cable expects it before the first apply.
 var ErrNotAddressed = errors.New("run fabric bring-up")
 
