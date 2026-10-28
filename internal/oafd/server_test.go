@@ -75,7 +75,7 @@ func (f *fixture) do(t *testing.T, method, path string, body any, tok string) (i
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	out := map[string]any{}
 	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out
@@ -285,7 +285,7 @@ func TestEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	lines := make(chan string, 64)
 	go func() {
 		sc := bufio.NewScanner(resp.Body)

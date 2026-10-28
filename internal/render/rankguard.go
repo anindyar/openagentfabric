@@ -16,7 +16,7 @@ import "fmt"
 const rankGuardScript = `import os, signal, socket, struct, subprocess, sys, time
 host, port = sys.argv[1], int(sys.argv[2])
 cmd = sys.argv[3:]
-want4 = "%%08X:%%04X" %% (struct.unpack("<I", socket.inet_aton(host))[0], port)
+want4 = "%08X:%04X" % (struct.unpack("<I", socket.inet_aton(host))[0], port)
 def connected():
     for f in ("/proc/net/tcp", "/proc/net/tcp6"):
         try:
@@ -38,7 +38,7 @@ while child.poll() is None:
     elif seen:
         lost = lost or time.time()
         if time.time() - lost > 45:
-            print("rank guard: lost the leader at %%s:%%d; stopping so docker restarts this rank" %% (host, port), flush=True)
+            print("rank guard: lost the leader at %s:%d; stopping so docker restarts this rank" % (host, port), flush=True)
             child.terminate()
             try:
                 child.wait(30)
@@ -53,7 +53,7 @@ sys.exit(child.returncode)
 // guard goes in the command and the entrypoint stays; otherwise the image's
 // entrypoint is vllm serve and the guard replaces it.
 func guardFollower(s *service, prefix []string, master string, port int) {
-	guard := []string{"python3", "-c", fmt.Sprintf(rankGuardScript), master, fmt.Sprint(port)}
+	guard := []string{"python3", "-c", rankGuardScript, master, fmt.Sprint(port)}
 	if len(prefix) > 0 {
 		s.Command = append(guard, s.Command...)
 		return

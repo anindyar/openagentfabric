@@ -164,7 +164,7 @@ func (s *Service) binary(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusNotFound, "no oaf build for "+arch+" on the control node")
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	w.Header().Set("Content-Type", "application/octet-stream")
 	_, _ = io.Copy(w, f)
 }
@@ -344,13 +344,13 @@ func (s *Service) createToken(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "count must be between 1 and 8")
 		return
 	}
-	clear, t, err := s.Tokens.Create(req.Label, time.Duration(req.TTLMinutes)*time.Minute, req.Count)
+	plain, t, err := s.Tokens.Create(req.Label, time.Duration(req.TTLMinutes)*time.Minute, req.Count)
 	if err != nil {
 		fail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	s.emit(Event{Type: "join", Status: "token", Message: fmt.Sprintf("join token %s created for %d box(es), valid until %s", t.ID, t.MaxUses, t.ExpiresAt.UTC().Format(time.RFC3339))})
-	writeJSON(w, http.StatusCreated, TokenResponse{ID: t.ID, Token: clear, Count: t.MaxUses, ExpiresAt: t.ExpiresAt.Unix(), Command: Command(s.ControlURL, s.Pin, clear)})
+	writeJSON(w, http.StatusCreated, TokenResponse{ID: t.ID, Token: plain, Count: t.MaxUses, ExpiresAt: t.ExpiresAt.Unix(), Command: Command(s.ControlURL, s.Pin, plain)})
 }
 
 func (s *Service) listTokens(w http.ResponseWriter, _ *http.Request) {
@@ -442,7 +442,7 @@ func (d DockerImages) Save(ctx context.Context, name string, w io.Writer) error 
 			var stderr strings.Builder
 			cmd.Stderr = &stderr
 			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("docker save %s: %v %s", img.Ref, err, strings.TrimSpace(stderr.String()))
+				return fmt.Errorf("docker save %s: %w %s", img.Ref, err, strings.TrimSpace(stderr.String()))
 			}
 			return nil
 		}

@@ -18,11 +18,12 @@ func unifiedDiff(a, b, nameA, nameB string) string {
 	}
 	for i := n - 1; i >= 0; i-- {
 		for j := m - 1; j >= 0; j-- {
-			if x[i] == y[j] {
+			switch {
+			case x[i] == y[j]:
 				lcs[i][j] = lcs[i+1][j+1] + 1
-			} else if lcs[i+1][j] >= lcs[i][j+1] {
+			case lcs[i+1][j] >= lcs[i][j+1]:
 				lcs[i][j] = lcs[i+1][j]
-			} else {
+			default:
 				lcs[i][j] = lcs[i][j+1]
 			}
 		}

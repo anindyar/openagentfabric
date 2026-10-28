@@ -274,7 +274,7 @@ func TestRoutes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		_ = json.NewDecoder(resp.Body).Decode(out)
 		return resp.StatusCode
 	}

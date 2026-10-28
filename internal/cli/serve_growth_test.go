@@ -55,7 +55,7 @@ func TestServeMountsGrowth(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != 200 || !strings.Contains(string(body), "oaf") {
 		t.Fatalf("join.sh: %d %s", resp.StatusCode, body)
 	}
@@ -78,14 +78,14 @@ func TestServeMountsGrowth(t *testing.T) {
 	r := post("/api/v1/nodes/join-tokens", "tok", `{"count":1}`)
 	var tok map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&tok)
-	r.Body.Close()
+	_ = r.Body.Close()
 	if r.StatusCode/100 != 2 || !strings.Contains(tok["command"].(string), "join.sh") {
 		t.Fatalf("join token: %d %v", r.StatusCode, tok)
 	}
 	r = post("/api/v1/topology/recommend", "tok", `{"new_nodes":2,"cabling":"cx7-pair"}`)
 	var rec map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&rec)
-	r.Body.Close()
+	_ = r.Body.Close()
 	if r.StatusCode != 200 || rec["options"] == nil {
 		t.Fatalf("recommend: %d %v", r.StatusCode, rec)
 	}

@@ -24,30 +24,30 @@ import (
 func TestTokens(t *testing.T) {
 	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
 	s := &TokenStore{Path: filepath.Join(t.TempDir(), "join", "tokens.json"), Now: func() time.Time { return now }}
-	clear, tok, err := s.Create("rack 2", 0, 0)
+	plain, tok, err := s.Create("rack 2", 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(clear, TokenPrefix) || tok.ExpiresAt != now.Add(DefaultTokenTTL) {
-		t.Fatalf("token %q %+v", clear, tok)
+	if !strings.HasPrefix(plain, TokenPrefix) || tok.ExpiresAt != now.Add(DefaultTokenTTL) {
+		t.Fatalf("token %q %+v", plain, tok)
 	}
 	raw, _ := os.ReadFile(s.Path)
-	if strings.Contains(string(raw), clear) {
+	if strings.Contains(string(raw), plain) {
 		t.Fatal("the token is stored in clear")
 	}
-	if _, err := s.Check(clear); err != nil {
+	if _, err := s.Check(plain); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Check(clear); err != nil {
+	if _, err := s.Check(plain); err != nil {
 		t.Fatal("Check must not use the token up")
 	}
 	if _, err := s.Check("oafj_nope"); !errors.Is(err, ErrTokenUnknown) {
 		t.Fatalf("unknown: %v", err)
 	}
-	if _, err := s.Consume(clear, "spark-2"); err != nil {
+	if _, err := s.Consume(plain, "spark-2"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Consume(clear, "spark-3"); !errors.Is(err, ErrTokenUsed) {
+	if _, err := s.Consume(plain, "spark-3"); !errors.Is(err, ErrTokenUsed) {
 		t.Fatalf("second use: %v", err)
 	}
 	c2, _, _ := s.Create("", 10*time.Minute, 1)
@@ -235,7 +235,7 @@ func TestServiceFlow(t *testing.T) {
 
 func decode(t *testing.T, resp *http.Response, code int, v any) {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != code {
 		t.Fatalf("HTTP %d, want %d: %s", resp.StatusCode, code, readAll(t, resp))
 	}
@@ -246,7 +246,7 @@ func decode(t *testing.T, resp *http.Response, code int, v any) {
 
 func readAll(t *testing.T, resp *http.Response) string {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(err)

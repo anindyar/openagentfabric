@@ -416,7 +416,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, ": oafd events\n\n")
+	_, _ = fmt.Fprint(w, ": oafd events\n\n")
 	fl.Flush()
 	ping := time.NewTicker(20 * time.Second)
 	defer ping.Stop()
@@ -425,7 +425,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-ping.C:
-			fmt.Fprint(w, ": ping\n\n")
+			_, _ = fmt.Fprint(w, ": ping\n\n")
 			fl.Flush()
 		case e := <-ch:
 			b, _ := json.Marshal(e)

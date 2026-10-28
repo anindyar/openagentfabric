@@ -261,7 +261,7 @@ func (w *Weights) list(ctx context.Context, spec *nodev1.WeightsSpec) ([]hfFile,
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusNotFound:
 		return nil, permanent{fmt.Sprintf("Hugging Face has no accessible %s at %s (HTTP %d; gated models need an access token)", spec.GetRepo(), spec.GetRevision(), resp.StatusCode)}
@@ -391,7 +391,7 @@ func (w *Weights) fetch(ctx context.Context, p *pull, f hfFile, target string) e
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 	var h hash.Hash
 	if f.SHA256 != "" {
 		h = sha256.New()
@@ -426,7 +426,7 @@ func (w *Weights) fetch(ctx context.Context, p *pull, f hfFile, target string) e
 			p.done.Add(-offset)
 			return fmt.Errorf("%s: %w", f.Name, err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		switch {
 		case offset > 0 && resp.StatusCode == http.StatusOK:
 			// The server ignored the range: start over.
@@ -554,7 +554,7 @@ func freeBytes(dir string) (int64, error) {
 	if err := syscall.Statfs(dir, &st); err != nil {
 		return 0, err
 	}
-	return int64(st.Bavail) * int64(st.Bsize), nil
+	return int64(st.Bavail) * st.Bsize, nil
 }
 
 func gb(n int64) string { return fmt.Sprintf("%.1f GB", float64(n)/1e9) }

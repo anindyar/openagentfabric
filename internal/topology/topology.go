@@ -163,19 +163,6 @@ func freePorts(hw join.Hardware, known bool) []int {
 
 func intp(i int) *int { return &i }
 
-// cableBetween finds an observed cable between two boxes.
-func cableBetween(cs []Cable, a, b string) (Cable, bool) {
-	for _, c := range cs {
-		if c.A.Node == a && c.B.Node == b {
-			return c, true
-		}
-		if c.A.Node == b && c.B.Node == a {
-			return Cable{A: c.B, B: c.A}, true
-		}
-	}
-	return Cable{}, false
-}
-
 // cablesBetween are all the observed cables between two boxes, a's end
 // first, ordered by a's port (port 1 first).
 func cablesBetween(cs []Cable, a, b string) []Cable {

@@ -228,7 +228,7 @@ func pushImage(ctx context.Context, out io.Writer, image, registry, component st
 	}
 	repo := registry + "/oaf/" + component
 	if b, err := exec.CommandContext(ctx, "docker", "tag", image, repo+":"+tag).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("docker tag: %v: %s", err, bytes.TrimSpace(b))
+		return "", fmt.Errorf("docker tag: %w: %s", err, bytes.TrimSpace(b))
 	}
 	var buf bytes.Buffer
 	push := exec.CommandContext(ctx, "docker", "push", repo+":"+tag)

@@ -115,8 +115,8 @@ func (s *TokenStore) Create(label string, ttl time.Duration, uses int) (string, 
 	if _, err := rand.Read(raw); err != nil {
 		return "", Token{}, err
 	}
-	clear := TokenPrefix + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
-	h := hashToken(clear)
+	plain := TokenPrefix + strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw))
+	h := hashToken(plain)
 	now := s.now()
 	t := Token{ID: h[:8], Hash: h, Label: label, CreatedAt: now, ExpiresAt: now.Add(ttl), MaxUses: uses}
 	s.mu.Lock()
@@ -128,11 +128,11 @@ func (s *TokenStore) Create(label string, ttl time.Duration, uses int) (string, 
 	if err := s.save(append(ts, t)); err != nil {
 		return "", Token{}, err
 	}
-	return clear, t, nil
+	return plain, t, nil
 }
 
-func (s *TokenStore) find(ts []Token, clear string) int {
-	h := hashToken(strings.TrimSpace(clear))
+func (s *TokenStore) find(ts []Token, plain string) int {
+	h := hashToken(strings.TrimSpace(plain))
 	for i, t := range ts {
 		if subtle.ConstantTimeCompare([]byte(t.Hash), []byte(h)) == 1 {
 			return i
@@ -153,14 +153,14 @@ func (s *TokenStore) check(t Token) error {
 
 // Check reports whether a token may still be used (downloads before
 // enrolment). It does not use it up.
-func (s *TokenStore) Check(clear string) (Token, error) {
+func (s *TokenStore) Check(plain string) (Token, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ts, err := s.load()
 	if err != nil {
 		return Token{}, err
 	}
-	i := s.find(ts, clear)
+	i := s.find(ts, plain)
 	if i < 0 {
 		return Token{}, ErrTokenUnknown
 	}
@@ -168,14 +168,14 @@ func (s *TokenStore) Check(clear string) (Token, error) {
 }
 
 // Consume counts one enrolment; after MaxUses the token is used up.
-func (s *TokenStore) Consume(clear, by string) (Token, error) {
+func (s *TokenStore) Consume(plain, by string) (Token, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ts, err := s.load()
 	if err != nil {
 		return Token{}, err
 	}
-	i := s.find(ts, clear)
+	i := s.find(ts, plain)
 	if i < 0 {
 		return Token{}, ErrTokenUnknown
 	}

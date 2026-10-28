@@ -27,7 +27,7 @@ type fakeHub struct {
 	failOnce atomic.Bool // the first file request breaks off halfway
 }
 
-func (h *fakeHub) server(t *testing.T) *httptest.Server {
+func (h *fakeHub) server(_ *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/api/models/org/model/revision/abc123"):
@@ -169,7 +169,7 @@ func TestWeightsCompleteByHand(t *testing.T) {
 
 // Not enough disk is a permanent failure with the sizes in the message.
 func TestWeightsDiskCheck(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"siblings": []map[string]any{{"rfilename": "huge.safetensors", "size": int64(1) << 60}}})
 	}))
 	defer srv.Close()

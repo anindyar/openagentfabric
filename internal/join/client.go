@@ -70,7 +70,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		var e struct {
 			Error string `json:"error"`
@@ -106,7 +106,7 @@ func (c *Client) LoadImage(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("image %s: %s", name, resp.Status)
 	}
@@ -115,7 +115,7 @@ func (c *Client) LoadImage(ctx context.Context, name string) error {
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("docker load %s: %v: %s", name, err, strings.TrimSpace(out.String()))
+		return fmt.Errorf("docker load %s: %w: %s", name, err, strings.TrimSpace(out.String()))
 	}
 	return nil
 }

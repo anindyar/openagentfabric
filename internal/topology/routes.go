@@ -303,7 +303,7 @@ func (d Deps) plan(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, code, resp)
 }
 
-func summary(in Input, opt string, req PlanRequest) string {
+func summary(in Input, opt string, _ PlanRequest) string {
 	var names []string
 	for _, p := range in.Pending {
 		names = append(names, p.Name)

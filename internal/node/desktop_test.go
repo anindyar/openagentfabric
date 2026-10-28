@@ -19,28 +19,28 @@ type fakeSystemd struct {
 func (f *fakeSystemd) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	line := hostexec.CmdLine(name, args...)
 	f.ran = append(f.ran, line)
-	switch {
-	case line == "systemctl get-default":
+	switch line {
+	case "systemctl get-default":
 		return []byte(f.target + "\n"), nil
-	case line == "systemctl is-active display-manager":
+	case "systemctl is-active display-manager":
 		if f.dm {
 			return []byte("active\n"), nil
 		}
 		return []byte("inactive\n"), &hostexec.ExitError{Cmd: line, Code: 3}
-	case line == "ps -eo comm=,rss=":
+	case "ps -eo comm=,rss=":
 		if f.dm { // 600 MiB of desktop; firefox and dockerd do not count
 			return []byte("gnome-shell 307200\nXorg 102400\ngsd-color 102400\nevolution-alarm 51200\ngdm3 51200\nfirefox 800000\ndockerd 120000\ngnome-terminal- 50000\nIsolated Web Co 1000\n"), nil
 		}
 		return []byte("dockerd 120000\n"), nil
-	case line == "loginctl list-sessions --no-legend":
+	case "loginctl list-sessions --no-legend":
 		return []byte(f.sessions), nil
-	case line == "systemctl set-default multi-user.target":
+	case "systemctl set-default multi-user.target":
 		f.target = "multi-user.target"
-	case line == "systemctl set-default graphical.target":
+	case "systemctl set-default graphical.target":
 		f.target = "graphical.target"
-	case line == "systemctl stop display-manager":
+	case "systemctl stop display-manager":
 		f.dm = false
-	case line == "systemctl start display-manager":
+	case "systemctl start display-manager":
 		f.dm = true
 	default:
 		return nil, &hostexec.ExitError{Cmd: line, Code: 127}

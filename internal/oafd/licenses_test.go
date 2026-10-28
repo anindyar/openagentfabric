@@ -77,7 +77,7 @@ func TestLicencesAcceptedBeforeApply(t *testing.T) {
 
 	// It renders: applied, with who and when recorded.
 	checkErr = nil
-	code, acc = f.do(t, "POST", "/api/v1/licenses/accept", map[string]any{"subjects": subjects, "accepted_by": "ana@example.test"}, token)
+	_, acc = f.do(t, "POST", "/api/v1/licenses/accept", map[string]any{"subjects": subjects, "accepted_by": "ana@example.test"}, token)
 	if c, _ := f.do(t, "POST", "/api/v1/plans/"+acc["plan_id"].(string)+"/apply", nil, token); c/100 != 2 {
 		t.Fatalf("apply: %d", c)
 	}
