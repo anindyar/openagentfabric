@@ -357,6 +357,31 @@ PY
 	if $with_embeddings || sudo grep -q "catalogRef: $EMBED_ID" "$ETC/cluster.yaml"; then
 		fetch_weights "$EMBED_ID"
 	fi
+
+	# vSR's reasoning signal needs its encoder (bundle artifact vsr-encoder,
+	# ~1.2 GB) on this, the gateway node: without it, `model: auto` sends
+	# everything to the fast model once a large model joins.
+	dest=$MODELS/vsr-encoder
+	want=$(awk '/- name: vsr-encoder$/ {f=1} f && /repo:/ {r=$2} f && /revision:/ {print r "@" $2; exit}' "$REPO_ROOT/bundle/versions.yaml")
+	[ -n "$want" ] || die "bundle/versions.yaml pins no vsr-encoder artifact"
+	step "Router encoder ($dest)"
+	if sudo test -f "$dest/.oaf-complete" && [ "$(sudo cat "$dest/.oaf-complete")" = "$want" ]; then
+		info "present: $want"
+	else
+		sudo install -d -m 0755 "$dest"
+		info "downloading $want"
+		$DOCKER run --rm --network host -e HF_TOKEN="${HF_TOKEN:-}" -v "$dest":/out \
+			-v "$REPO_ROOT/bundle/versions.yaml":/versions.yaml:ro --entrypoint python3 "$image" -c "
+import yaml
+from huggingface_hub import snapshot_download
+a = next(c for c in yaml.safe_load(open('/versions.yaml'))['artifacts'] if c['name'] == 'vsr-encoder')
+hf = a['huggingface']
+snapshot_download(repo_id=hf['repo'], revision=hf['revision'], allow_patterns=hf['include'], local_dir='/out')
+"
+		sudo test -f "$dest/model.safetensors" || die "the vsr-encoder download is incomplete (re-run to resume)"
+		echo "$want" | sudo tee "$dest/.oaf-complete" >/dev/null
+		info "complete: $(sudo du -sh "$dest" | cut -f1)"
+	fi
 fi
 
 # ---------------------------------------------------------------------------
