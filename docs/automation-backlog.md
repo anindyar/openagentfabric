@@ -30,12 +30,14 @@ Status: **open**, **in progress**, **done (commit)**.
 | M4 | vSR encoder artifact must be placed in `<modelsPath>/vsr-encoder` before reasoning signals work | gateway node | Pipeline fetches bundle artifacts by pinned revision (PLAN M2) | open |
 | M5 | Model catalog on the box (`/etc/oaf/catalog/models.yaml`) replaced by hand with the repo's version; it is stale again (GLM still says 512K, repo says 256K). Installed by hand again (2026-10-24) for the companion models (Qwen3-Coder, Ornith) | .242, 2026-10-24 | The catalog ships in the bundle and `oaf upgrade` installs it | open |
 | M7 | Catalog updated on the box by hand again (GLM profile's doubled `vllm serve` removed) and `oaf apply` run by hand to roll the fix out. Again (2026-10-24): GLM profile forces `--kv-cache-dtype bfloat16` (the checkpoint asks for FP8 KV, which the published build cannot run) and adds `--reasoning-parser glm45`; catalog installed and `oaf apply` run by hand | .242, 2026-10-24 | `oaf upgrade` installs the bundle's catalog and reconciles; a render test that an engine whose image ENTRYPOINT is `vllm serve` gets no commandPrefix | open |
+| M8 | The patched GLM-5.3-Flash engine (`glm53:v9`, `vllm-glm53`) exists only as a local image: saved by hand with `docker save` before a full reset, to be loaded and pushed again with `oaf images push` | pair, 2026-10-28 | Build it from a Dockerfile and patches kept in the repo, or publish it to a registry the installer pulls from, pinned by digest in `bundle/versions.yaml` | open |
 | M6 | NVIDIA CUDA EULA acceptance for a new engine image recorded in `spec.licenseAcceptances` | pending | Console asks for acceptance when a plan needs an image with included terms, and records who and when | open |
 
 ## Upgrades and services
 
 | # | Done by hand | Where | Automatic replacement | Status |
 |---|---|---|---|---|
+| R1 | Full reset of three test boxes before a from-scratch install test: legacy images, staging directories and old checkouts deleted by hand; desktop restored as the default target | 3 boxes, 2026-10-28 | `oaf reset` (and the app's own uninstall) remove everything they installed; leftovers were from hand deployments before the installers existed | done (050161c) |
 | U1 | New `oaf` binary copied to every node with scp, installed, services restarted (`oaf-node`, `oaf-keys`, `oaf-api`) | all boxes, repeatedly (last: 92f4d68 on .142/.212) | `oaf upgrade`: the control node pushes the bundle's binary to every agent, restarts services in order, checks versions | open |
 | U2 | `oaf-api.service` installed by hand on the control box | .242, 2026-10-24 | Installer (`spark-bootstrap.sh` has the step; the one-command installer must too) | open |
 | U3 | `oaf observability enable/scrape/grafana-url` run by the Garrison installer, `oaf apply` by hand after OAF upgrades | .242 | Part of the app install profile (PLAN M6) and `oaf upgrade` | open |
