@@ -113,10 +113,11 @@ func (r resetter) units(ctx context.Context) error {
 }
 
 // containers removes every container of an oaf-* compose project and
-// returns the images they ran.
+// returns the IDs of the images they ran (docker ps shows a digest-pinned
+// image by repository only, which `docker image rm` cannot resolve).
 func (r resetter) containers(ctx context.Context) ([]string, error) {
 	out, err := r.Run.Run(ctx, "docker", "ps", "-a", "--filter", "label=com.docker.compose.project",
-		"--format", `{{.ID}} {{.Image}} {{.Label "com.docker.compose.project"}}`)
+		"--format", `{{.ID}} {{.Label "com.docker.compose.project"}}`)
 	if err != nil {
 		return nil, fmt.Errorf("docker ps: %w", err)
 	}
@@ -124,13 +125,19 @@ func (r resetter) containers(ctx context.Context) ([]string, error) {
 	images := map[string]bool{}
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		f := strings.Fields(line)
-		if len(f) != 3 || !strings.HasPrefix(f[2], node.ProjectPrefix) {
+		if len(f) != 2 || !strings.HasPrefix(f[1], node.ProjectPrefix) {
 			continue
 		}
 		ids = append(ids, f[0])
-		images[f[1]] = true
 	}
 	if len(ids) > 0 {
+		out, err := r.Run.Run(ctx, "docker", append([]string{"inspect", "--format", "{{.Image}}"}, ids...)...)
+		if err != nil {
+			return nil, fmt.Errorf("docker inspect: %w", err)
+		}
+		for _, id := range strings.Fields(string(out)) {
+			images[id] = true
+		}
 		if _, err := r.Run.Run(ctx, "docker", append([]string{"rm", "--force", "--volumes"}, ids...)...); err != nil {
 			return nil, fmt.Errorf("docker rm: %w", err)
 		}
@@ -166,13 +173,19 @@ func (r resetter) volumesAndNetworks(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// images removes the images the containers ran, one at a time: an image
-// another (non-OAF) container still uses stays, with a note.
+// images removes the images the containers ran, with every tag they have
+// (a digest-pinned image may also be tagged, e.g. by `oaf images push`).
+// An image another (non-OAF) container still uses stays, with a note.
 func (r resetter) images(ctx context.Context, images []string) error {
 	n := 0
-	for _, img := range images {
-		if _, err := r.Run.Run(ctx, "docker", "image", "rm", img); err != nil {
-			r.say("kept      image %s (%v)", img, err)
+	for _, id := range images {
+		out, err := r.Run.Run(ctx, "docker", "image", "inspect", "--format", "{{range .RepoTags}}{{.}} {{end}}", id)
+		if err != nil {
+			continue // already gone
+		}
+		refs := append(strings.Fields(string(out)), id)
+		if _, err := r.Run.Run(ctx, "docker", append([]string{"image", "rm"}, refs...)...); err != nil {
+			r.say("kept      image %s (%v)", strings.Join(refs[:len(refs)-1], " "), err)
 			continue
 		}
 		n++

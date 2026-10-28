@@ -17,7 +17,13 @@ func (f *resetDocker) Run(_ context.Context, name string, args ...string) ([]byt
 	f.ran = append(f.ran, line)
 	switch {
 	case strings.HasPrefix(line, "docker ps"):
-		return []byte("c1 ghcr.io/agentgateway/agentgateway:v1.6.0 oaf-gateway\nc2 postgres:16 hms\nc3 vllm:x oaf-model-a\n"), nil
+		return []byte("c1 oaf-gateway\nc2 hms\nc3 oaf-model-a\n"), nil
+	case line == "docker inspect --format {{.Image}} c1 c3":
+		return []byte("sha256:gw\nsha256:vllm\n"), nil
+	case strings.HasPrefix(line, "docker image inspect") && strings.HasSuffix(line, "sha256:vllm"):
+		return []byte("10.0.0.1:5000/oaf/vllm-glm53:v9 glm53:v9 "), nil
+	case strings.HasPrefix(line, "docker image inspect"):
+		return []byte(""), nil
 	case strings.HasPrefix(line, "docker volume ls"):
 		return []byte("oaf-langfuse_pg oaf-langfuse\nhms_data hms\n"), nil
 	case strings.HasPrefix(line, "docker network ls"):
@@ -82,8 +88,8 @@ func TestReset(t *testing.T) {
 		"docker rm --force --volumes c1 c3",
 		"docker volume rm oaf-langfuse_pg",
 		"docker network rm oaf-gateway_default",
-		"docker image rm ghcr.io/agentgateway/agentgateway:v1.6.0",
-		"docker image rm vllm:x",
+		"docker image rm sha256:gw",
+		"docker image rm 10.0.0.1:5000/oaf/vllm-glm53:v9 glm53:v9 sha256:vllm",
 		"netplan apply",
 	} {
 		if !slices.Contains(d.ran, want) {
@@ -91,7 +97,7 @@ func TestReset(t *testing.T) {
 		}
 	}
 	for _, ran := range d.ran {
-		if strings.Contains(ran, "postgres:16") || strings.Contains(ran, "hms_data") || strings.Contains(ran, "c2") {
+		if strings.Contains(ran, "hms_data") || strings.Contains(ran, "c2") {
 			t.Errorf("touched a non-OAF object: %q", ran)
 		}
 	}
