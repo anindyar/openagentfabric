@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"io/fs"
 	"net/netip"
@@ -352,6 +353,11 @@ func TestRenderErrors(t *testing.T) {
 			_, err := Render(in)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error %v, want it to mention %q", err, tc.want)
+			}
+			// Only a rail without an address is "not brought up yet", which
+			// the pre-apply check of a plan that adds a cable accepts.
+			if errors.Is(err, fabric.ErrNotAddressed) != (tc.name == "rail without address") {
+				t.Fatalf("errors.Is(%v, ErrNotAddressed) = %v", err, !(tc.name == "rail without address"))
 			}
 		})
 	}

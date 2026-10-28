@@ -2,12 +2,14 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 
 	"openagentfabric.dev/oaf/bundle"
 	"openagentfabric.dev/oaf/internal/config"
+	"openagentfabric.dev/oaf/internal/fabric"
 	"openagentfabric.dev/oaf/internal/secrets"
 )
 
@@ -45,5 +47,10 @@ func renderCheck(ctx context.Context, f *stackFlags, stateDir string, doc []byte
 		return err
 	}
 	_, err = s.render(ctx, secrets.Preview{Store: secrets.Store{Dir: f.secretsDir}})
+	// Rails without addresses are expected when the change adds a cable:
+	// the apply addresses them, then renders for real before deploying.
+	if errors.Is(err, fabric.ErrNotAddressed) {
+		return nil
+	}
 	return err
 }

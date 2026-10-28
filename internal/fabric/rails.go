@@ -1,11 +1,16 @@
 package fabric
 
 import (
+	"errors"
 	"fmt"
 	"net/netip"
 	"slices"
 	"strconv"
 )
+
+// ErrNotAddressed: a rail has no address (yet). Fabric bring-up gives it
+// one, so a plan that adds a cable expects it before the first apply.
+var ErrNotAddressed = errors.New("run fabric bring-up")
 
 // GIDAuto asks for the RoCE v2 GID that carries the rail address.
 const GIDAuto = "auto"
@@ -66,7 +71,7 @@ func ResolveEnd(node string, ports []Port, port int, subnets []string, gidIndex 
 			if subnet.IsValid() {
 				in = " in " + subnet.String()
 			}
-			return End{}, fmt.Errorf("%s on %s has no IPv4 address%s; run fabric bring-up", nd.Name, node, in)
+			return End{}, fmt.Errorf("%s on %s has no IPv4 address%s; %w", nd.Name, node, in, ErrNotAddressed)
 		}
 		gid := fixed
 		if gid < 0 {
