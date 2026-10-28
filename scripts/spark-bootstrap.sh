@@ -7,7 +7,7 @@
 #   scripts/spark-bootstrap.sh --email you@example.com
 #
 # It installs the oaf binary and node agent, writes /etc/oaf/cluster.yaml
-# (topology single: the full OAF stack, Qwen3.8 Flash-Next at 0.75 of unified
+# (topology single: the full OAF stack, Ornith 1.5 35B-A3B at 0.40 of unified
 # memory, and the bge-m3 embedding model for the apps on the box), fetches the
 # weights, deploys, waits until everything is healthy and sends a chat and an
 # embedding request through the gateway. Every step checks
@@ -18,16 +18,18 @@
 set -euo pipefail
 
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
-MODEL_ID=qwen3.8-flash-next-fp4
-DEPLOYMENT=qwen-flash
+MODEL_ID=ornith-1.5-35b-a3b-nvfp4
+DEPLOYMENT=ornith
+MODEL_GIB=25 # weights 21.8 GiB, with headroom
 # Embeddings are part of the appliance: apps (vclocal memory search) get them
 # from the gateway at /v1/embeddings. About 6.5 GiB in all on a GB10.
 EMBED_ID=bge-m3
 EMBED_UTIL=0.03
 EMBED_LEN=8192
 EMBED_GIB=6.5
+# The engine of both models (the GB10 build of vLLM). The model is MIT, so the
+# engine's CUDA terms are the only ones to accept.
 IMAGE_COMPONENT=vllm-spark-b12x
-MODEL_LICENCE_URL=https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-agreement/
 CUDA_EULA_URL=https://docs.nvidia.com/cuda/eula/index.html
 # Builds oaf when the box has no Go toolchain (it usually has none).
 GO_IMAGE=docker.io/library/golang:1.27-bookworm@sha256:5c3e9b43cfd3bb95c7937462e29d87ada57b481a96fa23ad0eb61778d7a00110
@@ -39,7 +41,7 @@ MODELS=/var/lib/oaf/models
 name=$(hostname -s | tr '[:upper:]_' '[:lower:]-' | tr -cd 'a-z0-9-')
 address=""
 email=""
-util=0.75
+util=0.40
 max_len=262144
 accept=false
 weights_from=""
@@ -47,7 +49,7 @@ with_model=true
 with_embeddings=true
 oaf_bin=""
 rewrite_config=false
-health_timeout=60 # minutes; a cold start autotunes b12x kernels for ~10 min
+health_timeout=60 # minutes; a cold start compiles and autotunes kernels
 
 usage() {
 	cat <<EOF
@@ -118,7 +120,7 @@ info "node $name at $address, ${mem_gib} GiB memory, $(docker --version)"
 if $with_model; then
 	sudo install -d -m 0755 "$MODELS"
 	free_gib=$(df -BG --output=avail "$MODELS" | tail -1 | tr -dc 0-9)
-	need=100
+	need=$MODEL_GIB
 	[ -f "$MODELS/$MODEL_ID/.oaf-complete" ] && need=0
 	$with_embeddings && ! [ -f "$MODELS/$EMBED_ID/.oaf-complete" ] && need=$((need + 3))
 	$DOCKER image inspect "$image" >/dev/null 2>&1 || need=$((need + 20))
@@ -130,13 +132,11 @@ fi
 step "Licences"
 if $with_model; then
 	cat <<EOF
-    Serving $MODEL_ID needs two sets of terms:
-      - the vLLM Spark image ships NVIDIA CUDA:      $CUDA_EULA_URL
-      - the model is under the NVIDIA Open Model Agreement
-        (base model: Qwen Community License 1.0): $MODEL_LICENCE_URL
+    Serving $MODEL_ID (MIT) runs the vLLM Spark image, which ships NVIDIA CUDA
+    under its EULA: $CUDA_EULA_URL
 EOF
 	if ! $accept; then
-		read -r -p "    Have you read and do you accept both? Type 'yes': " answer
+		read -r -p "    Have you read and do you accept it? Type 'yes': " answer
 		[ "$answer" = yes ] || die "licences not accepted; nothing installed (or use --no-model)"
 	fi
 	info "accepted by $email"
@@ -235,10 +235,6 @@ EOF
   licenseAcceptances:
     - subject: image/$IMAGE_COMPONENT
       url: $CUDA_EULA_URL
-      acceptedBy: $email
-      acceptedAt: $now
-    - subject: model/$MODEL_ID
-      url: $MODEL_LICENCE_URL
       acceptedBy: $email
       acceptedAt: $now
 EOF

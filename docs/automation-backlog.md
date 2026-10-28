@@ -43,6 +43,7 @@ Status: **open**, **in progress**, **done (commit)**.
 | U3 | `oaf observability enable/scrape/grafana-url` run by the Garrison installer, `oaf apply` by hand after OAF upgrades | .242 | Part of the app install profile (PLAN M6) and `oaf upgrade` | open |
 | U4 | Garrison containers started with `docker compose up -d --build` by hand: its installer stopped at `oaf keys issue`, which re-renders the whole cluster and failed on a model waiting for its licence | .242, 2026-10-24 | Installer keeps the key already in .env (Garrison commit after 5e7c375); OAF: `oaf keys issue` for an existing key should not need every project to render (an unrelated deployment must not block it) | in progress |
 | U5 | A failed apply left the change in cluster.yaml (the GLM deployment without its licence), blocking later applies | .242, 2026-10-24 | oafd renders a change before writing it (6167323); licences are asked for at plan time and accepted in the console | done |
+| U6 | Applying a new single-box model waited behind a pair model still loading: apply converges projects one at a time, so `model-ornith` was not created until GLM (weights still downloading) was healthy | .242, 2026-10-28 | Converge independent projects in parallel, or create every project before waiting on any | open |
 
 ## Garrison (appliance console)
 

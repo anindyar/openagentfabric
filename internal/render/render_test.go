@@ -110,6 +110,13 @@ func singleInput(t *testing.T) Input {
 // accepted like the upstream vLLM image's.
 func TestSparkEngine(t *testing.T) {
 	in := singleInput(t)
+	// Qwen3.8 Flash-Next's profile sets every container setting there is.
+	in.Cluster.Spec.Models[0] = config.ModelDeployment{Name: "qwen-flash", CatalogRef: "qwen3.8-flash-next-fp4",
+		Placement: in.Cluster.Spec.Models[0].Placement, GPUMemoryUtilization: 0.75, MaxModelLen: 262144}
+	in.Cluster.Spec.Routing.Defaults = config.RoutingDefaults{Fast: "qwen-flash", Fallback: "qwen-flash"}
+	in.Cluster.Spec.LicenseAcceptances = append(in.Cluster.Spec.LicenseAcceptances, config.LicenseAcceptance{
+		Subject: "model/qwen3.8-flash-next-fp4", URL: "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-agreement/",
+		AcceptedBy: "admin@example.com", AcceptedAt: in.Cluster.Spec.LicenseAcceptances[0].AcceptedAt})
 	var cf composeFile
 	for _, p := range mustRender(t, in) {
 		if p.Name == "model-qwen-flash" {

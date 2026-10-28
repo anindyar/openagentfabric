@@ -4,7 +4,7 @@ services:
     image: ghcr.io/agentgateway/agentgateway:v1.6.0@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
     restart: unless-stopped
     labels:
-      dev.openagentfabric.config-hash: 6fd2708754485882
+      dev.openagentfabric.config-hash: ffd76800e8a77c6c
     command:
       - --file
       - /config/config.yaml

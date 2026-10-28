@@ -160,17 +160,16 @@ scripts/spark-bootstrap.sh --email you@example.com
 It checks the host (aarch64, docker, compose, the NVIDIA CDI spec, disk), asks you to accept the
 licences, builds `oaf` (in a pinned Go container if the box has no Go), writes
 `/etc/oaf/cluster.yaml` with `topology: single`, runs preflight, creates the certificates, starts the
-node agent, pulls the engine image (~18 GB), downloads the weights (~95 GiB) to
-`/var/lib/oaf/models/qwen3.8-flash-next-fp4/` and bge-m3's (~2.3 GiB) to `/var/lib/oaf/models/bge-m3/`,
+node agent, pulls the engine image (~18 GB), downloads the weights (~22 GiB) to
+`/var/lib/oaf/models/ornith-1.5-35b-a3b-nvfp4/` and bge-m3's (~2.3 GiB) to `/var/lib/oaf/models/bge-m3/`,
 runs `oaf install`, waits until `oaf status` is healthy and sends a chat and an embedding request
 through the gateway. On a box installed before bge-m3 was a default, a re-run adds it to cluster.yaml,
 but only when at least 9 GiB of memory is available. A first run takes about 30–60 minutes, mostly the
-download and the model's first start (it autotunes kernels for about 10 minutes; the results are kept
-in volumes, so later starts are faster). Every step checks before it acts, so re-run it after a failure.
+downloads and the model's first start. Every step checks before it acts, so re-run it after a failure.
 
 | Option | Default | Use |
 |---|---|---|
-| `--util` | `0.75` | vLLM's share of unified memory. 0.75 keeps the full 262K context with ~800K tokens of KV cache and, with bge-m3, leaves about 15 GiB for other apps |
+| `--util` | `0.40` | vLLM's share of unified memory. 0.40 keeps the full 262K context with room for many requests and, with bge-m3, leaves about 58 GiB for other apps |
 | `--weights-from user@host:/path/` | Hugging Face | copy the weights from another box over SSH instead of downloading |
 | `--no-model` | | the stack only |
 | `--no-embeddings` | | no bge-m3 embedding model (frees about 6.5 GiB) |
@@ -178,9 +177,11 @@ in volumes, so later starts are faster). Every step checks before it acts, so re
 | `--rewrite-config` | keep | replace an existing `/etc/oaf/cluster.yaml` |
 | `--accept-licences` | prompt | accept without the prompt (re-runs, automation) |
 
-The model is Qwen3.8 Flash-Next (NVIDIA NVFP4). Upstream vLLM cannot load its checkpoint yet, so the
-catalog serves it with the community GB10 build `eugr/spark-vllm-b12x`, pinned by digest in
-`bundle/versions.yaml` (`engine: vllm-spark-b12x` in the catalog profile). Other workloads on the same
+The model is Ornith 1.5 35B-A3B (NVFP4, MIT): a 35B mixture of experts with 3B active, so it answers
+quickly, and it thinks before answering. It and bge-m3 run on the community GB10 build
+`eugr/spark-vllm-b12x`, pinned by digest in `bundle/versions.yaml` (`engine: vllm-spark-b12x` in the
+catalog profiles), so the box pulls one engine image. For a larger model on one box, replace it from
+the console (Ornith 1.5 122B or Qwen3.8 Flash-Next, both in the catalog). Other workloads on the same
 box should get compose `mem_limit` caps so they cannot push vLLM into the OOM killer.
 
 For pairs and triangles, follow the steps below.
@@ -473,8 +474,8 @@ spec:
   routing:
     mode: observe          # observe first; switch to active once the decisions look right
     defaults:
-      fast: qwen-flash     # everything a rule does not claim, and where requests go if vSR is down
-      fallback: qwen-flash # used when the model a rule picked is down
+      fast: ornith         # everything a rule does not claim, and where requests go if vSR is down
+      fallback: ornith     # used when the model a rule picked is down
     rules:
       - name: complex
         target: glm        # must be an enabled chat deployment

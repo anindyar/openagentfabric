@@ -139,7 +139,7 @@ func TestProviderPlanApplyAndConflict(t *testing.T) {
 	}
 
 	// A second plan, made now, goes stale once the first is applied.
-	_, stale := f.do(t, "PUT", "/api/v1/routing", map[string]any{"mode": "active", "defaults": map[string]string{"fast": "qwen-flash"}, "rules": []any{}}, token)
+	_, stale := f.do(t, "PUT", "/api/v1/routing", map[string]any{"mode": "active", "defaults": map[string]string{"fast": "ornith"}, "rules": []any{}}, token)
 
 	id := plan["plan_id"].(string)
 	if c, body := f.do(t, "POST", "/api/v1/plans/"+id+"/apply", nil, token); c != 202 {
@@ -260,11 +260,11 @@ func TestModelsAndRouting(t *testing.T) {
 	if c, _ := f.do(t, "DELETE", "/api/v1/models/nope", nil, token); c != 404 {
 		t.Fatalf("remove missing model: %d", c)
 	}
-	if c, plan := f.do(t, "POST", "/api/v1/models", map[string]any{"name": "qwen-flash", "catalog_ref": "bge-m3"}, token); c != 409 {
+	if c, plan := f.do(t, "POST", "/api/v1/models", map[string]any{"name": "ornith", "catalog_ref": "bge-m3"}, token); c != 409 {
 		t.Fatalf("duplicate model: %d %v", c, plan)
 	}
 	_, r := f.do(t, "GET", "/api/v1/routing", nil, token)
-	if r["mode"] == "" || r["defaults"].(map[string]any)["fast"] != "qwen-flash" {
+	if r["mode"] == "" || r["defaults"].(map[string]any)["fast"] != "ornith" {
 		t.Fatalf("routing: %v", r)
 	}
 	_, cat := f.do(t, "GET", "/api/v1/catalog", nil, token)

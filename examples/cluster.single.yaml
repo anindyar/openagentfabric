@@ -3,12 +3,12 @@
 # unified memory left for other workloads. scripts/spark-bootstrap.sh writes
 # this shape for a new box.
 #
-# Memory on one GB10 (121.6 GiB visible), measured on a DGX Spark 2026-10-20:
-#   qwen-flash at 0.75   91.2 GiB  (weights 72.9, activations 2.0, fp8 KV ~15.3)
+# Memory on one GB10 (121.6 GiB visible):
+#   ornith at 0.40       48.6 GiB  (weights 21.8, the rest activations and KV cache)
 #   vLLM host processes  ~4.6 GiB  (outside --gpu-memory-utilization)
 #   embed (bge-m3)       ~6.5 GiB  (measured 2026-10-23; mostly vLLM overhead)
 #   OAF stack            ~3.1 GiB  (capped at 7.3 GiB)
-#   left                 ~15 GiB   for the OS and other apps
+#   left                 ~58 GiB   for the OS and other apps
 apiVersion: oaf/v1alpha1
 kind: Cluster
 metadata:
@@ -23,10 +23,10 @@ spec:
   fabric:
     topology: single
   models:
-    - name: qwen-flash
-      catalogRef: qwen3.8-flash-next-fp4
+    - name: ornith
+      catalogRef: ornith-1.5-35b-a3b-nvfp4
       placement: { node: spark-1 }
-      gpuMemoryUtilization: 0.75
+      gpuMemoryUtilization: 0.40
       maxModelLen: 262144
     # Embeddings for the apps on the box, through the gateway at /v1/embeddings.
     # Named after the model: apps store these vectors, so a different model
@@ -44,17 +44,13 @@ spec:
       - name: default
         secretRef: gateway-key-default
     defaults:
-      fast: qwen-flash
-      fallback: qwen-flash
+      fast: ornith
+      fallback: ornith
   observability:
     langfuse: { enabled: true }
     metrics: { retention: 15d }
   licenseAcceptances:
     - subject: image/vllm-spark-b12x
       url: https://docs.nvidia.com/cuda/eula/index.html
-      acceptedBy: admin@example.com
-      acceptedAt: 2026-10-20T12:00:00Z
-    - subject: model/qwen3.8-flash-next-fp4
-      url: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-agreement/
       acceptedBy: admin@example.com
       acceptedAt: 2026-10-20T12:00:00Z

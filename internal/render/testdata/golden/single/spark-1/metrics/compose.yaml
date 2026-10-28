@@ -41,7 +41,7 @@ services:
     image: docker.io/prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
     restart: unless-stopped
     labels:
-      dev.openagentfabric.config-hash: 1e27980d99d99e1f
+      dev.openagentfabric.config-hash: e6329eac815410c9
     entrypoint:
       - /bin/sh
       - -c

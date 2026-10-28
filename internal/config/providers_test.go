@@ -81,7 +81,7 @@ func TestProviderValidation(t *testing.T) {
 		{Provider{Name: "c", Type: ProviderOpenAICompatible, AllowEgress: true, Models: []ProviderModel{{Name: "m3"}}}, ".endpoint", "endpoint"},
 		{Provider{Name: "d", Type: ProviderAzureOpenAI, SecretRef: "k", AllowEgress: true, Models: []ProviderModel{{Name: "m4"}}}, ".azure", "resourceName"},
 		{Provider{Name: "e", Type: ProviderOpenAI, SecretRef: "k", AllowEgress: true, Guardrails: []string{"nope"}, Models: []ProviderModel{{Name: "m5"}}}, ".guardrails[0]", "no guardrail policy"},
-		{Provider{Name: "f", Type: ProviderOpenAI, SecretRef: "k", AllowEgress: true, Models: []ProviderModel{{Name: "qwen-flash"}}}, ".models[0].name", "already used"},
+		{Provider{Name: "f", Type: ProviderOpenAI, SecretRef: "k", AllowEgress: true, Models: []ProviderModel{{Name: "ornith"}}}, ".models[0].name", "already used"},
 	}
 	for _, b := range bad {
 		doc, _, err := SetProvider(singleDoc(t), b.p)
@@ -132,7 +132,7 @@ func TestGuardrailValidation(t *testing.T) {
 	if r := validateDoc(t, doc); !r.OK() {
 		t.Fatalf("basic does not validate: %v", r.Errors())
 	}
-	doc, changed, err := SetModelGuardrails(doc, "qwen-flash", []string{"basic"})
+	doc, changed, err := SetModelGuardrails(doc, "ornith", []string{"basic"})
 	if err != nil || !changed {
 		t.Fatalf("SetModelGuardrails: %v %v", changed, err)
 	}

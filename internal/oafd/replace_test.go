@@ -36,7 +36,7 @@ func TestReplaceModel(t *testing.T) {
 	f.srv = httptest.NewServer(s.Handler())
 	t.Cleanup(f.srv.Close)
 
-	// Added beside qwen-flash (0.75), the 122B (0.80) does not fit.
+	// Added beside ornith (0.40) and bge-m3, the 122B (0.80) does not fit.
 	if code, _ := f.do(t, "POST", "/api/v1/models", map[string]any{"name": "big", "catalog_ref": "ornith-1.5-122b-nvfp4"}, token); code != 422 {
 		t.Fatalf("adding beside: %d", code)
 	}
@@ -44,26 +44,26 @@ func TestReplaceModel(t *testing.T) {
 		t.Fatalf("unknown deployment: %d", code)
 	}
 	// In its place it does; the name, and so routing, stay.
-	code, plan := f.do(t, "POST", "/api/v1/models/qwen-flash/replace", map[string]any{"catalog_ref": "ornith-1.5-122b-nvfp4"}, token)
+	code, plan := f.do(t, "POST", "/api/v1/models/ornith/replace", map[string]any{"catalog_ref": "ornith-1.5-122b-nvfp4"}, token)
 	diff, _ := plan["diff"].(string)
 	if code != 201 || !strings.Contains(diff, "+      catalogRef: ornith-1.5-122b-nvfp4") || strings.Contains(diff, "+      fast:") {
 		t.Fatalf("replace keeping the name: %d %v", code, plan)
 	}
 	select {
 	case d := <-got:
-		if d.Name != "qwen-flash" || d.CatalogRef != "ornith-1.5-122b-nvfp4" || d.GPUMemoryUtilization != 0.8 {
+		if d.Name != "ornith" || d.CatalogRef != "ornith-1.5-122b-nvfp4" || d.GPUMemoryUtilization != 0.8 {
 			t.Fatalf("prefetched %+v", d)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("replacing did not start the download")
 	}
 	// Under a new name the old deployment goes and routing follows.
-	code, plan = f.do(t, "POST", "/api/v1/models/qwen-flash/replace", map[string]any{"catalog_ref": "ornith-1.5-122b-nvfp4", "name": "ornith-big"}, token)
+	code, plan = f.do(t, "POST", "/api/v1/models/ornith/replace", map[string]any{"catalog_ref": "ornith-1.5-122b-nvfp4", "name": "ornith-big"}, token)
 	diff, _ = plan["diff"].(string)
-	if code != 201 || !strings.Contains(diff, "+      fast: ornith-big") || !strings.Contains(diff, "-    - name: qwen-flash") {
+	if code != 201 || !strings.Contains(diff, "+      fast: ornith-big") || !strings.Contains(diff, "-    - name: ornith") {
 		t.Fatalf("replace with a new name: %d %v", code, plan)
 	}
-	if code, _ := f.do(t, "POST", "/api/v1/models/qwen-flash/replace", map[string]any{"catalog_ref": "ornith-1.5-122b-nvfp4", "name": "bge-m3"}, token); code != 409 {
+	if code, _ := f.do(t, "POST", "/api/v1/models/ornith/replace", map[string]any{"catalog_ref": "ornith-1.5-122b-nvfp4", "name": "bge-m3"}, token); code != 409 {
 		t.Fatalf("new name taken: %d", code)
 	}
 }

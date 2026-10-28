@@ -189,8 +189,11 @@ models:
         args: [--enable-chunked-prefill, --enable-prefix-caching, --max-num-seqs, "16",
                --tool-call-parser, qwen3_coder, --enable-auto-tool-choice]
 
-  # Ornith 1.5 35B-A3B (NVFP4): 3B active, so it is quick. Verified on a GB10
-  # with the published vLLM build (2026-10-25).
+  # Ornith 1.5 35B-A3B (NVFP4): 3B active, so it is quick. The default model of
+  # a single box (scripts/spark-bootstrap.sh): on the same GB10 build as the
+  # embeddings, so the box pulls one engine image. Only 10 of its 40 layers keep
+  # a KV cache (about 20 KiB a token), so the full 256K context fits at 0.40
+  # with room for many requests. Vision is not served (--language-model-only).
   - id: ornith-1.5-35b-a3b-nvfp4
     displayName: Ornith 1.5 35B-A3B (NVFP4)
     source:
@@ -203,14 +206,19 @@ models:
     companionOf: think
     profiles:
       - name: single
+        engine: vllm-spark-b12x
         nodes: 1
         tensorParallel: 1
-        gpuMemoryUtilization: 0.35
-        maxModelLen: 32768
+        gpuMemoryUtilization: 0.40
+        maxModelLen: 262144
         # It thinks before answering: without the parser the thinking lands
         # in the answer.
         args: [--trust-remote-code, --enable-chunked-prefill, --max-num-seqs, "16",
-               --tool-call-parser, qwen3_xml, --enable-auto-tool-choice, --reasoning-parser, qwen3]
+               --tool-call-parser, qwen3_xml, --enable-auto-tool-choice, --reasoning-parser, qwen3,
+               --language-model-only]
+        container:
+          commandPrefix: [vllm, serve]   # the image's entrypoint is NVIDIA's wrapper, with no default command
+          ipc: host
 
   # Ornith 1.5 122B (NVFP4): 122B MoE, about 10B active, on one box. The
   # same mixed build as the 35B (4-bit experts, FP8 attention), which runs on

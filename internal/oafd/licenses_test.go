@@ -122,7 +122,7 @@ func TestLicenceAcceptedDuringAnotherApply(t *testing.T) {
 	if code != 201 {
 		t.Fatalf("accept plan: %d %v", code, acc)
 	}
-	code, other := f.do(t, "PUT", "/api/v1/routing", map[string]any{"mode": "active", "defaults": map[string]any{"fast": "qwen-flash"}}, token)
+	code, other := f.do(t, "PUT", "/api/v1/routing", map[string]any{"mode": "active", "defaults": map[string]any{"fast": "ornith"}}, token)
 	if code != 201 {
 		t.Fatalf("routing plan: %d %v", code, other)
 	}
