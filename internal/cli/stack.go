@@ -117,6 +117,16 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 	if err != nil {
 		return err
 	}
+	// Desktop mode first: a headless box frees memory before models start.
+	// Then the fabric: rails addressed and checked (backlog G1, G3). Both
+	// come before the render, which reads the rails' addresses for models
+	// that span them: on a new pair they exist only after this.
+	if err := reconcile.Desktop(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
+		return err
+	}
+	if _, err := reconcile.FabricUp(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
+		return err
+	}
 	store := secrets.Store{Dir: f.secretsDir}
 	var src secrets.Source = store
 	if dryRun {
@@ -124,6 +134,10 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 	}
 	projects, err := s.render(ctx, src)
 	if err != nil {
+		if dryRun {
+			_, _ = fmt.Fprintf(out, "models are planned once the fabric is up: %v\n", err)
+			return nil
+		}
 		return err
 	}
 	for d, comp := range render.UnpinnedLocal(s.cluster, s.catalog, s.versions) {
@@ -134,15 +148,6 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 		return err
 	}
 	plan.Write(out)
-	// Desktop mode first: a headless box frees memory before models start.
-	if err := reconcile.Desktop(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
-		return err
-	}
-	// Then the fabric: rails addressed and checked before models that span
-	// them start (backlog G1, G3).
-	if _, err := reconcile.FabricUp(ctx, s.nodes, s.cluster, dryRun, out); err != nil {
-		return err
-	}
 	if dryRun {
 		return nil
 	}
