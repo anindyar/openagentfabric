@@ -15,7 +15,7 @@ metadata:
   name: spark-solo
 spec:
   bundle:
-    version: 0.1.0
+    version: 0.1.1
   nodes:
     - name: spark-1
       address: 192.168.1.11

@@ -8,7 +8,7 @@ kind: Cluster
 metadata:
   name: lab-pps
 spec:
-  bundle: { version: 0.1.0 }
+  bundle: { version: 0.1.1 }
   nodes:
     - { name: spark-1, address: 192.0.2.11, roles: [control, gateway, observability, inference] }
     - { name: spark-2, address: 192.0.2.12, roles: [inference] }

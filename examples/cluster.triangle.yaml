@@ -5,7 +5,7 @@ kind: Cluster
 metadata:
   name: lab-tri
 spec:
-  bundle: { version: 0.1.0 }
+  bundle: { version: 0.1.1 }
   nodes:
     - { name: gx-1, address: 10.0.0.21, roles: [control, gateway, observability, inference] }
     - { name: gx-2, address: 10.0.0.22, roles: [inference] }

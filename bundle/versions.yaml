@@ -8,7 +8,7 @@
 # Resolved 2026-10-17 with `docker buildx imagetools inspect`.
 apiVersion: oaf/v1alpha1
 kind: BundleVersions
-version: 0.1.0
+version: 0.1.1
 
 components:
   # --- gateway + routing -------------------------------------------------
