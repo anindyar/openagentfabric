@@ -89,7 +89,7 @@ func TestReset(t *testing.T) {
 		"docker volume rm oaf-langfuse_pg",
 		"docker network rm oaf-gateway_default",
 		"docker image rm sha256:gw",
-		"docker image rm 10.0.0.1:5000/oaf/vllm-glm53:v9 glm53:v9 sha256:vllm",
+		"docker image rm 10.0.0.1:5000/oaf/vllm-glm53:v9 glm53:v9",
 		"netplan apply",
 	} {
 		if !slices.Contains(d.ran, want) {

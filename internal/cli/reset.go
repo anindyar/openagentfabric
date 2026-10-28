@@ -183,9 +183,13 @@ func (r resetter) images(ctx context.Context, images []string) error {
 		if err != nil {
 			continue // already gone
 		}
-		refs := append(strings.Fields(string(out)), id)
+		// Removing the last tag removes the image; an untagged one goes by ID.
+		refs := strings.Fields(string(out))
+		if len(refs) == 0 {
+			refs = []string{id}
+		}
 		if _, err := r.Run.Run(ctx, "docker", append([]string{"image", "rm"}, refs...)...); err != nil {
-			r.say("kept      image %s (%v)", strings.Join(refs[:len(refs)-1], " "), err)
+			r.say("kept      image %s (%v)", strings.Join(refs, " "), err)
 			continue
 		}
 		n++
