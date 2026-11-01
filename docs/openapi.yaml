@@ -1,0 +1,2488 @@
+openapi: 3.1.0
+info:
+  title: openagentfabric management API (oafd)
+  version: 1.0.0
+  description: 'The /api/v1 HTTP API run by `oaf serve`. It is a management API over cluster.yaml and keeps no state
+    of its own. Changes are two steps: a write returns a plan, POST /plans/{id}/apply applies it. See docs/api.md.'
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+- url: https://oaf.example.internal:8443
+  description: The control node (OAF_API_URL).
+security:
+- managementToken: []
+tags:
+- name: status
+- name: models
+- name: providers
+- name: guardrails
+- name: routing
+- name: keys
+- name: plans
+- name: nodes
+- name: events
+paths:
+  /healthz:
+    get:
+      tags:
+      - status
+      summary: Liveness
+      operationId: getHealthz
+      responses:
+        '200':
+          description: Alive.
+      description: No token needed. Served at the server root, not under /api/v1.
+      security: []
+  /api/v1/status:
+    get:
+      tags:
+      - status
+      summary: Cluster status
+      operationId: getStatus
+      responses:
+        '200':
+          description: Status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        '501':
+          description: Status is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Status could not be gathered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/config:
+    get:
+      tags:
+      - status
+      summary: cluster.yaml and rendered gateway config
+      operationId: getConfig
+      responses:
+        '200':
+          description: Config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+        '500':
+          description: cluster.yaml unreadable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/catalog:
+    get:
+      tags:
+      - status
+      summary: Model catalog
+      operationId: getCatalog
+      responses:
+        '200':
+          description: Catalog.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CatalogModel'
+                required:
+                - models
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/models:
+    get:
+      tags:
+      - models
+      summary: List model deployments
+      operationId: listModels
+      responses:
+        '200':
+          description: Deployments.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Deployment'
+                required:
+                - models
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - models
+      summary: Deploy a catalog model (plan)
+      operationId: addModel
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: A deployment with that name exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: Starts downloading the weights when the plan has no errors.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddModelRequest'
+  /api/v1/models/{name}:
+    put:
+      tags:
+      - models
+      summary: Change serving settings (plan)
+      operationId: updateModel
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Deployment name.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateModelRequest'
+    delete:
+      tags:
+      - models
+      summary: Remove a deployment (plan)
+      operationId: removeModel
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '404':
+          description: No such deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Deployment name.
+        schema:
+          type: string
+  /api/v1/models/{name}/guardrails:
+    put:
+      tags:
+      - models
+      summary: Set the policies on a deployment (plan)
+      operationId: setModelGuardrails
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Deployment name.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetGuardrailsRequest'
+  /api/v1/models/{name}/replace:
+    post:
+      tags:
+      - models
+      summary: Replace the model behind a deployment (plan)
+      operationId: replaceModel
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The new name is taken.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Deployment name.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceModelRequest'
+  /api/v1/providers:
+    get:
+      tags:
+      - providers
+      summary: List external providers
+      operationId: listProviders
+      responses:
+        '200':
+          description: Providers.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Provider'
+                  no_guardrail_warning:
+                    type: string
+                required:
+                - providers
+                - no_guardrail_warning
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - providers
+      summary: Add an external provider (plan)
+      operationId: addProvider
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The provider exists; use PUT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: A sent api_key is stored as the provider's secret when the plan is made.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Provider'
+  /api/v1/providers/{name}:
+    put:
+      tags:
+      - providers
+      summary: Replace an external provider (plan)
+      operationId: putProvider
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such provider.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Provider name.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Provider'
+    delete:
+      tags:
+      - providers
+      summary: Remove an external provider (plan)
+      operationId: removeProvider
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '404':
+          description: No such provider.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Provider name.
+        schema:
+          type: string
+  /api/v1/guardrails:
+    get:
+      tags:
+      - guardrails
+      summary: List guardrail policies
+      operationId: listGuardrails
+      responses:
+        '200':
+          description: Policies.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  guardrails:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Guardrail'
+                  builtins:
+                    type: array
+                    items:
+                      type: string
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Guardrail'
+                required:
+                - guardrails
+                - builtins
+                - templates
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags:
+      - guardrails
+      summary: Add a guardrail policy (plan)
+      operationId: addGuardrail
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: An attached provider or model does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The policy exists; use PUT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: Use {"template":"basic"} for the recommended policy; attach it in the same plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Guardrail'
+  /api/v1/guardrails/{name}:
+    put:
+      tags:
+      - guardrails
+      summary: Replace a guardrail policy (plan)
+      operationId: putGuardrail
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: An attached provider or model does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Policy name.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Guardrail'
+    delete:
+      tags:
+      - guardrails
+      summary: Remove a guardrail policy (plan)
+      operationId: removeGuardrail
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '404':
+          description: No such policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: Detaches it from every provider and model in the same plan.
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Policy name.
+        schema:
+          type: string
+  /api/v1/routing:
+    get:
+      tags:
+      - routing
+      summary: Get routing
+      operationId: getRouting
+      responses:
+        '200':
+          description: Routing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Routing'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags:
+      - routing
+      summary: Replace routing (plan)
+      operationId: putRouting
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: Malformed request or an edit that cannot be made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: Replaces mode, defaults and rules together.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Routing'
+  /api/v1/keys:
+    get:
+      tags:
+      - keys
+      summary: List app keys
+      operationId: listKeys
+      responses:
+        '200':
+          description: Keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Key'
+                required:
+                - keys
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: Never returns key values.
+    post:
+      tags:
+      - keys
+      summary: Issue an app key (immediate, not a plan)
+      operationId: issueKey
+      responses:
+        '200':
+          description: The key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Key'
+        '400':
+          description: name is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          description: Key service not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: The gateway could not be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: 'Idempotent: an existing key of that name is returned unchanged. The key is in this reply only.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssueKeyRequest'
+  /api/v1/keys/{name}/rotate:
+    post:
+      tags:
+      - keys
+      summary: Rotate an app key (immediate, not a plan)
+      operationId: rotateKey
+      responses:
+        '200':
+          description: The new key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Key'
+        '429':
+          description: Rotated less than 30 seconds ago.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '501':
+          description: Key service not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '502':
+          description: Rotation failed (including an unknown key name). If the gateway could not be applied the
+            old key stays valid.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Key name.
+        schema:
+          type: string
+  /api/v1/plans/{id}:
+    get:
+      tags:
+      - plans
+      summary: Get a plan
+      operationId: getPlan
+      responses:
+        '200':
+          description: The plan. An expired plan reads as failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '404':
+          description: No such plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Plan id.
+        schema:
+          type: string
+  /api/v1/plans/{id}/apply:
+    post:
+      tags:
+      - plans
+      summary: Apply a plan
+      operationId: applyPlan
+      responses:
+        '200':
+          description: A record-only plan (licence acceptances) was applied at once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '202':
+          description: Apply started; follow with GET /plans/{id} or /events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '404':
+          description: Unknown or forgotten plan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The plan is not planned, another plan is applying, or cluster.yaml changed since the plan
+            was made.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: The plan has errors, or the change does not render (cluster.yaml unchanged).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplyRefused'
+        '500':
+          description: cluster.yaml could not be read or written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        description: Plan id.
+        schema:
+          type: string
+  /api/v1/licenses/accept:
+    post:
+      tags:
+      - plans
+      summary: Record licence acceptances (plan)
+      operationId: acceptLicenses
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: subjects or accepted_by missing, or a subject is not a licence this bundle or catalog asks
+            to accept.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: Returns a record-only plan; apply it with POST /plans/{id}/apply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptRequest'
+  /api/v1/nodes:
+    get:
+      tags:
+      - nodes
+      summary: List nodes, including pending boxes
+      operationId: listNodes
+      responses:
+        '200':
+          description: Nodes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Node'
+                required:
+                - nodes
+        '404':
+          description: 'Not available: the control node has no cluster CA key.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/nodes/{name}/headless:
+    put:
+      tags:
+      - nodes
+      summary: Run a node without its desktop GUI (plan)
+      operationId: setNodeHeadless
+      responses:
+        '201':
+          description: Plan that can be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '422':
+          description: Plan with errors; it cannot be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Plan'
+        '400':
+          description: headless is missing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No such node.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Node name.
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HeadlessRequest'
+  /api/v1/nodes/join-tokens:
+    post:
+      tags:
+      - nodes
+      summary: Create a join token
+      operationId: createJoinToken
+      responses:
+        '201':
+          description: Token, shown once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinToken'
+        '400':
+          description: Value out of range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 'Not available: the control node has no cluster CA key.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinTokenRequest'
+    get:
+      tags:
+      - nodes
+      summary: List join tokens
+      operationId: listJoinTokens
+      responses:
+        '200':
+          description: Tokens (values are not listed).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JoinTokenListItem'
+                required:
+                - tokens
+        '404':
+          description: 'Not available: the control node has no cluster CA key.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/nodes/pending:
+    get:
+      tags:
+      - nodes
+      summary: List boxes that joined and wait for a topology
+      operationId: listPendingNodes
+      responses:
+        '200':
+          description: Pending boxes.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PendingNode'
+                required:
+                - nodes
+        '404':
+          description: 'Not available: the control node has no cluster CA key.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/nodes/pending/{name}:
+    delete:
+      tags:
+      - nodes
+      summary: Forget a pending box
+      operationId: removePendingNode
+      responses:
+        '204':
+          description: Removed.
+        '404':
+          description: No such pending node.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: name
+        in: path
+        required: true
+        description: Pending node name.
+        schema:
+          type: string
+  /api/v1/topology/recommend:
+    post:
+      tags:
+      - nodes
+      summary: Options for growing the cluster
+      operationId: recommendTopology
+      responses:
+        '200':
+          description: Options.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  options:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Option'
+                required:
+                - options
+        '400':
+          description: new_nodes must be 1 or 2.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 'Not available: the control node has no cluster CA key.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendRequest'
+  /api/v1/topology/plan:
+    post:
+      tags:
+      - nodes
+      summary: Plan the chosen option
+      operationId: planTopology
+      responses:
+        '200':
+          description: Plan without errors.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopologyPlan'
+        '422':
+          description: Plan with errors, or the option cannot be planned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopologyPlan'
+        '400':
+          description: A named node has not joined.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: 'Not available: the control node has no cluster CA key.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: Apply plan_id with POST /plans/{id}/apply.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TopologyPlanRequest'
+  /api/v1/events:
+    get:
+      tags:
+      - events
+      summary: Server-sent events
+      operationId: streamEvents
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: 'Lines of the form `data: <Event JSON>`.'
+        '401':
+          description: Missing or wrong management token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      description: 'text/event-stream. Each event is a `data:` line with a JSON Event; `: ping` comments every 20
+        s. No replay.'
+components:
+  securitySchemes:
+    managementToken:
+      type: http
+      scheme: bearer
+      description: Management token from `oaf keys issue <app> --admin` (OAF_API_TOKEN). Keep it server-side.
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+      - error
+    Issue:
+      type: object
+      properties:
+        path:
+          type: string
+        message:
+          type: string
+      required:
+      - path
+      - message
+    NeededAcceptance:
+      type: object
+      properties:
+        subject:
+          type: string
+          description: image/<component> or model/<catalog id>
+        kind:
+          type: string
+          enum:
+          - image
+          - model
+        title:
+          type: string
+        for:
+          type: string
+        url:
+          type: string
+      required:
+      - subject
+      - kind
+      - title
+      - for
+      - url
+    Step:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - running
+          - done
+          - failed
+        message:
+          type: string
+      required:
+      - name
+      - status
+    Plan:
+      type: object
+      properties:
+        plan_id:
+          type: string
+        summary:
+          type: string
+        app:
+          type: string
+        status:
+          type: string
+          enum:
+          - planned
+          - applying
+          - applied
+          - failed
+        diff:
+          type: string
+          description: Unified diff of cluster.yaml; empty if nothing changes.
+        warnings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        applied_at:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/Step'
+        needs_acceptance:
+          type: array
+          items:
+            $ref: '#/components/schemas/NeededAcceptance'
+        error:
+          type: string
+      required:
+      - plan_id
+      - summary
+      - status
+      - diff
+      - warnings
+      - errors
+      - created_at
+      - expires_at
+    ApplyRefused:
+      type: object
+      properties:
+        error:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Issue'
+        plan_id:
+          type: string
+      required:
+      - error
+    Event:
+      type: object
+      properties:
+        type:
+          type: string
+          description: plan, fabric, link, join or preflight
+        plan_id:
+          type: string
+        status:
+          type: string
+        message:
+          type: string
+        at:
+          type: string
+          format: date-time
+      required:
+      - type
+      - message
+      - at
+    Placement:
+      type: object
+      properties:
+        node:
+          type: string
+        group:
+          type: string
+    Hardware:
+      type: object
+      properties:
+        gpu:
+          type: string
+        memory_gib:
+          type: number
+        memory_free_gib:
+          type: number
+        disk_free_gib:
+          type: number
+        serial:
+          type: string
+        os:
+          type: string
+        arch:
+          type: string
+    Rail:
+      type: object
+      properties:
+        netdev:
+          type: string
+        ip:
+          type: string
+        bw_gbps:
+          type: number
+        status:
+          type: string
+        rdma_dev:
+          type: string
+      required:
+      - netdev
+    Port:
+      type: object
+      properties:
+        port:
+          type: integer
+        link:
+          type: string
+          enum:
+          - up
+          - down
+        peer:
+          type: string
+        speed_gbps:
+          type: number
+        rails:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rail'
+      required:
+      - port
+      - link
+    PreflightResult:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - pass
+          - warn
+          - fail
+        summary:
+          type: string
+      required:
+      - name
+      - status
+      - summary
+    StatusNode:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        state:
+          type: string
+          enum:
+          - joined
+          - pending
+          - joining
+          - offline
+        health:
+          type: string
+        hardware:
+          $ref: '#/components/schemas/Hardware'
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Port'
+        preflight:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreflightResult'
+        version:
+          type: string
+        joined_at:
+          type: string
+      required:
+      - name
+      - address
+      - roles
+      - state
+    Group:
+      type: object
+      properties:
+        name:
+          type: string
+        nodes:
+          type: array
+          items:
+            type: string
+      required:
+      - name
+      - nodes
+    Deployment:
+      type: object
+      properties:
+        name:
+          type: string
+        catalog_ref:
+          type: string
+        task:
+          type: string
+          enum:
+          - chat
+          - embedding
+        placement:
+          $ref: '#/components/schemas/Placement'
+        profile:
+          type: string
+        nodes:
+          type: array
+          items:
+            type: string
+        state:
+          type: string
+          description: configured or disabled from GET /models; a live state from GET /status.
+        health:
+          type: string
+        enabled:
+          type: boolean
+        gpu_memory_utilization:
+          type: number
+        max_model_len:
+          type: integer
+        guardrails:
+          type: array
+          items:
+            type: string
+        phase:
+          type: string
+          enum:
+          - queued
+          - downloading
+          - starting
+          - loading
+          - ready
+          - failed
+          - removing
+          - disabled
+          description: GET /status only.
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        detail:
+          type: string
+        error:
+          type: string
+        since:
+          type: string
+        restarts:
+          type: integer
+      required:
+      - name
+      - catalog_ref
+      - placement
+      - nodes
+      - state
+      - enabled
+      - guardrails
+    Component:
+      type: object
+      properties:
+        name:
+          type: string
+        node:
+          type: string
+        state:
+          type: string
+        health:
+          type: string
+      required:
+      - name
+      - node
+      - state
+    Download:
+      type: object
+      properties:
+        node:
+          type: string
+        model_id:
+          type: string
+        state:
+          type: string
+          enum:
+          - downloading
+          - complete
+          - failed
+        bytes_done:
+          type: integer
+          format: int64
+        bytes_total:
+          type: integer
+          format: int64
+        bytes_per_second:
+          type: number
+        error:
+          type: string
+        started_at:
+          type: string
+      required:
+      - node
+      - model_id
+      - state
+      - bytes_done
+      - bytes_total
+    Applying:
+      type: object
+      properties:
+        plan_id:
+          type: string
+        summary:
+          type: string
+        since:
+          type: string
+          format: date-time
+      required:
+      - plan_id
+      - summary
+      - since
+    Status:
+      type: object
+      properties:
+        cluster:
+          type: string
+        topology:
+          type: string
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusNode'
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/Group'
+        licenses_needed:
+          type: array
+          items:
+            $ref: '#/components/schemas/NeededAcceptance'
+        deployments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Deployment'
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/Component'
+        applying:
+          $ref: '#/components/schemas/Applying'
+        downloads:
+          type: array
+          items:
+            $ref: '#/components/schemas/Download'
+      required:
+      - cluster
+      - topology
+      - nodes
+      - groups
+      - licenses_needed
+      - deployments
+      - components
+      - downloads
+    Config:
+      type: object
+      properties:
+        cluster_yaml:
+          type: string
+        hash:
+          type: string
+          description: SHA-256 of cluster.yaml, hex.
+        gateway_config:
+          type: string
+        gateway_config_error:
+          type: string
+      required:
+      - cluster_yaml
+      - hash
+    Profile:
+      type: object
+      properties:
+        name:
+          type: string
+        nodes:
+          type: integer
+        gpu_memory_utilization:
+          type: number
+        max_model_len:
+          type: integer
+      required:
+      - name
+      - nodes
+      - gpu_memory_utilization
+    CatalogModel:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        task:
+          type: string
+          enum:
+          - chat
+          - embedding
+        params_b:
+          type: number
+        active_params_b:
+          type: number
+        quantization:
+          type: string
+        memory_gib:
+          type: number
+        context_window:
+          type: integer
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Profile'
+        license:
+          type: string
+        hf_repo:
+          type: string
+        classes:
+          type: array
+          items:
+            type: string
+        offered:
+          type: boolean
+        recommended:
+          type: boolean
+        note:
+          type: string
+      required:
+      - id
+      - profiles
+      - offered
+    AddModelRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        catalog_ref:
+          type: string
+        placement:
+          $ref: '#/components/schemas/Placement'
+        profile:
+          type: string
+        gpu_memory_utilization:
+          type: number
+        max_model_len:
+          type: integer
+        guardrails:
+          type: array
+          items:
+            type: string
+      required:
+      - name
+      - catalog_ref
+    UpdateModelRequest:
+      type: object
+      properties:
+        max_model_len:
+          type: integer
+          description: 0 restores the profile's value.
+        gpu_memory_utilization:
+          type: number
+        enabled:
+          type: boolean
+      description: At least one field is required.
+    ReplaceModelRequest:
+      type: object
+      properties:
+        catalog_ref:
+          type: string
+        name:
+          type: string
+        placement:
+          $ref: '#/components/schemas/Placement'
+        gpu_memory_utilization:
+          type: number
+        max_model_len:
+          type: integer
+      required:
+      - catalog_ref
+    SetGuardrailsRequest:
+      type: object
+      properties:
+        guardrails:
+          type: array
+          items:
+            type: string
+      required:
+      - guardrails
+    Azure:
+      type: object
+      properties:
+        resource_name:
+          type: string
+        api_version:
+          type: string
+      required:
+      - resource_name
+    ProviderModel:
+      type: object
+      properties:
+        name:
+          type: string
+        upstream:
+          type: string
+      required:
+      - name
+    Provider:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - openai
+          - anthropic
+          - gemini
+          - azure-openai
+          - openai-compatible
+        endpoint:
+          type: string
+        azure:
+          $ref: '#/components/schemas/Azure'
+        models:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderModel'
+        secret_ref:
+          type: string
+        guardrails:
+          type: array
+          items:
+            type: string
+        allow_egress:
+          type: boolean
+        has_key:
+          type: boolean
+          readOnly: true
+        api_key:
+          type: string
+          writeOnly: true
+          description: Write only. Stored as the provider's secret; never returned.
+      required:
+      - name
+      - type
+    Rule:
+      type: object
+      properties:
+        builtin:
+          type: string
+        regex:
+          type: string
+        webhook:
+          type: string
+        name:
+          type: string
+        action:
+          type: string
+          enum:
+          - reject
+          - mask
+          - audit
+        'on':
+          type: string
+          enum:
+          - request
+          - response
+      description: Exactly one of builtin, regex, webhook.
+    Attach:
+      type: object
+      properties:
+        providers:
+          type: array
+          items:
+            type: string
+        models:
+          type: array
+          items:
+            type: string
+        keys:
+          type: array
+          items:
+            type: string
+          description: Rejected with 400; limits for keys are set on the key.
+    Guardrail:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        message:
+          type: string
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/Rule'
+        requests_per_minute:
+          type: integer
+        attach:
+          $ref: '#/components/schemas/Attach'
+        template:
+          type: string
+          enum:
+          - basic
+          description: Write only.
+      description: Policy name is required unless template is given.
+    Signal:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - keyword
+          - context
+          - reasoning
+          - domain
+        threshold:
+          type: number
+        keywords:
+          type: array
+          items:
+            type: string
+        domains:
+          type: array
+          items:
+            type: string
+        case_sensitive:
+          type: boolean
+        min_tokens:
+          type: integer
+      required:
+      - type
+    RoutingRule:
+      type: object
+      properties:
+        name:
+          type: string
+        target:
+          type: string
+        match:
+          type: object
+          properties:
+            signals:
+              type: array
+              items:
+                $ref: '#/components/schemas/Signal'
+          required:
+          - signals
+        requires_entitlement:
+          type: string
+      required:
+      - name
+      - target
+      - match
+    Routing:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - observe
+          - active
+        defaults:
+          type: object
+          properties:
+            fast:
+              type: string
+            fallback:
+              type: string
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoutingRule'
+      required:
+      - mode
+      - defaults
+      - rules
+    Key:
+      type: object
+      properties:
+        name:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+        requests_per_minute:
+          type: integer
+        fingerprint:
+          type: string
+          description: First 12 hex characters of the SHA-256 of the key.
+        key:
+          type: string
+          description: The key. Present only in the reply to issue and rotate.
+      required:
+      - name
+    IssueKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+      required:
+      - name
+    AcceptRequest:
+      type: object
+      properties:
+        subjects:
+          type: array
+          items:
+            type: string
+        accepted_by:
+          type: string
+      required:
+      - subjects
+      - accepted_by
+    HeadlessRequest:
+      type: object
+      properties:
+        headless:
+          type: boolean
+      required:
+      - headless
+    Desktop:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum:
+          - graphical
+          - headless
+        display_manager_active:
+          type: boolean
+        estimated_mib:
+          type: integer
+          format: int64
+    Node:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        state:
+          type: string
+          enum:
+          - joined
+          - pending
+          - joining
+          - offline
+        health:
+          type: string
+        hardware:
+          $ref: '#/components/schemas/Hardware'
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Port'
+        preflight:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreflightResult'
+        joined_at:
+          type: integer
+          format: int64
+          description: Epoch seconds.
+        desktop:
+          $ref: '#/components/schemas/Desktop'
+        headless:
+          type: boolean
+      required:
+      - name
+      - address
+      - roles
+      - state
+    JoinTokenRequest:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          maximum: 8
+          default: 1
+        ttl_minutes:
+          type: integer
+          minimum: 1
+          maximum: 1440
+          default: 60
+        label:
+          type: string
+    JoinToken:
+      type: object
+      properties:
+        id:
+          type: string
+        token:
+          type: string
+          description: Shown once.
+        count:
+          type: integer
+        expires_at:
+          type: integer
+          format: int64
+          description: Epoch seconds.
+        command:
+          type: string
+      required:
+      - id
+      - token
+      - count
+      - expires_at
+      - command
+    JoinTokenListItem:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        count:
+          type: integer
+        uses:
+          type: integer
+        expires_at:
+          type: integer
+          format: int64
+        used_by:
+          type: array
+          items:
+            type: string
+      required:
+      - id
+      - count
+      - uses
+      - expires_at
+    PendingNode:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        enrolled_at:
+          type: string
+          format: date-time
+        token_id:
+          type: string
+        hardware:
+          type: object
+          properties:
+            hostname:
+              type: string
+            arch:
+              type: string
+            kernel:
+              type: string
+            gpu:
+              type: string
+            driver:
+              type: string
+            serial:
+              type: string
+            mem_total_gib:
+              type: number
+            mem_available_gib:
+              type: number
+            data_path:
+              type: string
+            disk_free_gib:
+              type: number
+            disk_total_gib:
+              type: number
+            addresses:
+              type: array
+              items:
+                type: string
+            ports:
+              type: array
+              items:
+                type: object
+            neighbors:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    mac:
+                      type: string
+                    ip:
+                      type: string
+            preflight:
+              type: array
+              items:
+                type: object
+            worst:
+              type: string
+      required:
+      - name
+      - address
+      - hardware
+      - enrolled_at
+    RecommendRequest:
+      type: object
+      properties:
+        new_nodes:
+          type: integer
+          minimum: 1
+          maximum: 2
+        cabling:
+          type: string
+          enum:
+          - cx7
+          - lan
+          - cx7-pair
+          - unknown
+      required:
+      - new_nodes
+    Option:
+      type: object
+      properties:
+        id:
+          type: string
+          enum:
+          - a
+          - b
+          - c
+        title:
+          type: string
+        summary:
+          type: string
+        topology:
+          type: string
+        nodes_needed:
+          type: integer
+        possible:
+          type: boolean
+        reason:
+          type: string
+        total_memory_gib:
+          type: number
+        models:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              placement:
+                type: string
+              note:
+                type: string
+            required:
+            - id
+            - placement
+        routing:
+          type: array
+          items:
+            type: string
+        ha:
+          type: boolean
+        coming_next:
+          type: boolean
+        recommended:
+          type: boolean
+        cabling:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: object
+                properties:
+                  node:
+                    type: string
+                  port:
+                    type: integer
+                required:
+                - node
+              to:
+                type: object
+                properties:
+                  node:
+                    type: string
+                  port:
+                    type: integer
+                required:
+                - node
+              kind:
+                type: string
+                enum:
+                - cx7
+                - lan
+              done:
+                type: boolean
+              text:
+                type: string
+            required:
+            - from
+            - to
+            - kind
+        new_nodes:
+          type: array
+          items:
+            type: string
+      required:
+      - id
+      - title
+      - summary
+      - nodes_needed
+      - possible
+    TopologyPlanRequest:
+      type: object
+      properties:
+        option:
+          type: string
+          enum:
+          - a
+          - c
+          - pair
+          - pair-plus-single
+        nodes:
+          type: array
+          items:
+            type: string
+        model:
+          type: string
+        name:
+          type: string
+        no_model:
+          type: boolean
+        headless:
+          type: boolean
+      required:
+      - option
+    TopologyPlan:
+      type: object
+      properties:
+        plan_id:
+          type: string
+        summary:
+          type: string
+        diff:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        errors:
+          type: array
+          items:
+            type: string
+        needs_acceptance:
+          type: array
+          items:
+            $ref: '#/components/schemas/NeededAcceptance'
+      required:
+      - plan_id
+      - diff

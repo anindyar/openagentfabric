@@ -10,6 +10,7 @@ Status: early development (milestone M1: CLI install of the stack on one node or
 
 - [User guide](docs/user-guide.md): requirements, step-by-step install, what to expect, operations, troubleshooting.
 - One box, one command, on a new DGX Spark: `curl -fsSL https://raw.githubusercontent.com/anindyar/openagentfabric/main/install.sh | bash -s -- --email you@example.com` (user guide §4). More boxes join from the console (user guide §8a).
+- Building an app on OAF: [management API reference](docs/api.md), [OpenAPI spec](docs/openapi.yaml), and a [skill for Claude Code](skills/oaf-consumer/SKILL.md) to copy into your project.
 - [Architecture](docs/architecture.md): how OAF works, and why it builds on pairs of nodes rather than a 4-node cluster.
 - [Plan](docs/PLAN.md): milestones, schemas, validation rules and progress.
 - [ADR-0001](docs/adr/0001-stack.md): implementation stack. [Licence audit](docs/licence-audit.md).
