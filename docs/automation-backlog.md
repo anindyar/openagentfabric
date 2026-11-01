@@ -19,6 +19,7 @@ Status: **open**, **in progress**, **done (commit)**.
 | G7 | Join token passed on the command line (visible in the process list) | join, 2026-10-24 | The join command exports `OAF_JOIN_TOKEN` and runs `sudo --preserve-env=OAF_JOIN_TOKEN bash -s`; join.sh sends it to curl on stdin and to `oaf join` in the environment (`--token` still accepted) | in progress (92f4d68): `--preserve-env` checked on DGX OS; needs a real join with the new script |
 | G8 | Add-model form could not offer a new pair (only pairs that already ran a model) | console, 2026-10-24 | Status lists spec.groups; the form offers every pair (af8e2ee, Garrison 5a8164f) | done |
 | G9 | The pair has two cables, but fabric.links lists only port 1 (the boxes were planned before the cabling probe existed), so apply removed port 0's probe-test addresses | pair, 2026-10-24 | A plan that adds a cable to an existing pair (probe → new link with subnets), and the vLLM renderer giving NCCL every rail of every link between the pair, not only the first link | open |
+| G10 | Box taken out of a cluster by hand: `systemctl disable --now oaf-node`, `docker rm -f` of the oaf-* containers, `rm -rf /etc/oaf/pki /var/lib/oaf/{projects,waiting}` (weights kept) | .142 and .212, 2026-11-02 | `oaf leave` on the node (also offered by the console): stops the agent, removes its projects and enrolment, keeps downloaded weights unless `--purge` | open |
 
 ## Models
 
