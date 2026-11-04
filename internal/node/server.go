@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -210,6 +211,38 @@ func (s *Server) ResumeWeights() {
 			s.waitForWeights(e.Name(), strings.TrimSpace(string(dir)))
 		}
 	}
+}
+
+// RepairNetworks recreates the containers of this agent's projects that came
+// back from an unclean shutdown without their network. Nothing re-applies a
+// project after a reboot, so the agent does it once at start; it returns
+// what it recreated.
+func (s *Server) RepairNetworks(ctx context.Context) ([]string, error) {
+	lost, err := s.Compose.Disconnected(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var done []string
+	var errs []error
+	for _, name := range slices.Sorted(maps.Keys(lost)) {
+		dir := filepath.Join(s.projectsDir(), name)
+		if validateName(name) != nil {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, ComposeFile)); err != nil {
+			continue // not a project this agent manages
+		}
+		if err := s.Compose.Recreate(ctx, name, dir, lost[name]); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", name, err))
+			continue
+		}
+		for _, svc := range lost[name] {
+			done = append(done, name+"/"+svc)
+		}
+	}
+	return done, errors.Join(errs...)
 }
 
 // PullWeights implements NodeService.

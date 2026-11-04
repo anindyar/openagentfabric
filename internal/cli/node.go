@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -60,6 +61,17 @@ func newNodeServeCmd() *cobra.Command {
 				Downloads:        &node.Weights{StateDir: stateDir},
 			}
 			srv.ResumeWeights()
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+				defer cancel()
+				done, err := srv.RepairNetworks(ctx)
+				if len(done) > 0 {
+					fmt.Fprintf(cmd.OutOrStdout(), "oaf-node: recreated containers that lost their network: %s\n", strings.Join(done, ", "))
+				}
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "oaf-node: repairing container networks: %v\n", err)
+				}
+			}()
 			hs := node.NewHTTPServer(listen, srv, tlsCfg)
 
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)

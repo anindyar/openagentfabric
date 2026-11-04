@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,54 @@ func (c Compose) base(name, dir string) []string {
 func (c Compose) Up(ctx context.Context, name, dir string) error {
 	_, err := c.Runner.Run(ctx, "docker", append(c.base(name, dir), "up", "--detach", "--remove-orphans", "--quiet-pull")...)
 	return err
+}
+
+// Recreate replaces the named services' containers, keeping their volumes.
+func (c Compose) Recreate(ctx context.Context, name, dir string, services []string) error {
+	args := append(c.base(name, dir), "up", "--detach", "--no-deps", "--force-recreate")
+	_, err := c.Runner.Run(ctx, "docker", append(args, services...)...)
+	return err
+}
+
+// Disconnected returns, by project (without ProjectPrefix), the services
+// whose container has lost its network. After an unclean shutdown docker can
+// restart a container without one ("network sandbox not found"): it runs, or
+// restarts forever, unable to reach its peers, and neither the restart
+// policy nor `compose up` repairs it. Host-network services are never
+// affected.
+func (c Compose) Disconnected(ctx context.Context) (map[string][]string, error) {
+	ids, err := c.Runner.Run(ctx, "docker", "ps", "--all", "--quiet", "--filter", "label=com.docker.compose.project")
+	if err != nil {
+		return nil, err
+	}
+	if len(strings.Fields(string(ids))) == 0 {
+		return nil, nil
+	}
+	out, err := c.Runner.Run(ctx, "docker", append([]string{"inspect", "--format",
+		`{{index .Config.Labels "com.docker.compose.project"}} {{index .Config.Labels "com.docker.compose.service"}} {{.HostConfig.NetworkMode}} {{len .NetworkSettings.Networks}}`},
+		strings.Fields(string(ids))...)...)
+	if err != nil {
+		return nil, err
+	}
+	return parseDisconnected(string(out)), nil
+}
+
+func parseDisconnected(out string) map[string][]string {
+	lost := map[string][]string{}
+	for _, l := range strings.Split(out, "\n") {
+		f := strings.Fields(l)
+		if len(f) != 4 || !strings.HasPrefix(f[0], ProjectPrefix) || f[3] != "0" {
+			continue
+		}
+		if mode := f[2]; mode == "host" || mode == "none" || strings.HasPrefix(mode, "container:") {
+			continue
+		}
+		name := strings.TrimPrefix(f[0], ProjectPrefix)
+		if !slices.Contains(lost[name], f[1]) {
+			lost[name] = append(lost[name], f[1])
+		}
+	}
+	return lost
 }
 
 // Down stops and removes the project's containers (and volumes if asked).
