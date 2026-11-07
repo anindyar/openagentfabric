@@ -60,8 +60,9 @@ spec:
         match:
           signals:
             - { type: domain, domains: [health, medicine] }
-        target: ddx
-        requires: { entitlement: ddx }   # rule omitted from vSR config unless entitled AND ddx deployed
+        # Spetaar DDx is a LoRA adapter on gpt-oss-20b (examples/cluster.hospital.yaml).
+        target: spetaar-ddx
+        requires: { entitlement: ddx }   # rule omitted from vSR config unless entitled AND the adapter is served
   observability:
     langfuse: { enabled: true }
     metrics: { retention: 15d }

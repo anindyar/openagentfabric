@@ -43,17 +43,61 @@ models:
         tensorParallel: 2
         gpuMemoryUtilization: 0.55
 
-  - id: ddx
-    displayName: DDx (entitled)
+  # gpt-oss-20b (MXFP4): 21B MoE, 3.6B active, ~13 GiB of weights. Small and
+  # quick; it is also the base of LoRA adapters such as Spetaar DDx (the
+  # differential-diagnosis model), which are not catalog entries: a deployment
+  # lists them under adapters (docs/user-guide.md, Models: LoRA adapters), and
+  # an entitled one (DDx: entitlement ddx) is served only while the
+  # entitlement is granted. The recipe is the one serving DDx on a GB10.
+  - id: gpt-oss-20b
+    displayName: gpt-oss-20b
     source:
-      entitled:
-        sha256: "0000000000000000000000000000000000000000000000000000000000000000"   # PLACEHOLDER
-    license: { name: OAF DDx Commercial, url: "https://openagentfabric.dev/licenses/ddx", acceptUrl: "https://openagentfabric.dev/licenses/ddx", gated: true, redistributable: false }
-    entitlement: { feature: ddx }
-    sizeGiB: 1          # PLACEHOLDER
-    classes: [medical]
+      huggingface:
+        repo: openai/gpt-oss-20b
+        # PLACEHOLDER: pin the real commit (HF API: /api/models/openai/gpt-oss-20b) before use.
+        revision: "0000000000000000000000000000000000000000"
+        include: ["*.safetensors", "*.json", "*.jinja"]   # skip original/ and metal/
+    license: { spdx: Apache-2.0, gated: false, redistributable: true }
+    sizeGiB: 12.8     # approximate (13.8 GB); re-check when pinning the revision
+    classes: [fast]
     profiles:
-      - { name: single, nodes: 1, tensorParallel: 1, gpuMemoryUtilization: 0.4 }
+      - name: single
+        nodes: 1
+        tensorParallel: 1
+        gpuMemoryUtilization: 0.20   # to be measured on a GB10 (served at 0.30 so far)
+        maxModelLen: 8192
+        args: [--max-num-seqs, "32", --enable-prefix-caching,
+               --reasoning-parser, openai_gptoss, --enable-auto-tool-choice, --tool-call-parser, openai]
+
+  # MedGemma 27B (multimodal: text and medical images). bf16 weights are
+  # ~51 GiB; vLLM quantizes them to FP8 as it loads (--quantization fp8),
+  # which halves what it keeps in memory. The vision tower is served (no
+  # --language-model-only): image requests are why it is deployed. Gated on
+  # Hugging Face under Google's Health AI Developer Foundations terms, which
+  # a person accepts through OAF's licence flow before the pull.
+  - id: medgemma-27b-it
+    displayName: MedGemma 27B (multimodal, FP8 on load)
+    source:
+      huggingface:
+        repo: google/medgemma-27b-it
+        # PLACEHOLDER: pin the real commit (HF API: /api/models/google/medgemma-27b-it, gated) before use.
+        revision: "0000000000000000000000000000000000000000"
+    license:
+      name: Health AI Developer Foundations Terms of Use
+      url: "https://developers.google.com/health-ai-developer-foundations/terms"
+      acceptUrl: "https://huggingface.co/google/medgemma-27b-it"
+      gated: true
+      redistributable: false
+    sizeGiB: 50.7     # approximate (bf16 safetensors); re-check when pinning the revision
+    classes: [medical, vision]
+    profiles:
+      - name: single
+        nodes: 1
+        tensorParallel: 1
+        gpuMemoryUtilization: 0.32   # to be measured on a GB10
+        maxModelLen: 8192
+        quantization: fp8
+        args: [--max-num-seqs, "16", --enable-prefix-caching]
 
   # Hybrid MoE (Qwen4Exp) with MTP speculative decoding. The NVFP4 scales are in a
   # format upstream vLLM cannot load yet, so it runs on the community Spark build

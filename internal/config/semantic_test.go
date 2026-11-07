@@ -7,6 +7,15 @@ import (
 
 func intp(i int) *int { return &i }
 
+// entitledModel is a full model delivered with an entitlement (the example
+// catalog has none: DDx is a LoRA adapter there).
+func entitledModel() CatalogModel {
+	return CatalogModel{ID: "entitled-demo", Source: ModelSource{Entitled: &EntitledSource{SHA256: strings.Repeat("0", 64)}},
+		License:     ModelLicense{Name: "Commercial", AcceptURL: "https://example.com/licence", Gated: true},
+		Entitlement: &Entitlement{Feature: "ddx"}, SizeGiB: 1, Classes: []string{"medical"},
+		Profiles: []ServingProf{{Name: "single", Nodes: 1, TensorParallel: 1, GPUMemoryUtilization: 0.2}}}
+}
+
 // TestSemanticRules mutates a valid example and expects one specific error.
 func TestSemanticRules(t *testing.T) {
 	cases := []struct {
@@ -103,17 +112,18 @@ func TestSemanticRules(t *testing.T) {
 		{"explicit port collides with a default one", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Models[1].Port = DefaultModelPortBase // model 0's default port, also on spark-1
 		}, Options{}, "spec.models[1].port", `already used by model "fast"`},
-		{"entitled model without entitlement", pairExample, func(c *Cluster, _ *Catalog) {
+		{"entitled model without entitlement", pairExample, func(c *Cluster, cat *Catalog) {
+			cat.Models = append(cat.Models, entitledModel())
 			c.Spec.Models = append(c.Spec.Models, ModelDeployment{
-				Name: "ddx", CatalogRef: "ddx", Placement: Placement{Node: "spark-2"}, GPUMemoryUtilization: 0.2,
+				Name: "ddx", CatalogRef: "entitled-demo", Placement: Placement{Node: "spark-2"}, GPUMemoryUtilization: 0.2,
 			})
-			c.Spec.LicenseAcceptances = []LicenseAcceptance{{Subject: "model/ddx"}}
+			c.Spec.LicenseAcceptances = []LicenseAcceptance{{Subject: "model/entitled-demo"}}
 		}, Options{}, "spec.models[2].catalogRef", `requires the "ddx" entitlement`},
 		{"licence not accepted", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Models = append(c.Spec.Models, ModelDeployment{
-				Name: "ddx", CatalogRef: "ddx", Placement: Placement{Node: "spark-2"}, GPUMemoryUtilization: 0.2,
+				Name: "medgemma", CatalogRef: "medgemma-27b-it", Placement: Placement{Node: "spark-2"}, GPUMemoryUtilization: 0.2,
 			})
-		}, Options{Features: map[string]bool{"ddx": true}}, "spec.models[2].catalogRef", "has not been accepted"},
+		}, Options{}, "spec.models[2].catalogRef", "has not been accepted"},
 		{"default fast not deployed", pairExample, func(c *Cluster, _ *Catalog) {
 			c.Spec.Routing.Defaults.Fast = "nope"
 		}, Options{}, "spec.routing.defaults.fast", "not an enabled deployment"},
@@ -134,8 +144,10 @@ func TestSemanticRules(t *testing.T) {
 			cat.Models[1].ID = cat.Models[0].ID
 		}, Options{}, "catalog.models[1].id", "duplicate model id"},
 		{"catalog entitled without entitlement", pairExample, func(_ *Cluster, cat *Catalog) {
-			cat.Models[2].Entitlement = nil
-		}, Options{}, "catalog.models[2]", "must be set together"},
+			m := entitledModel()
+			m.Entitlement = nil
+			cat.Models = append([]CatalogModel{m}, cat.Models...)
+		}, Options{}, "catalog.models[0]", "must be set together"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -211,7 +223,7 @@ func TestWarnings(t *testing.T) {
 	})
 	t.Run("entitled rule target not deployed", func(t *testing.T) {
 		r := Validate(mustCluster(t, pairExample), mustCatalog(t), Options{Features: map[string]bool{"ddx": true}})
-		assertWarning(t, r, `"ddx" is not deployed`)
+		assertWarning(t, r, `"spetaar-ddx" is not deployed`)
 	})
 }
 
@@ -230,11 +242,14 @@ func assertWarning(t *testing.T, r Report, substr string) {
 
 func TestAcceptedLicenceUnblocksDeployment(t *testing.T) {
 	c := mustCluster(t, pairExample)
+	cat := mustCatalog(t)
+	cat.Models = append(cat.Models, entitledModel())
 	c.Spec.Models = append(c.Spec.Models, ModelDeployment{
-		Name: "ddx", CatalogRef: "ddx", Placement: Placement{Node: "spark-2"}, GPUMemoryUtilization: 0.2,
+		Name: "ddx", CatalogRef: "entitled-demo", Placement: Placement{Node: "spark-2"}, GPUMemoryUtilization: 0.2,
 	})
-	c.Spec.LicenseAcceptances = []LicenseAcceptance{{Subject: AcceptanceSubject("ddx")}}
-	r := Validate(c, mustCatalog(t), Options{Features: map[string]bool{"ddx": true}})
+	c.Spec.Routing.Rules[1].Target = "ddx"
+	c.Spec.LicenseAcceptances = []LicenseAcceptance{{Subject: AcceptanceSubject("entitled-demo")}}
+	r := Validate(c, cat, Options{Features: map[string]bool{"ddx": true}})
 	if !r.OK() {
 		t.Fatalf("unexpected errors: %v", r.Errors())
 	}
