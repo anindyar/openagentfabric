@@ -482,6 +482,13 @@ func (k *checker) models() {
 		if !ok {
 			continue
 		}
+		// The gateway rewrites the model name only on chat requests: an audio or
+		// embedding request reaches the engine with the deployment's name, so an
+		// engine that serves a fixed name must be deployed under that name.
+		if up := prof.UpstreamModel(d.Name); model.Task() != TaskChat && up != d.Name {
+			k.errorf(p+".name", "%s serves the model name %q and the gateway passes %s requests through unchanged; name this deployment %q",
+				prof.EngineComponent(), up, model.Task(), up)
+		}
 		if model.Entitlement != nil && !k.opts.Features[model.Entitlement.Feature] {
 			k.errorf(p+".catalogRef", "model %q requires the %q entitlement, which is not present", model.ID, model.Entitlement.Feature)
 		}

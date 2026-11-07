@@ -27,12 +27,12 @@ func TestSpeechDeployments(t *testing.T) {
 	}
 
 	cf = composeFile{}
-	if err := yaml.Unmarshal([]byte(projectFile(t, ps, "model-tts", "compose.yaml")), &cf); err != nil {
+	if err := yaml.Unmarshal([]byte(projectFile(t, ps, "model-kokoro", "compose.yaml")), &cf); err != nil {
 		t.Fatal(err)
 	}
 	s := cf.Services["server"]
 	if s == nil {
-		t.Fatal("model-tts has no server service")
+		t.Fatal("model-kokoro has no server service")
 	}
 	if !strings.HasPrefix(s.Image, "ghcr.io/remsky/kokoro-fastapi-cpu:v0.9.2@sha256:") || s.GPUs != "" || len(s.Command) != 0 ||
 		s.NetworkMode != "host" || s.Environment["PORT"] != "8005" || s.Environment["HOST"] != "0.0.0.0" ||
@@ -41,7 +41,7 @@ func TestSpeechDeployments(t *testing.T) {
 		t.Errorf("tts service = %+v", s)
 	}
 	for _, p := range ps {
-		if p.Name == "model-tts" && p.Weights != nil {
+		if p.Name == "model-kokoro" && p.Weights != nil {
 			t.Error("bundled weights must not be downloaded")
 		}
 	}
@@ -62,11 +62,11 @@ func TestSpeechDeployments(t *testing.T) {
 	for _, m := range g.LLM.Models {
 		upstream[m.Name] = m.Params["model"] + " " + m.Params["baseUrl"]
 	}
-	if upstream["stt"] != "stt http://192.168.1.11:8004/v1" || upstream["tts"] != "kokoro http://192.168.1.11:8005/v1" {
+	if upstream["stt"] != "stt http://192.168.1.11:8004/v1" || upstream["kokoro"] != "kokoro http://192.168.1.11:8005/v1" {
 		t.Errorf("gateway speech backends: %v", upstream)
 	}
 	for _, f := range []string{"vsr.yaml", "envoy.yaml"} {
-		if c := projectFile(t, ps, "router", f); strings.Contains(c, "stt") || strings.Contains(c, "tts") {
+		if c := projectFile(t, ps, "router", f); strings.Contains(c, "stt") || strings.Contains(c, "kokoro") {
 			t.Errorf("speech model in %s", f)
 		}
 	}

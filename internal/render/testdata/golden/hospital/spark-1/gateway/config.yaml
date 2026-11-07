@@ -59,7 +59,7 @@ llm:
         baseUrl: http://192.168.1.11:8004/v1
         model: stt
       provider: openAI
-    - name: tts
+    - name: kokoro
       params:
         apiKey: $VLLM_API_KEY
         baseUrl: http://192.168.1.11:8005/v1
@@ -80,7 +80,7 @@ llm:
             - medgemma
             - bge-m3
             - stt
-            - tts
+            - kokoro
           keyHash: sha256:39c5f90000f6e4f09729f43e61e9b39aee23235b1d57cba87f35de0dbb6f48be
           metadata:
             name: hms

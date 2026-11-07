@@ -51,9 +51,9 @@ func TestInstallerFlow(t *testing.T) {
 	run("no licences needed", "licenses", "needed")
 	// Speech: Whisper on vLLM (the vllm-audio engine) and Kokoro.
 	run(`added "stt" (whisper-large-v3-turbo on spark-1, gpuMemoryUtilization 0.04)`, "models", "add", "stt", "--catalog-ref", "whisper-large-v3-turbo")
-	out := run(`added "tts" (kokoro-82m on spark-1, gpuMemoryUtilization 0.02)`, "models", "add", "tts", "--catalog-ref", "kokoro-82m")
+	out := run(`added "kokoro" (kokoro-82m on spark-1, gpuMemoryUtilization 0.02)`, "models", "add", "kokoro", "--catalog-ref", "kokoro-82m")
 	if !strings.Contains(out, "has no authentication of its own") {
-		t.Errorf("tts warning missing:\n%s", out)
+		t.Errorf("kokoro warning missing:\n%s", out)
 	}
 	run("image/vllm-audio", "licenses", "needed")
 	run("accepted image/vllm-audio", "licenses", "accept", "image/vllm-audio", "--by", "admin@example.com")

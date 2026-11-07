@@ -775,11 +775,11 @@ rules refuse them, like embeddings).
 | Catalog id | Class | Engine | Serves | Upstream model name |
 |---|---|---|---|---|
 | `whisper-large-v3-turbo` | `speech-to-text` | `vllm-audio` (GPU) | `/v1/audio/transcriptions`, `/v1/audio/translations` (to English) | the deployment name |
-| `kokoro-82m` | `text-to-speech` | `kokoro-fastapi` (CPU) | `/v1/audio/speech` | `kokoro` (the gateway rewrites it) |
+| `kokoro-82m` | `text-to-speech` | `kokoro-fastapi` (CPU) | `/v1/audio/speech` | `kokoro`: the gateway passes speech requests through unchanged, so the deployment must be named `kokoro` (`oaf validate` says so) |
 
 ```sh
 sudo oaf models add stt --catalog-ref whisper-large-v3-turbo      # share 0.04, to be measured
-sudo oaf models add tts --catalog-ref kokoro-82m                  # share 0.02 (a memory cap), to be measured
+sudo oaf models add kokoro --catalog-ref kokoro-82m                  # share 0.02 (a memory cap), to be measured
 sudo oaf licenses accept image/vllm-audio --by you@example.com   # NVIDIA CUDA terms, after reading them
 docker build -t vllm-audio:0.31.0 deploy/engines/vllm-audio       # once per box: see its README
 sudo oaf images push vllm-audio:0.31.0 --component vllm-audio
@@ -815,7 +815,7 @@ Read-aloud (JSON in, audio out):
 ```sh
 curl http://<gateway>:4000/v1/audio/speech -H "Authorization: Bearer $KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"model":"tts","input":"The patient is stable.","voice":"af_heart","response_format":"mp3"}' \
+  -d '{"model":"kokoro","input":"The patient is stable.","voice":"af_heart","response_format":"mp3"}' \
   -o reply.mp3
 ```
 

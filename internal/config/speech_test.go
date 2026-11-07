@@ -37,8 +37,8 @@ func TestSpeechRules(t *testing.T) {
 			c.Spec.Routing.Defaults.Fast = "stt"
 		}, "spec.routing.defaults.fast", `"stt" is a speech-to-text model; it cannot answer chat requests`},
 		{"speech model as a rule target", func(c *Cluster, _ *Catalog) {
-			c.Spec.Routing.Rules[1].Target = "tts"
-		}, "spec.routing.rules[1].target", `"tts" is a text-to-speech model`},
+			c.Spec.Routing.Rules[1].Target = "kokoro"
+		}, "spec.routing.rules[1].target", `"kokoro" is a text-to-speech model`},
 		{"adapter on a speech model", func(c *Cluster, _ *Catalog) {
 			c.Spec.Models[4].Adapters = []Adapter{{Name: "x", Path: "/x", Rank: 8}}
 		}, "spec.models[4].adapters", "speech-to-text model; LoRA adapters"},
@@ -46,6 +46,13 @@ func TestSpeechRules(t *testing.T) {
 			m, _ := cat.Lookup("kokoro-82m")
 			m.Source.Bundled.Component = "vllm"
 		}, "catalog.models[", "the weights are bundled in vllm, but this profile runs kokoro-fastapi"},
+		{"text-to-speech under another name", func(c *Cluster, _ *Catalog) {
+			for i := range c.Spec.Models {
+				if c.Spec.Models[i].Name == "kokoro" {
+					c.Spec.Models[i].Name = "tts"
+				}
+			}
+		}, "spec.models[", `kokoro-fastapi serves the model name "kokoro" and the gateway passes text-to-speech requests through unchanged; name this deployment "kokoro"`},
 		{"server engine on a pair", func(_ *Cluster, cat *Catalog) {
 			m, _ := cat.Lookup("kokoro-82m")
 			m.Profiles = append(m.Profiles, ServingProf{Name: "pair", Engine: "kokoro-fastapi", Nodes: 2, TensorParallel: 2, GPUMemoryUtilization: 0.1, Server: m.Profiles[0].Server})
@@ -71,7 +78,7 @@ func TestSpeechRules(t *testing.T) {
 func TestSpeechMemoryAndAuth(t *testing.T) {
 	c, cat := mustCluster(t, hospitalExample), mustCatalog(t)
 	r := Validate(c, cat, ddx)
-	assertWarning(t, r, "tts (kokoro-fastapi) has no authentication of its own")
+	assertWarning(t, r, "kokoro (kokoro-fastapi) has no authentication of its own")
 	// Five vLLMs (ornith, gpt-oss-20b, medgemma, bge-m3, stt), not six.
 	want := 0.86 + 5*VLLMInstanceOverhead
 	assertWarning(t, r, fmt.Sprintf("need %.2f of unified memory", want))
