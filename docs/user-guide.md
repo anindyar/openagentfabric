@@ -714,11 +714,18 @@ Each entry under `spec.models` is one served model:
       gpuMemoryUtilization: 0.55
 ```
 
-- **Weights (until M2):** copy the Hugging Face snapshot of the pinned revision to
-  `/var/lib/oaf/models/<catalog id>/` on **every** node of the placement. On a pair, download once
-  and copy it over the fabric:
-  `rsync -a /var/lib/oaf/models/gpt-oss-120b/ 192.168.31.1:/var/lib/oaf/models/gpt-oss-120b/`.
-  vLLM runs with `HF_HUB_OFFLINE=1` and never downloads anything itself.
+- **Weights:** `oaf apply` has the agent on each node of the placement download the catalog's pinned
+  revision into `/var/lib/oaf/models/<catalog id>/` (every file checked, resumable) and start the
+  model once they are complete; `oaf status` shows the progress. oafd starts the download as soon as
+  a model is chosen in the console. Weights already there (with the `.oaf-complete` marker, or copied
+  by hand, e.g. over the fabric with `rsync`) are not fetched again. vLLM runs with
+  `HF_HUB_OFFLINE=1` and never downloads anything itself.
+- **Gated models** (MedGemma) need a Hugging Face access token from an account that accepted the
+  model's terms on Hugging Face. Give it once, on the control node:
+  `printf %s "$HF_TOKEN" | sudo oaf secrets set hf-token` (or have `HF_TOKEN` in the environment of
+  `oaf apply`, which wins). It is sent to the agents with gated downloads only and never written to
+  disk on the nodes; `oaf apply` warns when a gated model has none, and its download fails with
+  "gated models need an access token" until it does.
 - **Memory shares:** vLLM takes about 90% of unified memory unless told otherwise, so every
   deployment states its share. The shares on one node must add up to 0.90 or less, which leaves room
   for the OS and the OAF services. Each vLLM instance also uses about 4.6 GiB outside its share
@@ -805,8 +812,47 @@ It takes no port, no memory share and no extra vLLM overhead.
 adapter, MedGemma and bge-m3 on one box, with a rule sending differential-diagnosis prompts to the
 adapter.
 
-*(planned, M2: `oaf models search/pull` downloads from Hugging Face, fans out over the fabric, checks
-disk and checksums, and benchmarks each model against its catalog baseline.)*
+### Changing models and routing from an installer
+
+Apps and their installers never edit cluster.yaml by hand. Each command below edits it with its
+comments kept, validates the result against the catalog (memory budget, routing targets, licences)
+and writes it only if it has no errors; warnings are printed. Each is idempotent, so an installer can
+run it again. None of them deploys anything: run `sudo oaf apply` at the end. All take `-f` and
+`--catalog`.
+
+| Command | Does |
+|---|---|
+| `oaf models add <name> --catalog-ref <id> [--node N] [--util F] [--max-model-len N]` | adds a deployment (no-op if `<name>` exists) |
+| `oaf models set <name> [--util F] [--max-model-len N] [--enabled=false]` | changes one; shrink a model before adding another |
+| `oaf models adapter add <deployment> <adapter> --path <dir> --rank N [--entitlement F] [--guardrails a,b]` | adds or updates a LoRA adapter (prints what changed) |
+| `oaf models adapter remove <deployment> <adapter>` | removes it |
+| `oaf routing rule set <name> --target <model> [--keywords "a,b"] [--min-tokens N] [--case-sensitive] [--requires-entitlement F] [--before <rule>]` | adds or replaces a rule; a new one goes last unless `--before` |
+| `oaf routing rule remove <name>` | removes it |
+| `oaf routing mode observe\|active` | observe only records vSR's decisions; active applies them |
+| `oaf routing defaults [--fast M] [--fallback M]` | the `model: auto` default and fallback |
+| `oaf licenses needed [--json]` | the licences deployed models and engines still need |
+| `oaf licenses accept <subject>... --by <who>` | records a person's acceptance (`model/<id>`, `image/<component>`) |
+
+The hospital profile from a fresh box (`scripts/spark-bootstrap.sh`, Ornith at its default share):
+
+```sh
+sudo oaf models set ornith --util 0.25 --max-model-len 65536
+sudo oaf models add gpt-oss-20b --catalog-ref gpt-oss-20b
+sudo oaf licenses accept model/medgemma-27b-it image/vllm --by admin@hospital.example   # after the person accepted
+sudo oaf models add medgemma --catalog-ref medgemma-27b-it
+sudo oaf models adapter add gpt-oss-20b spetaar-ddx --path /var/lib/oaf/adapters/spetaar-ddx --rank 16
+sudo oaf routing rule set differential --target spetaar-ddx --keywords "differential diagnosis,ddx,rule out"
+sudo oaf routing rule set medical --target medgemma --keywords "patient,symptoms,medication"
+sudo oaf routing mode active
+printf %s "$HF_TOKEN" | sudo oaf secrets set hf-token
+sudo oaf apply
+```
+
+A model's licence must be accepted before `oaf models add` takes it. Record only what a person
+accepted. Rules are ordered and the first match wins, so put specific rules before broad ones
+(`--before`).
+
+*(planned: `oaf models search`, and benchmarks of each model against its catalog baseline.)*
 
 ## 8. Day-2 operations
 
@@ -1042,7 +1088,8 @@ vLLM has no container limit: its share is set by `gpuMemoryUtilization`.
 ### Commands
 `oaf validate`, `oaf preflight [--ssh]`, `oaf pki init`, `oaf node serve`, `oaf fabric check`,
 `oaf install`, `oaf apply [--dry-run]`, `oaf status`, `oaf uninstall --yes [--purge]`, `oaf reset --yes [--keep-weights] [--keep-images]`,
-`oaf keys issue [--admin]|rotate|list|serve`, `oaf models add`, `oaf serve`, `oaf secrets set`,
-`oaf observability ...`, `oaf version`.
+`oaf keys issue [--admin]|rotate|list|serve`, `oaf models add|set|adapter add|adapter remove`,
+`oaf routing rule set|rule remove|mode|defaults`, `oaf licenses needed|accept`, `oaf serve`,
+`oaf secrets set`, `oaf observability ...`, `oaf version`.
 Every command has `--help`. Commands that act on the cluster take `-f` (cluster.yaml),
 `--catalog`, `--pki-dir`, `--secrets-dir` and `--timeout`.

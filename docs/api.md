@@ -232,6 +232,15 @@ The flow for an app:
 that this bundle or catalog asks to accept. A subject that is already accepted is not duplicated; if
 all are accepted the plan's summary is `"licences already accepted"`.
 
+An installer on the control node can do the same without the API: `oaf licenses needed [--json]`
+lists what is missing and `oaf licenses accept <subject>... --by <who>` records it.
+
+Accepting a gated model's terms in OAF records the person's consent; it does not give OAF access to
+the repo. Its weights download only with a Hugging Face token from an account that accepted the
+terms on Hugging Face: the `hf-token` secret (`oaf secrets set hf-token`) or `HF_TOKEN` in the
+environment of `oaf apply`. Without one the model's download in `GET /status` is `failed` with
+"gated models need an access token".
+
 ---
 
 ## 6. Events
