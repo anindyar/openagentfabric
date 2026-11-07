@@ -137,12 +137,14 @@ func (w *Weights) All() []*nodev1.WeightsStatus {
 // WhenComplete runs fn once dir's weights are complete (at once if they
 // are); key replaces an earlier waiter with the same key.
 func (w *Weights) WhenComplete(dir, key string, fn func()) {
+	// Checked under the lock: a download that completes concurrently either
+	// finds this waiter or has written its marker before the check.
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if Complete(dir) {
 		go fn()
 		return
 	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	w.init()
 	if w.waiters[dir] == nil {
 		w.waiters[dir] = map[string]func(){}

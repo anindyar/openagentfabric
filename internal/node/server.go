@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"maps"
 	"net/netip"
 	"os"
@@ -59,6 +60,12 @@ type Server struct {
 	// Downloads fetches model weights (PullWeights, models waiting for them);
 	// nil disables downloads.
 	Downloads *Weights
+	// StartRetry is the first pause before retrying a model whose start
+	// failed after its weights arrived (default 30s; it doubles, up to 10m).
+	StartRetry time.Duration
+	// Log receives what the agent does on its own (default slog.Default,
+	// which journald records).
+	Log *slog.Logger
 
 	mu sync.Mutex // serialises project changes
 
@@ -168,24 +175,79 @@ func (s *Server) ApplyProject(ctx context.Context, req *nodev1.ApplyProjectReque
 }
 
 // waitForWeights starts project once dir's weights are complete; the wait is
-// recorded so an agent restart keeps it.
+// recorded so an agent restart keeps it. The record goes only once the
+// project is up: a start that fails (the engine image is often pulled only
+// now, and a large one can take longer than a deadline) is logged and
+// retried, and an agent restarted meanwhile starts it again.
 func (s *Server) waitForWeights(project, dir string) {
 	wdir := filepath.Join(s.StateDir, "waiting")
+	record := filepath.Join(wdir, project)
 	if os.MkdirAll(wdir, 0o755) == nil {
-		_ = os.WriteFile(filepath.Join(wdir, project), []byte(dir), 0o644)
+		_ = os.WriteFile(record, []byte(dir), 0o644)
 	}
+	// The engine image downloads alongside the weights, outside the
+	// project lock, so the start is quick once they are complete.
+	go s.pullImages(project)
 	s.Downloads.WhenComplete(dir, project, func() {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		pdir := filepath.Join(s.projectsDir(), project)
-		if _, err := os.Stat(filepath.Join(pdir, ComposeFile)); err != nil {
-			return // removed meanwhile
+		delay := s.StartRetry
+		if delay <= 0 {
+			delay = 30 * time.Second
 		}
-		_ = os.Remove(filepath.Join(wdir, project))
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-		_ = s.Compose.Up(ctx, project, pdir)
+		for {
+			s.pullImages(project)
+			done, err := s.startWaiting(project, record)
+			if done {
+				return
+			}
+			s.logger().Error("starting a model after its weights arrived failed; retrying", "project", project, "in", delay, "err", err)
+			time.Sleep(delay)
+			delay = min(delay*2, 10*time.Minute)
+		}
 	})
+}
+
+// startWaiting starts a project waiting for its weights. done is true when
+// it is up, or when nothing waits for it any more (removed, or re-applied).
+func (s *Server) startWaiting(project, record string) (done bool, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := os.Stat(record); err != nil {
+		return true, nil // stopWaiting ran: re-applied or removed
+	}
+	pdir := filepath.Join(s.projectsDir(), project)
+	if _, err := os.Stat(filepath.Join(pdir, ComposeFile)); err != nil {
+		_ = os.Remove(record)
+		return true, nil // removed meanwhile
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+	if err := s.Compose.Up(ctx, project, pdir); err != nil {
+		return false, err
+	}
+	_ = os.Remove(record)
+	s.logger().Info("started a model after its weights arrived", "project", project)
+	return true, nil
+}
+
+// pullImages fetches a project's images, logging (not failing on) errors:
+// the start pulls whatever is still missing and reports its own error.
+func (s *Server) pullImages(project string) {
+	pdir := filepath.Join(s.projectsDir(), project)
+	if _, err := os.Stat(filepath.Join(pdir, ComposeFile)); err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Hour)
+	defer cancel()
+	if err := s.Compose.Pull(ctx, project, pdir); err != nil {
+		s.logger().Warn("pulling a waiting model's images failed", "project", project, "err", err)
+	}
+}
+
+func (s *Server) logger() *slog.Logger {
+	if s.Log != nil {
+		return s.Log
+	}
+	return slog.Default()
 }
 
 func (s *Server) stopWaiting(project string) {
