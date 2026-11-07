@@ -105,6 +105,9 @@ message WeightsSpec {
   string revision = 4;
   // Glob patterns of the files to fetch; empty fetches every file.
   repeated string include = 5;
+  // Hugging Face access token, sent for gated repos only. The agent uses it
+  // for this download and never writes it to disk.
+  string token = 6;
 }
 
 message PullWeightsRequest {

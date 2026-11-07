@@ -23,11 +23,13 @@ func prefetch(ctx context.Context, f *stackFlags, c *config.Cluster, d config.Mo
 		log.Warn("weights download not started", "model", d.Name, "err", err)
 		return
 	}
+	token := hfToken(f.secretsDir)
 	for node, w := range render.ModelWeights(c, s.catalog, d) {
 		cl, ok := s.nodes[node]
 		if !ok {
 			continue
 		}
+		withHFToken(w, token)
 		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		resp, err := cl.PullWeights(cctx, &nodev1.PullWeightsRequest{Weights: reconcile.WeightsSpec(w)})
 		cancel()

@@ -426,7 +426,10 @@ type WeightsSpec struct {
 	Repo     string                 `protobuf:"bytes,3,opt,name=repo,proto3" json:"repo,omitempty"`
 	Revision string                 `protobuf:"bytes,4,opt,name=revision,proto3" json:"revision,omitempty"`
 	// Glob patterns of the files to fetch; empty fetches every file.
-	Include       []string `protobuf:"bytes,5,rep,name=include,proto3" json:"include,omitempty"`
+	Include []string `protobuf:"bytes,5,rep,name=include,proto3" json:"include,omitempty"`
+	// Hugging Face access token, sent for gated repos only. The agent uses it
+	// for this download and never writes it to disk.
+	Token         string `protobuf:"bytes,6,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -494,6 +497,13 @@ func (x *WeightsSpec) GetInclude() []string {
 		return x.Include
 	}
 	return nil
+}
+
+func (x *WeightsSpec) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
 }
 
 type PullWeightsRequest struct {
@@ -2477,13 +2487,14 @@ const file_oaf_node_v1_node_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12'\n" +
 	"\x05files\x18\x02 \x03(\v2\x11.oaf.node.v1.FileR\x05files\x12\x17\n" +
 	"\adry_run\x18\x03 \x01(\bR\x06dryRun\x122\n" +
-	"\aweights\x18\x04 \x01(\v2\x18.oaf.node.v1.WeightsSpecR\aweights\"\x84\x01\n" +
+	"\aweights\x18\x04 \x01(\v2\x18.oaf.node.v1.WeightsSpecR\aweights\"\x9a\x01\n" +
 	"\vWeightsSpec\x12\x19\n" +
 	"\bmodel_id\x18\x01 \x01(\tR\amodelId\x12\x10\n" +
 	"\x03dir\x18\x02 \x01(\tR\x03dir\x12\x12\n" +
 	"\x04repo\x18\x03 \x01(\tR\x04repo\x12\x1a\n" +
 	"\brevision\x18\x04 \x01(\tR\brevision\x12\x18\n" +
-	"\ainclude\x18\x05 \x03(\tR\ainclude\"H\n" +
+	"\ainclude\x18\x05 \x03(\tR\ainclude\x12\x14\n" +
+	"\x05token\x18\x06 \x01(\tR\x05token\"H\n" +
 	"\x12PullWeightsRequest\x122\n" +
 	"\aweights\x18\x01 \x01(\v2\x18.oaf.node.v1.WeightsSpecR\aweights\"I\n" +
 	"\x13PullWeightsResponse\x122\n" +

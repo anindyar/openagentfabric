@@ -54,11 +54,10 @@ models:
     source:
       huggingface:
         repo: openai/gpt-oss-20b
-        # PLACEHOLDER: pin the real commit (HF API: /api/models/openai/gpt-oss-20b) before use.
-        revision: "0000000000000000000000000000000000000000"
+        revision: 6cee5e81ee83917806bbde320786a8fb61efebee
         include: ["*.safetensors", "*.json", "*.jinja"]   # skip original/ and metal/
     license: { spdx: Apache-2.0, gated: false, redistributable: true }
-    sizeGiB: 12.8     # approximate (13.8 GB); re-check when pinning the revision
+    sizeGiB: 12.9     # the included files (HF API, 2026-11-07)
     classes: [fast]
     profiles:
       - name: single
@@ -80,15 +79,14 @@ models:
     source:
       huggingface:
         repo: google/medgemma-27b-it
-        # PLACEHOLDER: pin the real commit (HF API: /api/models/google/medgemma-27b-it, gated) before use.
-        revision: "0000000000000000000000000000000000000000"
+        revision: 2d3e00ea38b50018bf5dd3aa1009457cd2d5a48f
     license:
       name: Health AI Developer Foundations Terms of Use
       url: "https://developers.google.com/health-ai-developer-foundations/terms"
       acceptUrl: "https://huggingface.co/google/medgemma-27b-it"
       gated: true
       redistributable: false
-    sizeGiB: 50.7     # approximate (bf16 safetensors); re-check when pinning the revision
+    sizeGiB: 51.1     # bf16 safetensors (HF API, 2026-11-07)
     classes: [medical, vision]
     profiles:
       - name: single
