@@ -54,6 +54,10 @@ func (c *Cluster) ActiveRoutes(cat *Catalog, features map[string]bool) Routes {
 		if firstChat == "" {
 			firstChat = d.Name
 		}
+		// A served adapter is a chat model of its own on the base's vLLM.
+		for _, a := range d.ServedAdapters(features) {
+			chat[a.Name] = true
+		}
 	}
 	rt := c.Spec.Routing
 	out := Routes{Fast: rt.Defaults.Fast, Fallback: rt.Defaults.Fallback}
@@ -72,7 +76,7 @@ func (c *Cluster) ActiveRoutes(cat *Catalog, features map[string]bool) Routes {
 			continue
 		}
 		if !chat[rule.Target] {
-			out.Skipped = append(out.Skipped, fmt.Sprintf("rule %q: %q is not an enabled chat deployment", rule.Name, rule.Target))
+			out.Skipped = append(out.Skipped, fmt.Sprintf("rule %q: %q is not an enabled chat deployment or served adapter", rule.Name, rule.Target))
 			continue
 		}
 		var sigs []Signal

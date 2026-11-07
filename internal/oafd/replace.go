@@ -61,6 +61,9 @@ func (s *Server) replaceModel(w http.ResponseWriter, r *http.Request) {
 	// guardrails, enabled) and drops what belonged to the old model.
 	d := *old
 	d.CatalogRef, d.Profile, d.Args, d.Env, d.Port = req.CatalogRef, "", nil, nil, 0
+	if req.CatalogRef != old.CatalogRef {
+		d.Adapters = nil // trained for the old base model; they do not load on another
+	}
 	d.GPUMemoryUtilization, d.MaxModelLen = req.GPUMemoryUtilization, req.MaxModelLen
 	if req.Placement.Node != "" || req.Placement.Group != "" {
 		d.Placement = config.Placement{Node: req.Placement.Node, Group: req.Placement.Group}

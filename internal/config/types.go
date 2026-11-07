@@ -172,10 +172,62 @@ type ModelDeployment struct {
 	Guardrails           []string          `yaml:"guardrails,omitempty"`
 	Args                 []string          `yaml:"args,omitempty"`
 	Env                  map[string]string `yaml:"env,omitempty"`
+	// Adapters are LoRA adapters served by the same vLLM, each under its own
+	// model name (docs/user-guide.md, Models: LoRA adapters).
+	Adapters []Adapter `yaml:"adapters,omitempty"`
 }
 
 // IsEnabled applies the schema default (true).
 func (m ModelDeployment) IsEnabled() bool { return m.Enabled == nil || *m.Enabled }
+
+// Adapter is a PEFT LoRA adapter for a deployment's base model. vLLM loads it
+// next to the base weights (--enable-lora, --lora-modules), so it costs no
+// extra deployment, port or memory share: a request naming the adapter is
+// answered by the base model with the adapter applied.
+type Adapter struct {
+	// Name is the served model name: clients, routing rules and key model
+	// lists use it like a deployment name.
+	Name string `yaml:"name"`
+	// Path is an absolute directory on every node of the deployment's
+	// placement, holding adapter_config.json and adapter_model.safetensors.
+	// It is mounted read-only; OAF does not fetch it.
+	Path string `yaml:"path"`
+	// Rank is the adapter's LoRA rank (r in adapter_config.json). vLLM
+	// sizes its LoRA buffers from the largest rank (--max-lora-rank), and
+	// the adapter lives on the inference node, so cluster.yaml states it;
+	// `oaf validate` compares it with adapter_config.json when the file is
+	// readable where it runs.
+	Rank int `yaml:"rank"`
+	// Entitlement: the adapter is served only while a valid entitlement
+	// grants this feature.
+	Entitlement string `yaml:"entitlement,omitempty"`
+	// Guardrails replace the deployment's for requests that name the
+	// adapter; unset, the adapter has the deployment's guardrails.
+	Guardrails []string `yaml:"guardrails,omitempty"`
+}
+
+// ServedAdapters are the adapters vLLM loads and the gateway serves: those
+// of an enabled deployment whose entitlement (if any) is granted.
+func (m ModelDeployment) ServedAdapters(features map[string]bool) []Adapter {
+	if !m.IsEnabled() {
+		return nil
+	}
+	var out []Adapter
+	for _, a := range m.Adapters {
+		if a.Entitlement == "" || features[a.Entitlement] {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// AdapterGuardrails are the guardrail policies of requests naming a.
+func (m ModelDeployment) AdapterGuardrails(a Adapter) []string {
+	if a.Guardrails != nil {
+		return a.Guardrails
+	}
+	return m.Guardrails
+}
 
 // Placement is exactly one of Node or Group.
 type Placement struct {

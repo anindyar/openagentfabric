@@ -108,7 +108,8 @@ func (r *renderer) router(n config.Node, rt config.Routes) (Project, error) {
 	return finish(p, v, cf, newEnvFile(), vsrCfg, envoyCfg)
 }
 
-// chatBackend is an enabled chat deployment's API endpoint (its rank-0 node).
+// chatBackend is an enabled chat deployment's (or served adapter's) API
+// endpoint (its rank-0 node).
 type chatBackend struct {
 	name, host string
 	port       int
@@ -126,6 +127,11 @@ func (r *renderer) chatBackends() []chatBackend {
 		nodes := r.Cluster.PlacementNodes(d.Placement)
 		n, _ := r.Cluster.Node(nodes[0])
 		out = append(out, chatBackend{name: d.Name, host: n.Address, port: r.Cluster.ModelPort(i)})
+		// An adapter is its own model to vSR and Envoy, on the base's vLLM:
+		// its cluster rewrites the body's model to the adapter's name.
+		for _, a := range d.ServedAdapters(r.Features) {
+			out = append(out, chatBackend{name: a.Name, host: n.Address, port: r.Cluster.ModelPort(i)})
+		}
 	}
 	return out
 }

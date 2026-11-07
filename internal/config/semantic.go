@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"net"
+	"path"
 	"regexp"
 	"slices"
 	"sort"
@@ -97,6 +98,7 @@ func Validate(c *Cluster, cat *Catalog, opts Options) Report {
 	k.fabric()
 	k.groupsCheck()
 	k.models()
+	k.adapters()
 	k.routing()
 	k.guardrails()
 	k.providers()
@@ -515,6 +517,43 @@ func (k *checker) models() {
 	}
 }
 
+// adapters: LoRA adapters are served under their own names next to the
+// deployments, on the base model's vLLM.
+func (k *checker) adapters() {
+	taken := map[string]string{}
+	for _, d := range k.c.Spec.Models {
+		taken[d.Name] = "model deployment " + d.Name
+	}
+	for i, d := range k.c.Spec.Models {
+		if len(d.Adapters) == 0 {
+			continue
+		}
+		p := fmt.Sprintf("spec.models[%d]", i)
+		if m, ok := k.cat.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
+			k.errorf(p+".adapters", "%q is an embedding model; LoRA adapters are served on chat models only", d.Name)
+		}
+		for _, a := range d.Args {
+			if a == "--lora-modules" || strings.HasPrefix(a, "--lora-modules=") {
+				k.errorf(p+".args", "--lora-modules is rendered from adapters; list the adapter there instead")
+			}
+		}
+		for j, a := range d.Adapters {
+			ap := fmt.Sprintf("%s.adapters[%d]", p, j)
+			if owner, dup := taken[a.Name]; dup {
+				k.errorf(ap+".name", "model name %q is already used by %s", a.Name, owner)
+			} else {
+				taken[a.Name] = fmt.Sprintf("adapter %s on %s", a.Name, d.Name)
+			}
+			if !path.IsAbs(a.Path) || path.Clean(a.Path) != a.Path {
+				k.errorf(ap+".path", "%q must be an absolute, clean directory on the inference node", a.Path)
+			}
+			if a.Entitlement != "" && d.IsEnabled() && !k.opts.Features[a.Entitlement] {
+				k.warnf(ap, "adapter %q is not served: entitlement %q is not present", a.Name, a.Entitlement)
+			}
+		}
+	}
+}
+
 // placementNodes resolves a placement to node names.
 func (k *checker) placementNodes(pl Placement, path string) ([]string, bool) {
 	if pl.Node != "" {
@@ -556,7 +595,8 @@ func (k *checker) profileFor(d ModelDeployment, m *CatalogModel, nodes int, path
 func (k *checker) routing() {
 	r := k.c.Spec.Routing
 	served := map[string]bool{}
-	embedding := map[string]bool{} // embedding models are served, but never a chat route
+	embedding := map[string]bool{}    // embedding models are served, but never a chat route
+	unentitled := map[string]string{} // adapters waiting for an entitlement -> feature
 	chatModels := 0
 	for _, d := range k.c.Spec.Models {
 		if !d.IsEnabled() {
@@ -567,6 +607,13 @@ func (k *checker) routing() {
 			embedding[d.Name] = true
 		} else {
 			chatModels++
+		}
+		for _, a := range d.Adapters {
+			unentitled[a.Name] = a.Entitlement
+		}
+		for _, a := range d.ServedAdapters(k.opts.Features) {
+			served[a.Name] = true
+			delete(unentitled, a.Name)
 		}
 	}
 	external := map[string]bool{}
@@ -579,6 +626,8 @@ func (k *checker) routing() {
 		switch {
 		case external[name] && strings.HasPrefix(path, "spec.routing.rules"):
 			// A rule may send matching requests to an external model.
+		case unentitled[name] != "":
+			k.errorf(path, "adapter %q is not served: entitlement %q is not present", name, unentitled[name])
 		case !served[name]:
 			k.errorf(path, "%q is not an enabled deployment", name)
 		case embedding[name]:
@@ -607,6 +656,8 @@ func (k *checker) routing() {
 		switch {
 		case gated && !k.opts.Features[rule.Requires.Entitlement]:
 			k.warnf(p, "rule %q is inactive: entitlement %q is not present; matching requests go to the default model", rule.Name, rule.Requires.Entitlement)
+		case unentitled[rule.Target] != "":
+			k.warnf(p+".target", "rule %q is inactive: adapter %q needs entitlement %q, which is not present; matching requests go to the default model", rule.Name, rule.Target, unentitled[rule.Target])
 		case !served[rule.Target] && gated:
 			k.warnf(p+".target", "rule %q is inactive: %q is not deployed", rule.Name, rule.Target)
 		default:
@@ -627,7 +678,7 @@ func (k *checker) routing() {
 
 	for i, key := range r.Keys {
 		for j, m := range key.Models {
-			if m != "auto" && !served[m] && !external[m] {
+			if m != "auto" && !served[m] && !external[m] && unentitled[m] == "" {
 				k.warnf(fmt.Sprintf("spec.routing.keys[%d].models[%d]", i, j), "%q is not an enabled deployment", m)
 			}
 		}
@@ -699,6 +750,13 @@ func (k *checker) guardrails() {
 				k.errorf(fmt.Sprintf("spec.models[%d].guardrails[%d]", i, j), "no guardrail policy %q in spec.routing.guardrails", name)
 			}
 		}
+		for a, ad := range d.Adapters {
+			for j, name := range ad.Guardrails {
+				if !names[name] {
+					k.errorf(fmt.Sprintf("spec.models[%d].adapters[%d].guardrails[%d]", i, a, j), "no guardrail policy %q in spec.routing.guardrails", name)
+				}
+			}
+		}
 	}
 }
 
@@ -711,6 +769,9 @@ func (k *checker) providers() {
 	taken := map[string]string{"auto": "vSR routing"}
 	for _, d := range k.c.Spec.Models {
 		taken[d.Name] = "model deployment " + d.Name
+		for _, a := range d.Adapters {
+			taken[a.Name] = fmt.Sprintf("adapter %s on %s", a.Name, d.Name)
+		}
 	}
 	names := map[string]bool{}
 	for i, pr := range r.Providers {

@@ -156,6 +156,7 @@ func deploymentView(c *config.Cluster, cat *config.Catalog, d config.ModelDeploy
 	if v.Nodes == nil {
 		v.Nodes = []string{}
 	}
+	v.Adapters = AdapterViews(d)
 	if !v.Enabled {
 		v.State = "disabled"
 	}

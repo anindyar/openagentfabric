@@ -118,6 +118,9 @@ type DeploymentView struct {
 	GPUMemoryUtilization float64       `json:"gpu_memory_utilization,omitempty"`
 	MaxModelLen          int           `json:"max_model_len,omitempty"`
 	Guardrails           []string      `json:"guardrails"`
+	// Adapters are the LoRA adapters this deployment serves (read-only in
+	// the API: they are set in cluster.yaml).
+	Adapters []AdapterView `json:"adapters"`
 	// Phase is what the console shows (status only): queued | starting |
 	// loading | ready | failed | removing | disabled. Progress (0-100) and
 	// Detail follow a load; Error is a failure's cause; Since is when the
@@ -128,6 +131,33 @@ type DeploymentView struct {
 	Error    string `json:"error,omitempty"`
 	Since    string `json:"since,omitempty"`
 	Restarts int    `json:"restarts,omitempty"`
+}
+
+// AdapterView is a LoRA adapter on a deployment. Served is false while the
+// deployment is disabled or the adapter waits for its entitlement; Guardrails
+// are the effective ones (the deployment's unless the adapter sets its own).
+type AdapterView struct {
+	Name        string   `json:"name"`
+	Path        string   `json:"path"`
+	Rank        int      `json:"rank"`
+	Entitlement string   `json:"entitlement,omitempty"`
+	Guardrails  []string `json:"guardrails"`
+	Served      bool     `json:"served"`
+}
+
+// AdapterViews lists d's adapters. No entitlement is verified yet (render
+// gets no features either), so an entitled adapter shows as not served.
+func AdapterViews(d config.ModelDeployment) []AdapterView {
+	served := map[string]bool{}
+	for _, a := range d.ServedAdapters(nil) {
+		served[a.Name] = true
+	}
+	out := []AdapterView{}
+	for _, a := range d.Adapters {
+		out = append(out, AdapterView{Name: a.Name, Path: a.Path, Rank: a.Rank, Entitlement: a.Entitlement,
+			Guardrails: append([]string{}, d.AdapterGuardrails(a)...), Served: served[a.Name]})
+	}
+	return out
 }
 
 // PlacementView is a node or a group.
