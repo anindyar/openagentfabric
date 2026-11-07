@@ -47,7 +47,7 @@ func (c *Cluster) ActiveRoutes(cat *Catalog, features map[string]bool) Routes {
 		if !d.IsEnabled() {
 			continue
 		}
-		if m, ok := cat.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
+		if m, ok := cat.Lookup(d.CatalogRef); ok && !m.IsChat() {
 			continue
 		}
 		chat[d.Name] = true

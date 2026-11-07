@@ -324,7 +324,7 @@ type WebhookGuard struct {
 }
 
 // GuardrailBuiltins are the built-in detectors of the pinned agentgateway
-// (v1.6.0 llm.models[].guardrails regex builtin enum).
+// (llm.models[].guardrails regex builtin enum; the same in v1.6.0 and v1.7.0).
 var GuardrailBuiltins = []string{"ssn", "creditCard", "phoneNumber", "email", "caSin"}
 
 // Gateway listener settings.
@@ -491,8 +491,38 @@ type CatalogModel struct {
 	Profiles            []ServingProf `yaml:"profiles"`
 }
 
-// ClassEmbedding marks a model that serves /v1/embeddings, not chat.
-const ClassEmbedding = "embedding"
+// Classes of models that are served by name for one task and never answer
+// chat requests (model: auto, routing rules and defaults refuse them).
+const (
+	// ClassEmbedding serves /v1/embeddings.
+	ClassEmbedding = "embedding"
+	// ClassSpeechToText serves /v1/audio/transcriptions and /v1/audio/translations.
+	ClassSpeechToText = "speech-to-text"
+	// ClassTextToSpeech serves /v1/audio/speech.
+	ClassTextToSpeech = "text-to-speech"
+)
+
+// Tasks a model serves (CatalogModel.Task).
+const (
+	TaskChat         = "chat"
+	TaskEmbedding    = ClassEmbedding
+	TaskSpeechToText = ClassSpeechToText
+	TaskTextToSpeech = ClassTextToSpeech
+)
+
+// Task is what the model serves: chat, or one of the non-chat classes.
+func (m *CatalogModel) Task() string {
+	for _, c := range []string{ClassEmbedding, ClassSpeechToText, ClassTextToSpeech} {
+		if m.HasClass(c) {
+			return c
+		}
+	}
+	return TaskChat
+}
+
+// IsChat reports whether the model answers chat requests (and so may be a
+// routing target).
+func (m *CatalogModel) IsChat() bool { return m.Task() == TaskChat }
 
 // HasClass reports whether the model is in the routing class.
 func (m *CatalogModel) HasClass(class string) bool {
@@ -533,10 +563,17 @@ type Entitlement struct {
 	Feature string `yaml:"feature"`
 }
 
-// ModelSource is exactly one of HuggingFace or Entitled.
+// ModelSource is exactly one of HuggingFace, Entitled or Bundled.
 type ModelSource struct {
 	HuggingFace *HFSource       `yaml:"huggingface,omitempty"`
 	Entitled    *EntitledSource `yaml:"entitled,omitempty"`
+	Bundled     *BundledSource  `yaml:"bundled,omitempty"`
+}
+
+// BundledSource means the weights ship inside the engine image, pinned by
+// digest, so nothing is downloaded.
+type BundledSource struct {
+	Component string `yaml:"component"`
 }
 
 // HFSource pins a Hugging Face repo at a commit.
@@ -574,7 +611,32 @@ type ServingProf struct {
 	Args                 []string          `yaml:"args,omitempty"`
 	Env                  map[string]string `yaml:"env,omitempty"`
 	Container            *Container        `yaml:"container,omitempty"`
-	Baseline             *Baseline         `yaml:"baseline,omitempty"`
+	// Server: the engine is an OpenAI-compatible server other than vLLM.
+	Server   *Server   `yaml:"server,omitempty"`
+	Baseline *Baseline `yaml:"baseline,omitempty"`
+}
+
+// Server describes an engine that is not vLLM: OAF runs its image as is,
+// passes it its port, checks its health and caps its memory.
+type Server struct {
+	PortEnv       string `yaml:"portEnv"`
+	HostEnv       string `yaml:"hostEnv,omitempty"`
+	Health        string `yaml:"health"`
+	ServedModel   string `yaml:"servedModel,omitempty"`
+	GPU           bool   `yaml:"gpu,omitempty"`
+	Authenticates bool   `yaml:"authenticates,omitempty"`
+}
+
+// IsVLLM reports whether vLLM serves the profile.
+func (p ServingProf) IsVLLM() bool { return p.Server == nil }
+
+// UpstreamModel is the model name the gateway sends to the engine for
+// deployment name: vLLM serves the deployment's name.
+func (p ServingProf) UpstreamModel(name string) string {
+	if p.Server != nil && p.Server.ServedModel != "" {
+		return p.Server.ServedModel
+	}
+	return name
 }
 
 // EngineComponent is the bundle component whose image serves the profile.

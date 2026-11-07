@@ -1641,6 +1641,8 @@ components:
           enum:
           - chat
           - embedding
+          - speech-to-text
+          - text-to-speech
         placement:
           $ref: '#/components/schemas/Placement'
         profile:
@@ -1845,6 +1847,8 @@ components:
           enum:
           - chat
           - embedding
+          - speech-to-text
+          - text-to-speech
         params_b:
           type: number
         active_params_b:

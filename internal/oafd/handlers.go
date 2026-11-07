@@ -122,10 +122,7 @@ func (s *Server) catalog(w http.ResponseWriter, _ *http.Request) {
 		case pairDep != "" && m.HasClass("fast") && m.HasClass("think"):
 			v.Note = "Middle ground for a box on its own; beside " + pairDep + " a companion model is faster"
 		}
-		v.Task = "chat"
-		if m.IsEmbedding() {
-			v.Task = "embedding"
-		}
+		v.Task = m.Task()
 		if m.Source.HuggingFace != nil {
 			v.HFRepo = m.Source.HuggingFace.Repo
 		}
@@ -162,10 +159,7 @@ func deploymentView(c *config.Cluster, cat *config.Catalog, d config.ModelDeploy
 	}
 	if cat != nil {
 		if m, ok := cat.Lookup(d.CatalogRef); ok {
-			v.Task = "chat"
-			if m.IsEmbedding() {
-				v.Task = "embedding"
-			}
+			v.Task = m.Task()
 		}
 	}
 	return v

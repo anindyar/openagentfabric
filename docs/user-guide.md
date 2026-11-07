@@ -744,6 +744,7 @@ Each entry under `spec.models` is one served model:
   `AGENT_GATEWAY_EMBEDDING_DIMENSIONS`. To add it to an existing cluster.yaml (comments kept,
   validated before it is written): `sudo oaf models add bge-m3 --catalog-ref bge-m3`, then
   `sudo oaf apply`; the bootstrap does this itself when enough memory is free.
+- **Speech:** see [Speech](#speech) below.
 - **Licences:** components or models whose terms are not plain open source must be accepted first. Read
   the page that `oaf validate` names and record it under `spec.licenseAcceptances`. The vLLM image
   ships NVIDIA's CUDA libraries, so it needs `image/vllm`:
@@ -763,6 +764,64 @@ Each entry under `spec.models` is one served model:
   its own `image/<component>` acceptance.
 - **Disabling** a model (`enabled: false`) and running `oaf apply` stops and removes it on every node.
   Its weights stay on disk.
+
+### Speech
+
+Speech-to-text and text-to-speech models are catalog models like the others, served by name through
+the gateway with the same keys and Langfuse traces (the gateway passes audio through as is, so
+guardrail policies do not apply to it), and never a chat route (`model: auto`, routing defaults and
+rules refuse them, like embeddings).
+
+| Catalog id | Class | Engine | Serves | Upstream model name |
+|---|---|---|---|---|
+| `whisper-large-v3-turbo` | `speech-to-text` | `vllm-audio` (GPU) | `/v1/audio/transcriptions`, `/v1/audio/translations` (to English) | the deployment name |
+| `kokoro-82m` | `text-to-speech` | `kokoro-fastapi` (CPU) | `/v1/audio/speech` | `kokoro` (the gateway rewrites it) |
+
+```sh
+sudo oaf models add stt --catalog-ref whisper-large-v3-turbo      # share 0.04, to be measured
+sudo oaf models add tts --catalog-ref kokoro-82m                  # share 0.02 (a memory cap), to be measured
+sudo oaf licenses accept image/vllm-audio --by you@example.com   # NVIDIA CUDA terms, after reading them
+docker build -t vllm-audio:0.31.0 deploy/engines/vllm-audio       # once per box: see its README
+sudo oaf images push vllm-audio:0.31.0 --component vllm-audio
+sudo oaf apply
+```
+
+- **Whisper** runs on vLLM. vLLM's published image lacks the audio libraries Whisper needs, so it runs
+  on `vllm-audio`: that image plus vLLM's `audio` extra, built once on the box from
+  `deploy/engines/vllm-audio` and pushed to the control node's registry. Until it is pushed the
+  deployment is not started and `oaf apply` says so. Its weights (1.6 GB) download like any model's.
+- **Kokoro** runs in Kokoro-FastAPI's CPU image (82M parameters; the server's GPU build has no kernels
+  for GB10). Its weights and voices are inside the pinned image, so nothing is downloaded. The share is
+  a memory cap on its container, not a vLLM setting. Voices: English (US `af_*`/`am_*`, UK `bf_*`/`bm_*`),
+  Spanish, French, Hindi, Italian, Japanese, Portuguese, Mandarin; OpenAI voice names (`alloy`, `nova`,
+  ...) map to them. There is no Arabic voice.
+- **Kokoro has no authentication of its own**: the gateway's keys protect the gateway, not the server's
+  own port (`oaf validate` names it). Keep that port off untrusted networks.
+- `oaf keys issue` passes the names to apps as `AGENT_GATEWAY_STT_MODEL` and `AGENT_GATEWAY_TTS_MODEL`.
+- Memory: Whisper is one more vLLM, so it costs its share plus vLLM's ~4.6 GiB of fixed overhead.
+
+Dictation (multipart, as the OpenAI SDK's `audio.transcriptions.create` sends it):
+
+```sh
+curl http://<gateway>:4000/v1/audio/transcriptions -H "Authorization: Bearer $KEY" \
+  -F model=stt -F file=@note.wav -F language=en -F response_format=json
+# {"text": "..."}
+curl http://<gateway>:4000/v1/audio/translations -H "Authorization: Bearer $KEY" \
+  -F model=stt -F file=@arabic-note.wav     # English text from any supported language
+```
+
+Read-aloud (JSON in, audio out):
+
+```sh
+curl http://<gateway>:4000/v1/audio/speech -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"tts","input":"The patient is stable.","voice":"af_heart","response_format":"mp3"}' \
+  -o reply.mp3
+```
+
+The gateway picks the deployment from `model` (the multipart field for transcriptions and
+translations, the JSON field for speech) and rewrites it to the name the engine answers to. This needs
+agentgateway v1.7.0 or later, which the bundle pins: v1.6.0 routed `/v1/audio/transcriptions` only.
 
 ### LoRA adapters
 

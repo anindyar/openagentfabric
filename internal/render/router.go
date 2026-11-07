@@ -121,7 +121,7 @@ func (r *renderer) chatBackends() []chatBackend {
 		if !d.IsEnabled() {
 			continue
 		}
-		if m, ok := r.Catalog.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
+		if m, ok := r.Catalog.Lookup(d.CatalogRef); ok && !m.IsChat() {
 			continue
 		}
 		nodes := r.Cluster.PlacementNodes(d.Placement)

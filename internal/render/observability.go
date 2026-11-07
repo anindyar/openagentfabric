@@ -358,7 +358,7 @@ type staticConfig struct {
 }
 
 // prometheusConfig scrapes node_exporter on every node, agentgateway on the
-// gateway nodes and the API (rank-0) node of every enabled model.
+// gateway nodes and the API (rank-0) node of every enabled vLLM model.
 func (r *renderer) prometheusConfig(interval string) map[string]any {
 	node := scrapeConfig{JobName: "node"}
 	gw := scrapeConfig{JobName: "agentgateway"}
@@ -374,6 +374,11 @@ func (r *renderer) prometheusConfig(interval string) map[string]any {
 			continue
 		}
 		nodes := r.Cluster.PlacementNodes(d.Placement)
+		if m, ok := r.Catalog.Lookup(d.CatalogRef); ok {
+			if p, err := config.Profile(d, m, len(nodes)); err == nil && !p.IsVLLM() {
+				continue // another server: no vLLM metrics
+			}
+		}
 		n, _ := r.Cluster.Node(nodes[0])
 		vllm.StaticConfigs = append(vllm.StaticConfigs, staticConfig{
 			Targets: []string{hostPort(n.Address, r.Cluster.ModelPort(i))},

@@ -306,10 +306,7 @@ func deploymentState(c *config.Cluster, cat *config.Catalog, d config.ModelDeplo
 		GPUMemoryUtilization: d.GPUMemoryUtilization, MaxModelLen: d.MaxModelLen, Guardrails: append([]string{}, d.Guardrails...),
 		Adapters: oafd.AdapterViews(d)}
 	if m, ok := cat.Lookup(d.CatalogRef); ok {
-		dv.Task = "chat"
-		if m.IsEmbedding() {
-			dv.Task = "embedding"
-		}
+		dv.Task = m.Task()
 	}
 	if d.IsEnabled() {
 		modelPhase(&dv, sts, dl)

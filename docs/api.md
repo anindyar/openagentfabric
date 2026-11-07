@@ -311,7 +311,7 @@ Response `200`:
 | `topology` | `single`, `pair`, `triangle`, `two-pairs` or `pair-plus-single`. |
 | `nodes[]` | `name`, `address`, `roles[]`, `state` (`joined`, `pending`, `joining`, `offline`), `health`, `hardware` (`gpu`, `memory_gib`, `memory_free_gib`, `disk_free_gib`, `serial`, `os`, `arch`), `ports[]` (`port`, `link` `up`/`down`, `peer`, `speed_gbps`, `rails[]` with `netdev`, `ip`, `bw_gbps`, `status`, `rdma_dev`), `preflight[]` (`name`, `status` `pass`/`warn`/`fail`, `summary`), `version`, `joined_at`. |
 | `groups[]` | Placement groups: `name`, `nodes[]` (the boxes a multi-node model runs across). |
-| `deployments[]` | One per model deployment: `name`, `catalog_ref`, `task` (`chat`, `embedding`), `placement` (`node` or `group`), `profile`, `nodes[]`, `enabled`, `gpu_memory_utilization`, `max_model_len`, `guardrails[]`, `state`, `health`, and the console's view: `phase` (`queued`, `downloading`, `starting`, `loading`, `ready`, `failed`, `removing`, `disabled`), `progress` (0-100 while loading), `detail`, `error`, `since`, `restarts`. A model removed from `cluster.yaml` but still running shows with `phase: "removing"`. |
+| `deployments[]` | One per model deployment: `name`, `catalog_ref`, `task` (`chat`, `embedding`, `speech-to-text`, `text-to-speech`), `placement` (`node` or `group`), `profile`, `nodes[]`, `enabled`, `gpu_memory_utilization`, `max_model_len`, `guardrails[]`, `state`, `health`, and the console's view: `phase` (`queued`, `downloading`, `starting`, `loading`, `ready`, `failed`, `removing`, `disabled`), `progress` (0-100 while loading), `detail`, `error`, `since`, `restarts`. A model removed from `cluster.yaml` but still running shows with `phase: "removing"`. |
 | `components[]` | Stack containers: `name` (`project/service`), `node`, `state`, `health`. `state` is `unreachable` or `missing` when the node agent cannot be reached or the project is absent. |
 | `licenses_needed[]` | `needs_acceptance` entries (section 5) for what `cluster.yaml` deploys without an acceptance. |
 | `applying` | `{plan_id, summary, since}` while a plan is being applied; absent otherwise. |
@@ -341,7 +341,7 @@ curl -sS "$OAF_API_URL/api/v1/catalog" -H "$AUTH"
 ```
 
 Response `200` `{"models": [...]}`. Each model: `id` (use it as `catalog_ref`), `name`, `task`
-(`chat` or `embedding`), `memory_gib` (weights), `quantization`, `context_window` (the largest
+(`chat`, `embedding`, `speech-to-text` or `text-to-speech`), `memory_gib` (weights), `quantization`, `context_window` (the largest
 profile `max_model_len`), `profiles[]` (`name`, `nodes`, `gpu_memory_utilization`, `max_model_len`),
 `license`, `hf_repo`, `classes[]`, `offered` (always true today), `recommended` (a companion model
 that fits beside a large model the cluster runs) and `note` (why).
@@ -775,7 +775,9 @@ The management API never carries inference traffic. An app that wants model outp
 
    `model` is a deployment name (or a provider model name). `model: auto` is routed by the semantic
    router according to `/routing`; a named model is never re-routed. Any OpenAI SDK works with the
-   base URL and key set. Embedding deployments serve `/v1/embeddings`.
+   base URL and key set. Embedding deployments serve `/v1/embeddings`; speech-to-text deployments
+   `/v1/audio/transcriptions` and `/v1/audio/translations`; text-to-speech deployments `/v1/audio/speech`
+   (docs/user-guide.md, Speech).
 3. Can label calls with the headers `X-OAF-User`, `X-OAF-Session` and `X-OAF-Step`. They only label
    traces; they grant nothing.
 

@@ -14,9 +14,9 @@ components:
   # --- gateway + routing -------------------------------------------------
   - name: agentgateway
     thirdParty: agentgateway
-    image: ghcr.io/agentgateway/agentgateway:v1.6.0@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c
+    image: ghcr.io/agentgateway/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
     platforms: [linux/arm64, linux/amd64]
-    upstream: { repo: agentgateway/agentgateway, ref: v1.6.0 }
+    upstream: { repo: agentgateway/agentgateway, ref: v1.7.0 }
     license: { spdx: Apache-2.0, file: LICENSE, sha256: 3b1ee5b1e14fda40515c18ec2f0796d632e65a20b2aca8f017c654bc26ca77bd }
 
   # Standalone vSR image (router with its own listener). The M3 spike decides
@@ -82,6 +82,38 @@ components:
       includedTerms:
         - { name: NVIDIA CUDA Toolkit EULA, url: "https://docs.nvidia.com/cuda/eula/index.html" }
       acceptUrl: "https://docs.nvidia.com/cuda/eula/index.html"
+
+  # vLLM with its `audio` extra (av, soundfile, soxr, scipy), which the
+  # published image leaves out and Whisper's /v1/audio/transcriptions and
+  # /v1/audio/translations need. Built from deploy/engines/vllm-audio on the
+  # pinned `vllm` image above and pushed with `oaf images push vllm-audio:0.31.0
+  # --component vllm-audio`. Same vLLM code and NVIDIA CUDA terms.
+  - name: vllm-audio
+    thirdParty: vLLM
+    local: true
+    platforms: [linux/arm64]
+    upstream: { repo: vllm-project/vllm, ref: v0.31.0 }
+    license:
+      spdx: Apache-2.0
+      file: LICENSE
+      sha256: c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+      includedTerms:
+        - { name: NVIDIA CUDA Toolkit EULA, url: "https://docs.nvidia.com/cuda/eula/index.html" }
+      acceptUrl: "https://docs.nvidia.com/cuda/eula/index.html"
+
+  # Kokoro-FastAPI: an OpenAI-compatible /v1/audio/speech server for the
+  # Kokoro-82M text-to-speech model (Apache-2.0), whose weights and voices
+  # are baked into the image at build time, so the digest pins them too. The
+  # CPU build: the GPU build targets CUDA 12.6 kernels up to Ada, not GB10's
+  # SM121, and an 82M model needs no GPU. The image also carries espeak-ng
+  # (GPL-3.0, the phonemizer's fallback), unmodified: an offline bundle that
+  # includes it carries the source offer (docs/licence-audit.md §3.7).
+  - name: kokoro-fastapi
+    thirdParty: Kokoro-FastAPI
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.9.2@sha256:cbcc28802fb5d1eaaba8b91e38b0e872a669e85831c513cf6a29c709cbe25405
+    platforms: [linux/arm64, linux/amd64]
+    upstream: { repo: remsky/Kokoro-FastAPI, ref: v0.9.2 }
+    license: { spdx: Apache-2.0, file: LICENSE, sha256: c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4 }
 
   # The image registry on the control node: images that have no published
   # build (local components) and, later, images for boxes without internet.

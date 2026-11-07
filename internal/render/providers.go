@@ -7,7 +7,7 @@ import (
 	"openagentfabric.dev/oaf/internal/config"
 )
 
-// External providers and guardrails, rendered into agentgateway v1.6's
+// External providers and guardrails, rendered into agentgateway's
 // simplified LLM config (llm.models[]): each provider model is one entry
 // with the upstream's provider type and params, and guardrail policies
 // become the entry's guardrails.request / guardrails.response prompt guards.
@@ -15,7 +15,7 @@ import (
 // the gateway shell-expands from the compose env file.
 
 // agentgatewayProvider maps OAF provider types to agentgateway's provider
-// enum (v1.6.0 llm.models[].provider).
+// enum (llm.models[].provider; the same in v1.6.0 and v1.7.0).
 var agentgatewayProvider = map[string]string{
 	config.ProviderOpenAI:           "openAI",
 	config.ProviderOpenAICompatible: "openAI",

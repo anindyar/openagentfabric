@@ -20,6 +20,8 @@ func hospitalInput(t *testing.T) Input {
 		t.Fatal(err)
 	}
 	in.Cluster, in.Features = c, map[string]bool{"ddx": true}
+	// vllm-audio is a local engine: as if `oaf images push` had pinned it.
+	in.Cluster.Spec.Images = map[string]string{"vllm-audio": "192.168.1.11:5000/oaf/vllm-audio@sha256:" + strings.Repeat("a", 64)}
 	return in
 }
 

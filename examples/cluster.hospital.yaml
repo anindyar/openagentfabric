@@ -9,9 +9,13 @@
 #   gpt-oss-20b at 0.20   24.3 GiB  (weights ~13; the DDx adapter is 31 MB)
 #   medgemma at 0.32      38.9 GiB  (bf16 weights quantized to FP8 on load, ~27 GiB)
 #   bge-m3 at 0.03         3.6 GiB  (~6.5 GiB in all, mostly vLLM overhead)
+#   stt at 0.04            4.9 GiB  (Whisper large-v3-turbo, 1.6 GB of weights)
+#   tts at 0.02            2.4 GiB  (a cap: Kokoro runs on the CPU)
 #   vLLM host processes  ~4.6 GiB each (outside --gpu-memory-utilization)
-# The shares sum to 0.80, under the 0.90 limit; with four vLLMs' overhead
+# The shares sum to 0.86, under the 0.90 limit; with five vLLMs' overhead
 # `oaf validate` warns that little is left for the OS and the app itself.
+# stt runs on vllm-audio, built and pushed once (deploy/engines/vllm-audio):
+# until then it is not started.
 #
 # Spetaar DDx is entitled: it is served, and the differential rule is
 # rendered, only while an entitlement grants the ddx feature. Until then
@@ -57,6 +61,15 @@ spec:
       placement: { node: spark-1 }
       gpuMemoryUtilization: 0.03
       maxModelLen: 8192
+    # Speech, by name through the gateway: dictation (stt) and read-aloud (tts).
+    - name: stt
+      catalogRef: whisper-large-v3-turbo
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.04
+    - name: tts
+      catalogRef: kokoro-82m
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.02
   routing:
     mode: active
     gateway:
@@ -64,7 +77,7 @@ spec:
     keys:
       - name: hms
         secretRef: gateway-key-hms
-        models: [auto, spetaar-ddx, medgemma, bge-m3]
+        models: [auto, spetaar-ddx, medgemma, bge-m3, stt, tts]
     defaults:
       fast: ornith
       fallback: ornith
@@ -91,6 +104,10 @@ spec:
       acceptedBy: admin@example.com
       acceptedAt: 2026-11-07T12:00:00Z
     - subject: image/vllm
+      url: https://docs.nvidia.com/cuda/eula/index.html
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-11-07T12:00:00Z
+    - subject: image/vllm-audio
       url: https://docs.nvidia.com/cuda/eula/index.html
       acceptedBy: admin@example.com
       acceptedAt: 2026-11-07T12:00:00Z

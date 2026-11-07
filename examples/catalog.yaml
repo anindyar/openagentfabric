@@ -323,3 +323,54 @@ models:
         container:
           commandPrefix: [vllm, serve]
           ipc: host
+
+  # Speech. Both are served by name through the gateway like embeddings, with
+  # the same keys and tracing, and are never a chat route (model: auto).
+
+  # Whisper large-v3-turbo: speech-to-text on the GPU through vLLM, which
+  # serves /v1/audio/transcriptions and /v1/audio/translations (to English).
+  # 809M parameters, 1.6 GB of weights. It runs on vllm-audio: the pinned
+  # vLLM image plus the audio extra the published image lacks
+  # (deploy/engines/vllm-audio), built and pushed once on the box. Its share
+  # is to be measured on a GB10.
+  - id: whisper-large-v3-turbo
+    displayName: Whisper large-v3-turbo (speech-to-text)
+    source:
+      huggingface:
+        repo: openai/whisper-large-v3-turbo
+        revision: 41f01f3fe87f28c78e2fbf8b568835947dd65ed9
+    license: { spdx: MIT, gated: false, redistributable: true }
+    sizeGiB: 1.6
+    classes: [speech-to-text]
+    profiles:
+      - name: single
+        engine: vllm-audio
+        nodes: 1
+        tensorParallel: 1
+        gpuMemoryUtilization: 0.04   # to be measured (estimate ~3 GiB used of the 4.9 GiB share)
+        args: [--max-num-seqs, "8"]
+
+  # Kokoro-82M: text-to-speech (/v1/audio/speech) through Kokoro-FastAPI on
+  # the CPU (82M parameters; the server's GPU build has no GB10 kernels).
+  # Its weights and voices are baked into the pinned image, so nothing is
+  # downloaded. Voices are English (US, UK), Spanish, French, Hindi, Italian,
+  # Japanese, Portuguese and Mandarin; there is no Arabic voice. The server
+  # answers to the model name "kokoro" (the gateway sends it). Its share is
+  # a memory cap on its container, to be measured (estimate ~1 GiB in use).
+  - id: kokoro-82m
+    displayName: Kokoro 82M (text-to-speech)
+    source:
+      bundled: { component: kokoro-fastapi }
+    license: { spdx: Apache-2.0, gated: false, redistributable: true }
+    sizeGiB: 0.3
+    classes: [text-to-speech]
+    profiles:
+      - name: single
+        engine: kokoro-fastapi
+        nodes: 1
+        tensorParallel: 1
+        gpuMemoryUtilization: 0.02   # memory cap (~2.4 GiB); to be measured
+        env:
+          DOWNLOAD_MODEL: "false"    # the weights are in the image; never fetch at run time
+          USE_GPU: "false"
+        server: { portEnv: PORT, hostEnv: HOST, health: /health, servedModel: kokoro }

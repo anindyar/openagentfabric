@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"maps"
+	"math"
 	"net/netip"
 	"path"
 	"slices"
@@ -47,6 +48,10 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 	img, err := r.image(prof.EngineComponent())
 	if err != nil {
 		return nil, err
+	}
+	if !prof.IsVLLM() {
+		p, err := r.serverModel(i, d, m, prof, img, nodes[0])
+		return []Project{p}, err
 	}
 	var ranks []rankNet
 	if len(nodes) > 1 {
@@ -159,6 +164,55 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// serverModel renders a deployment whose engine is an OpenAI-compatible
+// server other than vLLM (profile.server): its image runs as is, told its
+// port (and address) through the environment, on the host network like
+// vLLM. Its memory is capped at the deployment's share of unified memory,
+// so the budget validation counts is the one it can use.
+func (r *renderer) serverModel(i int, d config.ModelDeployment, m *config.CatalogModel, prof *config.ServingProf, img, nodeName string) (Project, error) {
+	node, _ := r.Cluster.Node(nodeName)
+	srv := prof.Server
+	port := r.Cluster.ModelPort(i)
+	env := map[string]string{srv.PortEnv: strconv.Itoa(port)}
+	if srv.HostEnv != "" {
+		env[srv.HostEnv] = "0.0.0.0"
+	}
+	maps.Copy(env, prof.Env)
+	maps.Copy(env, d.Env)
+
+	s := newService(img)
+	s.NetworkMode = "host"
+	if srv.GPU {
+		s.GPUs = "all"
+	}
+	s.Environment = env
+	if prof.Container != nil && len(prof.Container.CommandPrefix) > 0 {
+		s.Command = slices.Clone(prof.Container.CommandPrefix)
+	}
+	if m.Source.HuggingFace != nil {
+		s.Volumes = []string{path.Join(modelsPath(node), m.ID) + ":" + path.Join("/models", m.ID) + ":ro"}
+	}
+	mib := int(math.Ceil(d.GPUMemoryUtilization * config.GB10MemoryGiB * 1024))
+	s.MemLimit = strconv.Itoa(mib) + "m"
+	s.MemswapLimit = s.MemLimit
+	probe := fmt.Sprintf("import urllib.request; urllib.request.urlopen('http://127.0.0.1:%d%s', timeout=5)", port, srv.Health)
+	s.Healthcheck = &healthcheck{Test: []string{"CMD", "python3", "-c", probe}, Interval: "30s", Timeout: "10s", Retries: 3, StartPeriod: "10m"}
+	s.StopGracePeriod = "30s"
+
+	cf := &composeFile{Services: map[string]*service{"server": s}}
+	if prof.Container != nil {
+		c := *prof.Container
+		c.CommandPrefix = nil // the server's command, set above
+		applyContainer(cf, s, &c)
+	}
+	p, err := finish(Project{Node: nodeName, Name: modelProjectName(d.Name)}, r.Versions.Version, cf, newEnvFile())
+	if err != nil {
+		return p, err
+	}
+	p.Weights = ModelWeights(r.Cluster, r.Catalog, d)[nodeName]
+	return p, nil
 }
 
 // loraRanks are the --max-lora-rank values vLLM accepts (LoRAConfig).

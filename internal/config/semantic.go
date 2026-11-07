@@ -167,6 +167,12 @@ func (k *checker) catalog() {
 				k.errorf(pp, "tensorParallel × pipelineParallel = %d, but nodes = %d (one GPU per GB10 node)",
 					pr.TensorParallel*pr.PP(), pr.Nodes)
 			}
+			if pr.Server != nil && pr.Nodes != 1 {
+				k.errorf(pp, "a server engine (%s) runs on one node", pr.EngineComponent())
+			}
+			if b := m.Source.Bundled; b != nil && b.Component != pr.EngineComponent() {
+				k.errorf(pp+".engine", "the weights are bundled in %s, but this profile runs %s", b.Component, pr.EngineComponent())
+			}
 		}
 	}
 }
@@ -472,7 +478,8 @@ func (k *checker) models() {
 			k.errorf(p+".catalogRef", "no catalog entry %q", d.CatalogRef)
 			continue
 		}
-		if _, ok := k.profileFor(d, model, len(placed), p); !ok {
+		prof, ok := k.profileFor(d, model, len(placed), p)
+		if !ok {
 			continue
 		}
 		if model.Entitlement != nil && !k.opts.Features[model.Entitlement.Feature] {
@@ -485,9 +492,15 @@ func (k *checker) models() {
 		if !d.IsEnabled() {
 			continue
 		}
+		if prof.Server != nil && !prof.Server.Authenticates {
+			k.warnf(p, "%s (%s) has no authentication of its own: anything that reaches port %d on %s can use it without a gateway key; keep that port off untrusted networks",
+				d.Name, prof.EngineComponent(), k.c.ModelPort(i), strings.Join(placed, ", "))
+		}
 		for r, n := range placed {
 			memory[n] += d.GPUMemoryUtilization
-			instances[n]++
+			if prof.IsVLLM() {
+				instances[n]++ // a server engine's memory is capped at its share
+			}
 			if r == 0 {
 				reserve(n, k.c.ModelPort(i), fmt.Sprintf("model %q", d.Name), p+".port")
 				if len(placed) > 1 {
@@ -529,8 +542,8 @@ func (k *checker) adapters() {
 			continue
 		}
 		p := fmt.Sprintf("spec.models[%d]", i)
-		if m, ok := k.cat.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
-			k.errorf(p+".adapters", "%q is an embedding model; LoRA adapters are served on chat models only", d.Name)
+		if m, ok := k.cat.Lookup(d.CatalogRef); ok && !m.IsChat() {
+			k.errorf(p+".adapters", "%q is %s model; LoRA adapters are served on chat models only", d.Name, withArticle(m.Task()))
 		}
 		for _, a := range d.Args {
 			if a == "--lora-modules" || strings.HasPrefix(a, "--lora-modules=") {
@@ -595,7 +608,7 @@ func (k *checker) profileFor(d ModelDeployment, m *CatalogModel, nodes int, path
 func (k *checker) routing() {
 	r := k.c.Spec.Routing
 	served := map[string]bool{}
-	embedding := map[string]bool{}    // embedding models are served, but never a chat route
+	nonChat := map[string]string{}    // embedding and speech models are served, but never a chat route
 	unentitled := map[string]string{} // adapters waiting for an entitlement -> feature
 	chatModels := 0
 	for _, d := range k.c.Spec.Models {
@@ -603,8 +616,8 @@ func (k *checker) routing() {
 			continue
 		}
 		served[d.Name] = true
-		if m, ok := k.cat.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
-			embedding[d.Name] = true
+		if m, ok := k.cat.Lookup(d.CatalogRef); ok && !m.IsChat() {
+			nonChat[d.Name] = m.Task()
 		} else {
 			chatModels++
 		}
@@ -630,8 +643,8 @@ func (k *checker) routing() {
 			k.errorf(path, "adapter %q is not served: entitlement %q is not present", name, unentitled[name])
 		case !served[name]:
 			k.errorf(path, "%q is not an enabled deployment", name)
-		case embedding[name]:
-			k.errorf(path, "%q is an embedding model; it cannot answer chat requests", name)
+		case nonChat[name] != "":
+			k.errorf(path, "%q is %s model; it cannot answer chat requests", name, withArticle(nonChat[name]))
 		}
 	}
 
@@ -834,4 +847,12 @@ func containsAny(s string, subs ...string) bool {
 		}
 	}
 	return false
+}
+
+// withArticle is "an embedding", "a speech-to-text".
+func withArticle(s string) string {
+	if s != "" && strings.ContainsRune("aeiou", rune(s[0])) {
+		return "an " + s
+	}
+	return "a " + s
 }

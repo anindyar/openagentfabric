@@ -49,9 +49,18 @@ func TestInstallerFlow(t *testing.T) {
 	fail("not a licence", "licenses", "accept", "model/bge-m3", "--by", "admin@example.com")
 	run(`added "medgemma"`, "models", "add", "medgemma", "--catalog-ref", "medgemma-27b-it")
 	run("no licences needed", "licenses", "needed")
+	// Speech: Whisper on vLLM (the vllm-audio engine) and Kokoro.
+	run(`added "stt" (whisper-large-v3-turbo on spark-1, gpuMemoryUtilization 0.04)`, "models", "add", "stt", "--catalog-ref", "whisper-large-v3-turbo")
+	out := run(`added "tts" (kokoro-82m on spark-1, gpuMemoryUtilization 0.02)`, "models", "add", "tts", "--catalog-ref", "kokoro-82m")
+	if !strings.Contains(out, "has no authentication of its own") {
+		t.Errorf("tts warning missing:\n%s", out)
+	}
+	run("image/vllm-audio", "licenses", "needed")
+	run("accepted image/vllm-audio", "licenses", "accept", "image/vllm-audio", "--by", "admin@example.com")
+	fail("speech-to-text model; it cannot answer chat requests", "routing", "defaults", "--fast", "stt")
 
 	add := []string{"models", "adapter", "add", "gpt-oss-20b", "spetaar-ddx", "--path", "/var/lib/oaf/adapters/spetaar-ddx", "--rank", "16", "--entitlement", "ddx"}
-	out := run(`added adapter "spetaar-ddx" on gpt-oss-20b`, add...)
+	out = run(`added adapter "spetaar-ddx" on gpt-oss-20b`, add...)
 	if !strings.Contains(out, "is not on this host") || !strings.Contains(out, `entitlement "ddx" is not present`) {
 		t.Errorf("adapter warnings missing:\n%s", out)
 	}

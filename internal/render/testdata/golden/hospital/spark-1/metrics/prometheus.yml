@@ -44,3 +44,8 @@ scrape_configs:
         labels:
           model: bge-m3
           node: spark-1
+      - targets:
+          - 192.168.1.11:8004
+        labels:
+          model: stt
+          node: spark-1
