@@ -757,6 +757,54 @@ Each entry under `spec.models` is one served model:
 - **Disabling** a model (`enabled: false`) and running `oaf apply` stops and removes it on every node.
   Its weights stay on disk.
 
+### LoRA adapters
+
+A fine-tune shipped as a PEFT LoRA adapter (a few MB to a few hundred MB) is not a model of its own:
+it is listed under the deployment of its base model and served by the same vLLM, under its own name.
+It takes no port, no memory share and no extra vLLM overhead.
+
+```yaml
+  models:
+    - name: gpt-oss-20b
+      catalogRef: gpt-oss-20b
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.20
+      maxModelLen: 8192
+      adapters:
+        - name: spetaar-ddx                         # the name clients and rules use
+          path: /var/lib/oaf/adapters/spetaar-ddx   # adapter_config.json + adapter_model.safetensors
+          rank: 16                                  # r in adapter_config.json
+          entitlement: ddx                          # optional: served only while entitled
+          guardrails: [phi]                         # optional: default is the deployment's
+```
+
+- **Files:** copy the adapter directory to `path` on **every** node of the placement. OAF mounts it
+  read-only (`/adapters/<name>` in the container) and never downloads it. `oaf validate` reads
+  `adapter_config.json` when the directory is on the host it runs on: a rank smaller than the
+  adapter's `r` is an error (vLLM would refuse it), as is a directory with no adapter weights; an
+  adapter trained on another base model is a warning.
+- **Rank:** vLLM sizes its LoRA buffers for the largest rank it may load, so `rank` is required.
+  OAF passes the largest served rank to `--max-lora-rank`, rounded up to a size vLLM accepts (1, 8,
+  16, 32, 64, 128, 256, 320, 512), adds `--enable-lora`, `--max-loras` when there are several, and
+  `--lora-modules`. Flags the catalog profile or the deployment's `args` already set are kept; do not
+  put `--lora-modules` in `args`.
+- **Names:** an adapter's name is a model name like any other: it must be unique among deployments,
+  adapters and external provider models. `model: spetaar-ddx` reaches the adapter;
+  `model: gpt-oss-20b` still reaches the base model. App keys can list it under `--models`.
+- **Routing:** rules, `defaults.fast` and `defaults.fallback` may target an adapter; vSR sees it as a
+  model of its own, and the fallback rules are unchanged (an adapter shares its base's health).
+- **When it is served:** only while its deployment is enabled and, if it names an `entitlement`,
+  while a valid entitlement grants that feature. Otherwise it is left out of vLLM, the gateway and
+  vSR, `oaf validate` says so, and a rule that targets it is inactive (its prompts go to the fast
+  model). Entitlement verification is not implemented yet, so today an entitled adapter is never
+  served; leave `entitlement` out until it is.
+- **Replacing** a deployment's base model (`POST /models/{name}/replace` with another catalog model)
+  drops its adapters: they only load on the model they were trained for.
+
+`examples/cluster.hospital.yaml` is a complete example: Ornith, gpt-oss-20b with the Spetaar DDx
+adapter, MedGemma and bge-m3 on one box, with a rule sending differential-diagnosis prompts to the
+adapter.
+
 *(planned, M2: `oaf models search/pull` downloads from Hugging Face, fans out over the fabric, checks
 disk and checksums, and benchmarks each model against its catalog baseline.)*
 

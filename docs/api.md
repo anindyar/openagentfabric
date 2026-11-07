@@ -351,6 +351,19 @@ curl -sS "$OAF_API_URL/api/v1/models" -H "$AUTH"
 Response `200` `{"models": [...]}` with the fields of a `deployments[]` entry in `/status` except the
 live ones (`state` is `configured` or `disabled`; there is no `phase`). Use `/status` for health.
 
+Each deployment lists its LoRA adapters (also in `/status`), `[]` when it has none:
+
+```json
+"adapters": [{"name": "spetaar-ddx", "path": "/var/lib/oaf/adapters/spetaar-ddx", "rank": 16,
+              "entitlement": "ddx", "guardrails": [], "served": false}]
+```
+
+`served` is false while the deployment is disabled or the adapter waits for its entitlement (no
+entitlement is verified yet, so an entitled adapter is never served). `guardrails` are the effective
+ones: the deployment's unless the adapter sets its own. A served adapter is a model name of its own
+for clients, keys and routing rules. Adapters are read-only in the API: they are set in
+`cluster.yaml` (docs/user-guide.md, LoRA adapters).
+
 #### POST /models (plan)
 
 Deploy a catalog model.
@@ -412,7 +425,8 @@ be replaced by a bigger one.
 | `placement` | Moves it. Empty keeps the current node or group. |
 | `gpu_memory_utilization`, `max_model_len` | As in `POST /models`. |
 
-Guardrails and `enabled` carry over. Errors: `404` no such deployment, `400` unknown `catalog_ref`,
+Guardrails and `enabled` carry over; LoRA adapters carry over only when the catalog model stays the
+same (they load on the base they were trained for). Errors: `404` no such deployment, `400` unknown `catalog_ref`,
 `409` the new name is taken. The download starts when the plan is made.
 
 ### 7.3 Providers
@@ -808,3 +822,5 @@ ADR-0002 lists these; the code does not have them:
 - Guardrail moderation endpoints and per-key limits through the API (a key's `requests_per_minute`
   is shown by `GET /keys` but is set in `cluster.yaml`).
 - Topology option `b` (high availability over LAN) cannot be planned yet.
+- Writing LoRA adapters through the API (adding, removing, or changing an adapter on a deployment).
+  `GET /models` and `/status` list them; they are edited in `cluster.yaml`.
