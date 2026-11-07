@@ -106,3 +106,34 @@ func AcceptableURL(subject string, cat *Catalog, v *Versions) (string, bool) {
 	}
 	return "", false
 }
+
+// WithAcceptances appends the subjects not yet accepted in cur to
+// spec.licenseAcceptances (urls gives each subject's terms), keeping the
+// rest of the document. It returns the subjects it added.
+func WithAcceptances(cur []byte, subjects []string, urls map[string]string, by, at string) ([]byte, []string, error) {
+	c, err := ParseCluster(cur)
+	if err != nil {
+		return nil, nil, err
+	}
+	have := map[string]bool{}
+	for _, a := range c.Spec.LicenseAcceptances {
+		have[a.Subject] = true
+	}
+	ed, err := NewEditor(cur)
+	if err != nil {
+		return nil, nil, err
+	}
+	var added []string
+	for _, sub := range subjects {
+		if have[sub] {
+			continue
+		}
+		have[sub] = true
+		if err := ed.Append(LicenseAcceptance{Subject: sub, URL: urls[sub], AcceptedBy: by, AcceptedAt: at}, "licenseAcceptances"); err != nil {
+			return nil, nil, err
+		}
+		added = append(added, sub)
+	}
+	doc, err := ed.Bytes()
+	return doc, added, err
+}
