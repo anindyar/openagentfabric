@@ -17,7 +17,7 @@ func NewRoot() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newKeysCmd(), newModelsCmd(), newServeCmd(), newSecretsCmd(), newObservabilityCmd(), newVersionCmd(), newValidateCmd(), newPreflightCmd(), newInstallCmd(), newApplyCmd(), newStatusCmd(), newImagesCmd(),
+	root.AddCommand(newKeysCmd(), newModelsCmd(), newRoutingCmd(), newLicensesCmd(), newServeCmd(), newSecretsCmd(), newObservabilityCmd(), newVersionCmd(), newValidateCmd(), newPreflightCmd(), newInstallCmd(), newApplyCmd(), newStatusCmd(), newImagesCmd(),
 		newUninstallCmd(), newResetCmd(), newFabricCmd(), newNodeCmd(), newPKICmd(), newJoinCmd())
 	return root
 }

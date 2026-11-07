@@ -88,6 +88,11 @@ func (r *renderer) gateway(n config.Node) (Project, error) {
 		if d.IsEnabled() && len(d.Guardrails) > 0 {
 			byName[d.Name] = d.Guardrails
 		}
+		for _, a := range d.ServedAdapters(r.Features) {
+			if g := d.AdapterGuardrails(a); len(g) > 0 {
+				byName[a.Name] = g
+			}
+		}
 	}
 	for _, m := range models {
 		name, _ := m["name"].(string)
@@ -222,7 +227,8 @@ func (r *renderer) apiKeyPolicy() (map[string]any, error) {
 	}, nil
 }
 
-// gatewayModels serves each enabled deployment under its name, plus "auto".
+// gatewayModels serves each enabled deployment and its served LoRA adapters
+// under their names, plus "auto".
 func (r *renderer) gatewayModels(gw config.Node) ([]map[string]any, error) {
 	var out []map[string]any
 	base := map[string]string{}
@@ -234,10 +240,24 @@ func (r *renderer) gatewayModels(gw config.Node) ([]map[string]any, error) {
 		nodes := r.Cluster.PlacementNodes(d.Placement)
 		n, _ := r.Cluster.Node(nodes[0])
 		base[d.Name] = "http://" + hostPort(n.Address, r.Cluster.ModelPort(i)) + "/v1"
-		// Embedding models are served by name for /v1/embeddings; "auto"
-		// never routes to one.
-		out = append(out, backend(d.Name, d.Name, base[d.Name]))
-		if m, ok := r.Catalog.Lookup(d.CatalogRef); firstChat == "" && (!ok || !m.IsEmbedding()) {
+		// Embedding and speech models are served by name for their own
+		// endpoints; "auto" never routes to one.
+		// The engine may answer to its own model name (a speech server):
+		// the gateway rewrites the request's model to it.
+		upstream := d.Name
+		if m, ok := r.Catalog.Lookup(d.CatalogRef); ok {
+			if p, err := config.Profile(d, m, len(nodes)); err == nil {
+				upstream = p.UpstreamModel(d.Name)
+			}
+		}
+		out = append(out, backend(d.Name, upstream, base[d.Name]))
+		// Each LoRA adapter is a model name on the same vLLM: vLLM applies
+		// the adapter the request's model names.
+		for _, a := range d.ServedAdapters(r.Features) {
+			base[a.Name] = base[d.Name]
+			out = append(out, backend(a.Name, a.Name, base[d.Name]))
+		}
+		if m, ok := r.Catalog.Lookup(d.CatalogRef); firstChat == "" && (!ok || m.IsChat()) {
 			firstChat = d.Name
 		}
 	}

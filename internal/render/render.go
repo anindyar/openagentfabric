@@ -61,6 +61,10 @@ type Project struct {
 type Weights struct {
 	ModelID, Dir, Repo, Revision string
 	Include                      []string
+	// Gated: the repo needs a Hugging Face access token. Rendering never
+	// reads it; the caller sets Token before sending the weights to a node.
+	Gated bool
+	Token string
 }
 
 // ModelWeights returns where a deployment's weights go on each of its nodes,
@@ -76,7 +80,7 @@ func ModelWeights(c *config.Cluster, cat *config.Catalog, d config.ModelDeployme
 		n, _ := c.Node(name)
 		hf := m.Source.HuggingFace
 		out[name] = &Weights{ModelID: m.ID, Dir: path.Join(modelsPath(n), m.ID), Repo: hf.Repo, Revision: hf.Revision,
-			Include: append([]string{}, hf.Include...)}
+			Include: append([]string{}, hf.Include...), Gated: m.License.Gated}
 	}
 	return out
 }

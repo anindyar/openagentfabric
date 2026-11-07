@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"maps"
+	"math"
 	"net/netip"
 	"path"
 	"slices"
@@ -48,6 +49,10 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 	if err != nil {
 		return nil, err
 	}
+	if !prof.IsVLLM() {
+		p, err := r.serverModel(i, d, m, prof, img, nodes[0])
+		return []Project{p}, err
+	}
 	var ranks []rankNet
 	if len(nodes) > 1 {
 		if ranks, err = r.rankNetworks(nodes); err != nil {
@@ -64,6 +69,7 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 	if d.MaxModelLen != 0 {
 		maxLen = d.MaxModelLen
 	}
+	adapters := d.ServedAdapters(r.Features)
 	var out []Project
 	pulls := ModelWeights(r.Cluster, r.Catalog, d)
 	for rank, nodeName := range nodes {
@@ -99,6 +105,7 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 		}
 		args = append(args, prof.Args...)
 		args = append(args, d.Args...)
+		args = append(args, loraArgs(adapters, args)...)
 
 		cenv := map[string]string{
 			// Weights are pulled and verified by oaf (M2), never by vLLM at runtime.
@@ -115,6 +122,9 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 		s.ShmSize = "10gb"
 		s.Command = args
 		s.Volumes = []string{path.Join(modelsPath(node), m.ID) + ":" + weights + ":ro"}
+		for _, a := range adapters {
+			s.Volumes = append(s.Volumes, a.Path+":"+adapterMount(a.Name)+":ro")
+		}
 		if p := r.Cluster.Spec.Fabric.NCCL.LDPreload; p != "" {
 			cenv["LD_PRELOAD"] = p
 			s.Volumes = append(s.Volumes, p+":"+p+":ro")
@@ -154,6 +164,109 @@ func (r *renderer) model(i int, d config.ModelDeployment) ([]Project, error) {
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// serverModel renders a deployment whose engine is an OpenAI-compatible
+// server other than vLLM (profile.server): its image runs as is, told its
+// port (and address) through the environment, on the host network like
+// vLLM. Its memory is capped at the deployment's share of unified memory,
+// so the budget validation counts is the one it can use.
+func (r *renderer) serverModel(i int, d config.ModelDeployment, m *config.CatalogModel, prof *config.ServingProf, img, nodeName string) (Project, error) {
+	node, _ := r.Cluster.Node(nodeName)
+	srv := prof.Server
+	port := r.Cluster.ModelPort(i)
+	env := map[string]string{srv.PortEnv: strconv.Itoa(port)}
+	if srv.HostEnv != "" {
+		env[srv.HostEnv] = "0.0.0.0"
+	}
+	maps.Copy(env, prof.Env)
+	maps.Copy(env, d.Env)
+
+	s := newService(img)
+	s.NetworkMode = "host"
+	if srv.GPU {
+		s.GPUs = "all"
+	}
+	s.Environment = env
+	if prof.Container != nil && len(prof.Container.CommandPrefix) > 0 {
+		s.Command = slices.Clone(prof.Container.CommandPrefix)
+	}
+	if m.Source.HuggingFace != nil {
+		s.Volumes = []string{path.Join(modelsPath(node), m.ID) + ":" + path.Join("/models", m.ID) + ":ro"}
+	}
+	mib := int(math.Ceil(d.GPUMemoryUtilization * config.GB10MemoryGiB * 1024))
+	s.MemLimit = strconv.Itoa(mib) + "m"
+	s.MemswapLimit = s.MemLimit
+	probe := fmt.Sprintf("import urllib.request; urllib.request.urlopen('http://127.0.0.1:%d%s', timeout=5)", port, srv.Health)
+	s.Healthcheck = &healthcheck{Test: []string{"CMD", "python3", "-c", probe}, Interval: "30s", Timeout: "10s", Retries: 3, StartPeriod: "10m"}
+	s.StopGracePeriod = "30s"
+
+	cf := &composeFile{Services: map[string]*service{"server": s}}
+	if prof.Container != nil {
+		c := *prof.Container
+		c.CommandPrefix = nil // the server's command, set above
+		applyContainer(cf, s, &c)
+	}
+	p, err := finish(Project{Node: nodeName, Name: modelProjectName(d.Name)}, r.Versions.Version, cf, newEnvFile())
+	if err != nil {
+		return p, err
+	}
+	p.Weights = ModelWeights(r.Cluster, r.Catalog, d)[nodeName]
+	return p, nil
+}
+
+// loraRanks are the --max-lora-rank values vLLM accepts (LoRAConfig).
+var loraRanks = []int{1, 8, 16, 32, 64, 128, 256, 320, 512}
+
+// loraArgs serves the adapters from the base model's vLLM: LoRA on, buffers
+// sized for the largest rank (rounded up to a size vLLM accepts), a slot per
+// adapter so one batch can mix them, and each adapter under its own name.
+// Flags the catalog profile or the deployment already set are left to them.
+func loraArgs(adapters []config.Adapter, have []string) []string {
+	if len(adapters) == 0 {
+		return nil
+	}
+	var out []string
+	if !hasFlag(have, "--enable-lora") {
+		out = append(out, "--enable-lora")
+	}
+	if !hasFlag(have, "--max-lora-rank") {
+		rank := 0
+		for _, a := range adapters {
+			rank = max(rank, a.Rank)
+		}
+		for _, r := range loraRanks {
+			if r >= rank {
+				rank = r
+				break
+			}
+		}
+		out = append(out, "--max-lora-rank", strconv.Itoa(rank))
+	}
+	if len(adapters) > 1 && !hasFlag(have, "--max-loras") {
+		out = append(out, "--max-loras", strconv.Itoa(len(adapters)))
+	}
+	out = append(out, "--lora-modules")
+	for _, a := range adapters {
+		out = append(out, a.Name+"="+adapterMount(a.Name))
+	}
+	return out
+}
+
+// hasFlag reports whether args set flag, as "--flag value" or "--flag=value".
+func hasFlag(args []string, flag string) bool {
+	for _, a := range args {
+		if a == flag || strings.HasPrefix(a, flag+"=") {
+			return true
+		}
+	}
+	return false
+}
+
+// adapterMount is where an adapter is mounted in the vLLM container. Served
+// names may hold '/' and '.', so they are slugged like project names.
+func adapterMount(name string) string {
+	return "/adapters/" + strings.TrimPrefix(ModelProjectName(name), modelProjectPrefix)
 }
 
 // applyContainer adds what the engine image needs on top of OAF's defaults.

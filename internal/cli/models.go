@@ -12,7 +12,7 @@ import (
 
 func newModelsCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "models", Short: "Edit the model deployments in cluster.yaml"}
-	cmd.AddCommand(newModelsAddCmd())
+	cmd.AddCommand(newModelsAddCmd(), newModelsSetCmd(), newModelsAdapterCmd())
 	return cmd
 }
 
@@ -106,4 +106,65 @@ func firstInferenceNode(c *config.Cluster) string {
 		return c.Spec.Nodes[0].Name
 	}
 	return ""
+}
+
+func newModelsSetCmd() *cobra.Command {
+	var f clusterFlags
+	var util float64
+	var maxLen int
+	var enabled bool
+	cmd := &cobra.Command{
+		Use:   "set <name> [--util F] [--max-model-len N] [--enabled=true|false]",
+		Short: "Change a deployment's memory share, context or enabled state (idempotent)",
+		Long: "Flags left out keep their values; --max-model-len 0 restores the catalog profile's. Shrink\n" +
+			"one model before adding another: the memory budget is checked before anything is written.\n" +
+			"Run `oaf apply` afterwards.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fl := cmd.Flags()
+			if !fl.Changed("util") && !fl.Changed("max-model-len") && !fl.Changed("enabled") {
+				return errors.New("give --util, --max-model-len and/or --enabled")
+			}
+			changed, err := editCluster(cmd.ErrOrStderr(), f.cluster, f.catalog, func(data []byte) ([]byte, bool, error) {
+				c, err := config.ParseCluster(data)
+				if err != nil {
+					return nil, false, err
+				}
+				for _, d := range c.Spec.Models {
+					if d.Name != args[0] {
+						continue
+					}
+					if fl.Changed("util") {
+						d.GPUMemoryUtilization = util
+					}
+					if fl.Changed("max-model-len") {
+						d.MaxModelLen = maxLen
+					}
+					if fl.Changed("enabled") {
+						if enabled {
+							d.Enabled = nil // the default
+						} else {
+							d.Enabled = &enabled
+						}
+					}
+					return config.SetNamed(data, d, d.Name, "models")
+				}
+				return nil, false, fmt.Errorf("no model deployment %q", args[0])
+			}, nil)
+			if err != nil {
+				return err
+			}
+			if !changed {
+				_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s: %q unchanged\n", f.cluster, args[0])
+				return err
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "updated %q; run `oaf apply` to deploy\n", args[0])
+			return err
+		},
+	}
+	f.register(cmd)
+	cmd.Flags().Float64Var(&util, "util", 0, "gpuMemoryUtilization")
+	cmd.Flags().IntVar(&maxLen, "max-model-len", 0, "context length (0: the catalog profile's)")
+	cmd.Flags().BoolVar(&enabled, "enabled", true, "serve the model (false stops it; weights stay)")
+	return cmd
 }

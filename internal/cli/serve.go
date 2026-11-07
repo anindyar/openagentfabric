@@ -275,7 +275,7 @@ func statusView(ctx context.Context, f *stackFlags) (oafd.StatusView, error) {
 	sort.Strings(gone)
 	for _, p := range gone {
 		v.Deployments = append(v.Deployments, oafd.DeploymentView{Name: strings.TrimPrefix(p, reconcile.ModelProjectPrefix),
-			Nodes: removing[p], Guardrails: []string{}, State: PhaseRemoving, Phase: PhaseRemoving, Detail: "Stopping and removing its containers"})
+			Nodes: removing[p], Guardrails: []string{}, Adapters: []oafd.AdapterView{}, State: PhaseRemoving, Phase: PhaseRemoving, Detail: "Stopping and removing its containers"})
 	}
 	for _, st := range states {
 		if strings.HasPrefix(st.Project, "model-") {
@@ -303,12 +303,10 @@ func deploymentState(c *config.Cluster, cat *config.Catalog, d config.ModelDeplo
 	}
 	dv := oafd.DeploymentView{Name: d.Name, CatalogRef: d.CatalogRef, Profile: d.Profile, Nodes: nodes,
 		Placement: oafd.PlacementView{Node: d.Placement.Node, Group: d.Placement.Group}, Enabled: d.IsEnabled(),
-		GPUMemoryUtilization: d.GPUMemoryUtilization, MaxModelLen: d.MaxModelLen, Guardrails: append([]string{}, d.Guardrails...)}
+		GPUMemoryUtilization: d.GPUMemoryUtilization, MaxModelLen: d.MaxModelLen, Guardrails: append([]string{}, d.Guardrails...),
+		Adapters: oafd.AdapterViews(d)}
 	if m, ok := cat.Lookup(d.CatalogRef); ok {
-		dv.Task = "chat"
-		if m.IsEmbedding() {
-			dv.Task = "embedding"
-		}
+		dv.Task = m.Task()
 	}
 	if d.IsEnabled() {
 		modelPhase(&dv, sts, dl)

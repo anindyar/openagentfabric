@@ -25,10 +25,15 @@ type fakeHub struct {
 	lfs      map[string]bool
 	gets     atomic.Int32
 	failOnce atomic.Bool // the first file request breaks off halfway
+	token    string      // a gated repo: every request needs this bearer token
 }
 
 func (h *fakeHub) server(_ *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if h.token != "" && r.Header.Get("Authorization") != "Bearer "+h.token {
+			http.Error(w, "gated", http.StatusUnauthorized)
+			return
+		}
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/api/models/org/model/revision/abc123"):
 			type lfs struct {
@@ -183,4 +188,35 @@ func TestWeightsDiskCheck(t *testing.T) {
 	if !strings.Contains(st.GetError(), "not enough disk space") {
 		t.Fatalf("error: %q", st.GetError())
 	}
+}
+
+// A gated repo needs the token the control plane sends; the token is used
+// for the download and never written to the agent's resume state.
+func TestWeightsGatedToken(t *testing.T) {
+	hub := &fakeHub{files: map[string][]byte{"config.json": []byte(`{}`)}, token: "hf_secret"}
+	srv := hub.server(t)
+	defer srv.Close()
+	root := t.TempDir()
+	dir := filepath.Join(root, "models", "gated")
+	w := &Weights{StateDir: root, BaseURL: srv.URL, RetryDelay: time.Millisecond}
+	spec := &nodev1.WeightsSpec{ModelId: "gated", Dir: dir, Repo: "org/model", Revision: "abc123"}
+	if _, err := w.Start(spec); err != nil {
+		t.Fatal(err)
+	}
+	if st := waitState(t, w, dir, WeightsFailed); !strings.Contains(st.GetError(), "access token") {
+		t.Fatalf("without a token: %v", st)
+	}
+	spec.Token = "hf_secret"
+	w.remember(spec)
+	saved, _ := os.ReadFile(filepath.Join(root, "weights", "gated.json"))
+	if strings.Contains(string(saved), "hf_secret") || len(saved) == 0 {
+		t.Fatalf("token persisted: %s", saved)
+	}
+	if spec.GetToken() != "hf_secret" {
+		t.Fatal("remember changed the caller's spec")
+	}
+	if _, err := w.Start(spec); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, w, dir, WeightsComplete)
 }

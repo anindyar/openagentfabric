@@ -1607,6 +1607,28 @@ components:
       required:
       - name
       - nodes
+    Adapter:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Served model name of the adapter.
+        path:
+          type: string
+          description: Adapter directory on the deployment's nodes.
+        rank:
+          type: integer
+        entitlement:
+          type: string
+          description: Feature that must be granted for the adapter to be served.
+        guardrails:
+          type: array
+          description: Effective policies (the deployment's unless the adapter sets its own).
+          items:
+            type: string
+        served:
+          type: boolean
+          description: False while the deployment is disabled or the entitlement is not granted.
     Deployment:
       type: object
       properties:
@@ -1619,6 +1641,8 @@ components:
           enum:
           - chat
           - embedding
+          - speech-to-text
+          - text-to-speech
         placement:
           $ref: '#/components/schemas/Placement'
         profile:
@@ -1642,6 +1666,11 @@ components:
           type: array
           items:
             type: string
+        adapters:
+          type: array
+          description: LoRA adapters served by this deployment's vLLM (read-only; set in cluster.yaml).
+          items:
+            $ref: '#/components/schemas/Adapter'
         phase:
           type: string
           enum:
@@ -1818,6 +1847,8 @@ components:
           enum:
           - chat
           - embedding
+          - speech-to-text
+          - text-to-speech
         params_b:
           type: number
         active_params_b:

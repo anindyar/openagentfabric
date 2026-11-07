@@ -80,7 +80,7 @@
           "minimum": 1
         },
         "classes": {
-          "description": "Routing classes. They drive default routing: fast → `model: auto`, think → reasoning signals, medical → medical signals.",
+          "description": "Routing classes. They drive default routing: fast → `model: auto`, think → reasoning signals, medical → medical signals. embedding, speech-to-text and text-to-speech models are served by name only (/v1/embeddings, /v1/audio/transcriptions and /v1/audio/translations, /v1/audio/speech) and are never a chat route.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
@@ -91,7 +91,9 @@
               "medical",
               "code",
               "vision",
-              "embedding"
+              "embedding",
+              "speech-to-text",
+              "text-to-speech"
             ]
           }
         },
@@ -137,6 +139,19 @@
               "items": {
                 "type": "string"
               }
+            }
+          }
+        },
+        "bundled": {
+          "description": "Weights that ship inside the engine image (pinned by digest in bundle/versions.yaml), so nothing is downloaded. component names that engine.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "component"
+          ],
+          "properties": {
+            "component": {
+              "type": "string"
             }
           }
         },
@@ -218,9 +233,9 @@
           "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
         },
         "engine": {
-          "description": "The bundle component (bundle/versions.yaml) whose image serves this profile: `vllm` (upstream) or a pinned vLLM build such as `vllm-spark-b12x`.",
+          "description": "The bundle component (bundle/versions.yaml) whose image serves this profile: `vllm` (upstream), a pinned vLLM build such as `vllm-spark-b12x`, or another OpenAI-compatible server described by `server`.",
           "type": "string",
-          "pattern": "^vllm(-[a-z0-9-]+)?$",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
           "default": "vllm"
         },
         "nodes": {
@@ -266,8 +281,49 @@
         "container": {
           "$ref": "#/$defs/container"
         },
+        "server": {
+          "$ref": "#/$defs/server"
+        },
         "baseline": {
           "$ref": "#/$defs/baseline"
+        }
+      }
+    },
+    "server": {
+      "description": "The engine is an OpenAI-compatible server other than vLLM (e.g. a text-to-speech server). OAF runs its image as is, gives it its port, checks its health, and caps its memory at the deployment's share; no vLLM arguments are passed. Single node only.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "portEnv",
+        "health"
+      ],
+      "properties": {
+        "portEnv": {
+          "description": "Environment variable the server reads its listening port from.",
+          "type": "string",
+          "pattern": "^[A-Z_][A-Z0-9_]*$"
+        },
+        "hostEnv": {
+          "description": "Environment variable the server reads its listening address from (set to 0.0.0.0).",
+          "type": "string",
+          "pattern": "^[A-Z_][A-Z0-9_]*$"
+        },
+        "health": {
+          "description": "HTTP path that answers 200 when the server is ready.",
+          "type": "string",
+          "pattern": "^/"
+        },
+        "servedModel": {
+          "description": "The model name the server itself answers to; the gateway sends it upstream. Default: the deployment name.",
+          "type": "string"
+        },
+        "gpu": {
+          "description": "The server uses the GPU. Default false: it runs on the CPU (in the same unified memory).",
+          "type": "boolean"
+        },
+        "authenticates": {
+          "description": "The server checks the gateway's upstream API key. When false (the default), anything that reaches its port can use it, and `oaf validate` says so.",
+          "type": "boolean"
         }
       }
     },

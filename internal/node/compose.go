@@ -31,6 +31,12 @@ func (c Compose) Up(ctx context.Context, name, dir string) error {
 	return err
 }
 
+// Pull fetches the project's images without starting anything.
+func (c Compose) Pull(ctx context.Context, name, dir string) error {
+	_, err := c.Runner.Run(ctx, "docker", append(c.base(name, dir), "pull", "--quiet")...)
+	return err
+}
+
 // Recreate replaces the named services' containers, keeping their volumes.
 func (c Compose) Recreate(ctx context.Context, name, dir string, services []string) error {
 	args := append(c.base(name, dir), "up", "--detach", "--no-deps", "--force-recreate")

@@ -47,12 +47,16 @@ func (c *Cluster) ActiveRoutes(cat *Catalog, features map[string]bool) Routes {
 		if !d.IsEnabled() {
 			continue
 		}
-		if m, ok := cat.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
+		if m, ok := cat.Lookup(d.CatalogRef); ok && !m.IsChat() {
 			continue
 		}
 		chat[d.Name] = true
 		if firstChat == "" {
 			firstChat = d.Name
+		}
+		// A served adapter is a chat model of its own on the base's vLLM.
+		for _, a := range d.ServedAdapters(features) {
+			chat[a.Name] = true
 		}
 	}
 	rt := c.Spec.Routing
@@ -72,7 +76,7 @@ func (c *Cluster) ActiveRoutes(cat *Catalog, features map[string]bool) Routes {
 			continue
 		}
 		if !chat[rule.Target] {
-			out.Skipped = append(out.Skipped, fmt.Sprintf("rule %q: %q is not an enabled chat deployment", rule.Name, rule.Target))
+			out.Skipped = append(out.Skipped, fmt.Sprintf("rule %q: %q is not an enabled chat deployment or served adapter", rule.Name, rule.Target))
 			continue
 		}
 		var sigs []Signal

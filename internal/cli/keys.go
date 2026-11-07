@@ -153,6 +153,12 @@ func appEnv(f *stackFlags, creds keys.Credentials, host string) (string, error) 
 				fmt.Fprintf(&b, "AGENT_GATEWAY_EMBEDDING_DIMENSIONS=%d\n", dims)
 			}
 		}
+		if name := taskModel(c, cat, config.TaskSpeechToText); name != "" {
+			fmt.Fprintf(&b, "AGENT_GATEWAY_STT_MODEL=%s\n", name)
+		}
+		if name := taskModel(c, cat, config.TaskTextToSpeech); name != "" {
+			fmt.Fprintf(&b, "AGENT_GATEWAY_TTS_MODEL=%s\n", name)
+		}
 	}
 	b.WriteString(langfuseEnv(f, c, host))
 	return b.String(), nil
@@ -202,6 +208,16 @@ func embeddingModel(c *config.Cluster, cat *config.Catalog) (string, int) {
 	return "", 0
 }
 
+// taskModel is the first enabled deployment serving task (speech).
+func taskModel(c *config.Cluster, cat *config.Catalog, task string) string {
+	for _, d := range c.Spec.Models {
+		if m, ok := cat.Lookup(d.CatalogRef); ok && d.IsEnabled() && m.Task() == task {
+			return d.Name
+		}
+	}
+	return ""
+}
+
 func joinHostPort(host string, port int) string {
 	if strings.Contains(host, ":") {
 		host = "[" + host + "]"
@@ -229,7 +245,7 @@ func smallestContextWindow(c *config.Cluster, cat *config.Catalog) int {
 			continue
 		}
 		m, known := cat.Lookup(d.CatalogRef)
-		if known && m.IsEmbedding() {
+		if known && !m.IsChat() {
 			continue
 		}
 		w := d.MaxModelLen

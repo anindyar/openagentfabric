@@ -1,0 +1,117 @@
+# yaml-language-server: $schema=../schema/cluster.schema.json
+# Example: one GB10 serving a hospital app. Ornith answers general chat and
+# tool calls; Spetaar DDx (a LoRA adapter on gpt-oss-20b) answers differential
+# diagnosis; MedGemma answers other medical prompts and every request with an
+# image (the app names medgemma for those); bge-m3 serves embeddings.
+#
+# Memory on one GB10 (121.6 GiB visible), shares to be measured:
+#   ornith at 0.25        30.4 GiB  (weights 21.8; 64K context)
+#   gpt-oss-20b at 0.20   24.3 GiB  (weights ~13; the DDx adapter is 31 MB)
+#   medgemma at 0.32      38.9 GiB  (bf16 weights quantized to FP8 on load, ~27 GiB)
+#   bge-m3 at 0.03         3.6 GiB  (~6.5 GiB in all, mostly vLLM overhead)
+#   stt at 0.04            4.9 GiB  (Whisper large-v3-turbo, 1.6 GB of weights)
+#   kokoro at 0.02            2.4 GiB  (a cap: Kokoro runs on the CPU)
+#   vLLM host processes  ~4.6 GiB each (outside --gpu-memory-utilization)
+# The shares sum to 0.86, under the 0.90 limit; with five vLLMs' overhead
+# `oaf validate` warns that little is left for the OS and the app itself.
+# stt runs on vllm-audio, built and pushed once (deploy/engines/vllm-audio):
+# until then it is not started.
+#
+# Spetaar DDx is entitled: it is served, and the differential rule is
+# rendered, only while an entitlement grants the ddx feature. Until then
+# `model: auto` sends those prompts to the fast model.
+apiVersion: oaf/v1alpha1
+kind: Cluster
+metadata:
+  name: hospital
+spec:
+  bundle:
+    version: 0.1.1
+  nodes:
+    - name: spark-1
+      address: 192.168.1.11
+      roles: [control, gateway, observability, inference]
+  fabric:
+    topology: single
+  models:
+    - name: ornith
+      catalogRef: ornith-1.5-35b-a3b-nvfp4
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.25
+      maxModelLen: 65536
+    - name: gpt-oss-20b
+      catalogRef: gpt-oss-20b
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.20
+      maxModelLen: 8192
+      adapters:
+        # PEFT LoRA (r=16, alpha 32, q/k/v/o_proj). Copied to this directory
+        # on the box; OAF mounts it read-only and does not fetch it.
+        - name: spetaar-ddx
+          path: /var/lib/oaf/adapters/spetaar-ddx
+          rank: 16
+          entitlement: ddx
+    - name: medgemma
+      catalogRef: medgemma-27b-it
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.32
+      maxModelLen: 8192
+    - name: bge-m3
+      catalogRef: bge-m3
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.03
+      maxModelLen: 8192
+    # Speech, by name through the gateway: dictation (stt) and read-aloud (kokoro: Kokoro answers only to that name).
+    - name: stt
+      catalogRef: whisper-large-v3-turbo
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.04
+    - name: kokoro
+      catalogRef: kokoro-82m
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.02
+  routing:
+    mode: active
+    gateway:
+      port: 4000
+    keys:
+      - name: hms
+        secretRef: gateway-key-hms
+        models: [auto, spetaar-ddx, medgemma, bge-m3, stt, kokoro]
+    defaults:
+      fast: ornith
+      fallback: ornith
+    rules:
+      - name: differential
+        match:
+          signals:
+            - type: keyword
+              keywords: [differential diagnosis, differential, ddx, possible diagnoses, rule out]
+        target: spetaar-ddx
+        requires: { entitlement: ddx }
+      - name: medical
+        match:
+          signals:
+            - type: keyword
+              keywords: [diagnosis, symptoms, patient, clinical, medication, dosage, lab results, radiology]
+        target: medgemma
+  observability:
+    langfuse: { enabled: true }
+    metrics: { retention: 15d }
+  licenseAcceptances:
+    - subject: image/vllm-spark-b12x
+      url: https://docs.nvidia.com/cuda/eula/index.html
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-11-07T12:00:00Z
+    - subject: image/vllm
+      url: https://docs.nvidia.com/cuda/eula/index.html
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-11-07T12:00:00Z
+    - subject: image/vllm-audio
+      url: https://docs.nvidia.com/cuda/eula/index.html
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-11-07T12:00:00Z
+    - subject: model/medgemma-27b-it
+      url: https://huggingface.co/google/medgemma-27b-it
+      acceptedBy: admin@example.com
+      acceptedAt: 2026-11-07T12:00:00Z

@@ -382,7 +382,7 @@ func WeightsSpec(w *render.Weights) *nodev1.WeightsSpec {
 	if w == nil {
 		return nil
 	}
-	return &nodev1.WeightsSpec{ModelId: w.ModelID, Dir: w.Dir, Repo: w.Repo, Revision: w.Revision, Include: w.Include}
+	return &nodev1.WeightsSpec{ModelId: w.ModelID, Dir: w.Dir, Repo: w.Repo, Revision: w.Revision, Include: w.Include, Token: w.Token}
 }
 
 // applyOrder puts dependencies first: metrics and stores before the models,

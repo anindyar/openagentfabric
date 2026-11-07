@@ -43,7 +43,8 @@ Running it again returns the same key. `--models a,b` limits what the key may us
 
 Any OpenAI SDK works. Set the base URL to `AGENT_GATEWAY_URL` and the API key to `AGENT_GATEWAY_API_KEY`.
 
-- `model` is a deployment name from the cluster (list them with `GET /v1/models` on the gateway).
+- `model` is a deployment name from the cluster, or the name of a LoRA adapter served on one (list them with
+  `GET /v1/models` on the gateway).
 - `model: auto` lets OAF's router choose: simple requests go to the fast model, hard ones to the large model.
   Explicit model names are never re-routed. Use `auto` unless you need a specific model.
 - A model that fails its health check is replaced by the cluster's fallback model for `auto` requests, so check which

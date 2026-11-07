@@ -172,10 +172,62 @@ type ModelDeployment struct {
 	Guardrails           []string          `yaml:"guardrails,omitempty"`
 	Args                 []string          `yaml:"args,omitempty"`
 	Env                  map[string]string `yaml:"env,omitempty"`
+	// Adapters are LoRA adapters served by the same vLLM, each under its own
+	// model name (docs/user-guide.md, Models: LoRA adapters).
+	Adapters []Adapter `yaml:"adapters,omitempty"`
 }
 
 // IsEnabled applies the schema default (true).
 func (m ModelDeployment) IsEnabled() bool { return m.Enabled == nil || *m.Enabled }
+
+// Adapter is a PEFT LoRA adapter for a deployment's base model. vLLM loads it
+// next to the base weights (--enable-lora, --lora-modules), so it costs no
+// extra deployment, port or memory share: a request naming the adapter is
+// answered by the base model with the adapter applied.
+type Adapter struct {
+	// Name is the served model name: clients, routing rules and key model
+	// lists use it like a deployment name.
+	Name string `yaml:"name"`
+	// Path is an absolute directory on every node of the deployment's
+	// placement, holding adapter_config.json and adapter_model.safetensors.
+	// It is mounted read-only; OAF does not fetch it.
+	Path string `yaml:"path"`
+	// Rank is the adapter's LoRA rank (r in adapter_config.json). vLLM
+	// sizes its LoRA buffers from the largest rank (--max-lora-rank), and
+	// the adapter lives on the inference node, so cluster.yaml states it;
+	// `oaf validate` compares it with adapter_config.json when the file is
+	// readable where it runs.
+	Rank int `yaml:"rank"`
+	// Entitlement: the adapter is served only while a valid entitlement
+	// grants this feature.
+	Entitlement string `yaml:"entitlement,omitempty"`
+	// Guardrails replace the deployment's for requests that name the
+	// adapter; unset, the adapter has the deployment's guardrails.
+	Guardrails []string `yaml:"guardrails,omitempty"`
+}
+
+// ServedAdapters are the adapters vLLM loads and the gateway serves: those
+// of an enabled deployment whose entitlement (if any) is granted.
+func (m ModelDeployment) ServedAdapters(features map[string]bool) []Adapter {
+	if !m.IsEnabled() {
+		return nil
+	}
+	var out []Adapter
+	for _, a := range m.Adapters {
+		if a.Entitlement == "" || features[a.Entitlement] {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// AdapterGuardrails are the guardrail policies of requests naming a.
+func (m ModelDeployment) AdapterGuardrails(a Adapter) []string {
+	if a.Guardrails != nil {
+		return a.Guardrails
+	}
+	return m.Guardrails
+}
 
 // Placement is exactly one of Node or Group.
 type Placement struct {
@@ -272,7 +324,7 @@ type WebhookGuard struct {
 }
 
 // GuardrailBuiltins are the built-in detectors of the pinned agentgateway
-// (v1.6.0 llm.models[].guardrails regex builtin enum).
+// (llm.models[].guardrails regex builtin enum; the same in v1.6.0 and v1.7.0).
 var GuardrailBuiltins = []string{"ssn", "creditCard", "phoneNumber", "email", "caSin"}
 
 // Gateway listener settings.
@@ -439,8 +491,38 @@ type CatalogModel struct {
 	Profiles            []ServingProf `yaml:"profiles"`
 }
 
-// ClassEmbedding marks a model that serves /v1/embeddings, not chat.
-const ClassEmbedding = "embedding"
+// Classes of models that are served by name for one task and never answer
+// chat requests (model: auto, routing rules and defaults refuse them).
+const (
+	// ClassEmbedding serves /v1/embeddings.
+	ClassEmbedding = "embedding"
+	// ClassSpeechToText serves /v1/audio/transcriptions and /v1/audio/translations.
+	ClassSpeechToText = "speech-to-text"
+	// ClassTextToSpeech serves /v1/audio/speech.
+	ClassTextToSpeech = "text-to-speech"
+)
+
+// Tasks a model serves (CatalogModel.Task).
+const (
+	TaskChat         = "chat"
+	TaskEmbedding    = ClassEmbedding
+	TaskSpeechToText = ClassSpeechToText
+	TaskTextToSpeech = ClassTextToSpeech
+)
+
+// Task is what the model serves: chat, or one of the non-chat classes.
+func (m *CatalogModel) Task() string {
+	for _, c := range []string{ClassEmbedding, ClassSpeechToText, ClassTextToSpeech} {
+		if m.HasClass(c) {
+			return c
+		}
+	}
+	return TaskChat
+}
+
+// IsChat reports whether the model answers chat requests (and so may be a
+// routing target).
+func (m *CatalogModel) IsChat() bool { return m.Task() == TaskChat }
 
 // HasClass reports whether the model is in the routing class.
 func (m *CatalogModel) HasClass(class string) bool {
@@ -481,10 +563,17 @@ type Entitlement struct {
 	Feature string `yaml:"feature"`
 }
 
-// ModelSource is exactly one of HuggingFace or Entitled.
+// ModelSource is exactly one of HuggingFace, Entitled or Bundled.
 type ModelSource struct {
 	HuggingFace *HFSource       `yaml:"huggingface,omitempty"`
 	Entitled    *EntitledSource `yaml:"entitled,omitempty"`
+	Bundled     *BundledSource  `yaml:"bundled,omitempty"`
+}
+
+// BundledSource means the weights ship inside the engine image, pinned by
+// digest, so nothing is downloaded.
+type BundledSource struct {
+	Component string `yaml:"component"`
 }
 
 // HFSource pins a Hugging Face repo at a commit.
@@ -522,7 +611,32 @@ type ServingProf struct {
 	Args                 []string          `yaml:"args,omitempty"`
 	Env                  map[string]string `yaml:"env,omitempty"`
 	Container            *Container        `yaml:"container,omitempty"`
-	Baseline             *Baseline         `yaml:"baseline,omitempty"`
+	// Server: the engine is an OpenAI-compatible server other than vLLM.
+	Server   *Server   `yaml:"server,omitempty"`
+	Baseline *Baseline `yaml:"baseline,omitempty"`
+}
+
+// Server describes an engine that is not vLLM: OAF runs its image as is,
+// passes it its port, checks its health and caps its memory.
+type Server struct {
+	PortEnv       string `yaml:"portEnv"`
+	HostEnv       string `yaml:"hostEnv,omitempty"`
+	Health        string `yaml:"health"`
+	ServedModel   string `yaml:"servedModel,omitempty"`
+	GPU           bool   `yaml:"gpu,omitempty"`
+	Authenticates bool   `yaml:"authenticates,omitempty"`
+}
+
+// IsVLLM reports whether vLLM serves the profile.
+func (p ServingProf) IsVLLM() bool { return p.Server == nil }
+
+// UpstreamModel is the model name the gateway sends to the engine for
+// deployment name: vLLM serves the deployment's name.
+func (p ServingProf) UpstreamModel(name string) string {
+	if p.Server != nil && p.Server.ServedModel != "" {
+		return p.Server.ServedModel
+	}
+	return name
 }
 
 // EngineComponent is the bundle component whose image serves the profile.

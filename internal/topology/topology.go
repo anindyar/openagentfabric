@@ -110,12 +110,12 @@ func usedFraction(c *config.Cluster, node string) float64 {
 }
 
 // fits lists catalog models with a profile for n nodes that fit in free
-// (a fraction of each node's memory), largest first. Entitled and embedding
-// models are left out: they are added deliberately, not recommended.
+// (a fraction of each node's memory), largest first. Entitled models and
+// those that do not chat (embedding, speech) are left out: they are added deliberately, not recommended.
 func fits(cat *config.Catalog, n int, free float64, where string) []ModelFit {
 	var out []ModelFit
 	for _, m := range cat.Models {
-		if m.Entitlement != nil || m.IsEmbedding() {
+		if m.Entitlement != nil || !m.IsChat() {
 			continue
 		}
 		for _, p := range m.Profiles {

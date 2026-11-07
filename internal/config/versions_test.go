@@ -48,7 +48,7 @@ func TestVLLMNeedsAcceptance(t *testing.T) {
 	}
 	for _, c := range v.Components {
 		got := c.License.NeedsAcceptance()
-		if want := c.Name == "vllm" || c.Name == "vllm-spark-b12x" || c.Name == "vllm-glm53"; got != want {
+		if want := c.Name == "vllm" || c.Name == "vllm-spark-b12x" || c.Name == "vllm-glm53" || c.Name == "vllm-audio"; got != want {
 			t.Errorf("%s: NeedsAcceptance = %v, want %v", c.Name, got, want)
 		}
 	}
@@ -57,7 +57,7 @@ func TestVLLMNeedsAcceptance(t *testing.T) {
 func TestVersionsRejections(t *testing.T) {
 	base := string(bundle.VersionsYAML)
 	schemaCases := []struct{ name, old, new string }{
-		{"tag without digest", "agentgateway:v1.6.0@sha256:9d3e6044ddcdc0878b1787f77bd401252b95e22684203fb5e874c4c42d2ed90c", "agentgateway:v1.6.0"},
+		{"tag without digest", "agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b", "agentgateway:v1.7.0"},
 		{"no arm64", "platforms: [linux/arm64, linux/amd64]\n    upstream: { repo: agentgateway", "platforms: [linux/amd64]\n    upstream: { repo: agentgateway"},
 		{"bad licence hash", "sha256: 3b1ee5b1e14fda40515c18ec2f0796d632e65a20b2aca8f017c654bc26ca77bd", "sha256: abc"},
 	}

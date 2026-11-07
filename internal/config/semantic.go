@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"net"
+	"path"
 	"regexp"
 	"slices"
 	"sort"
@@ -97,6 +98,7 @@ func Validate(c *Cluster, cat *Catalog, opts Options) Report {
 	k.fabric()
 	k.groupsCheck()
 	k.models()
+	k.adapters()
 	k.routing()
 	k.guardrails()
 	k.providers()
@@ -164,6 +166,12 @@ func (k *checker) catalog() {
 			if pr.TensorParallel*pr.PP() != pr.Nodes {
 				k.errorf(pp, "tensorParallel × pipelineParallel = %d, but nodes = %d (one GPU per GB10 node)",
 					pr.TensorParallel*pr.PP(), pr.Nodes)
+			}
+			if pr.Server != nil && pr.Nodes != 1 {
+				k.errorf(pp, "a server engine (%s) runs on one node", pr.EngineComponent())
+			}
+			if b := m.Source.Bundled; b != nil && b.Component != pr.EngineComponent() {
+				k.errorf(pp+".engine", "the weights are bundled in %s, but this profile runs %s", b.Component, pr.EngineComponent())
 			}
 		}
 	}
@@ -470,8 +478,16 @@ func (k *checker) models() {
 			k.errorf(p+".catalogRef", "no catalog entry %q", d.CatalogRef)
 			continue
 		}
-		if _, ok := k.profileFor(d, model, len(placed), p); !ok {
+		prof, ok := k.profileFor(d, model, len(placed), p)
+		if !ok {
 			continue
+		}
+		// The gateway rewrites the model name only on chat requests: an audio or
+		// embedding request reaches the engine with the deployment's name, so an
+		// engine that serves a fixed name must be deployed under that name.
+		if up := prof.UpstreamModel(d.Name); model.Task() != TaskChat && up != d.Name {
+			k.errorf(p+".name", "%s serves the model name %q and the gateway passes %s requests through unchanged; name this deployment %q",
+				prof.EngineComponent(), up, model.Task(), up)
 		}
 		if model.Entitlement != nil && !k.opts.Features[model.Entitlement.Feature] {
 			k.errorf(p+".catalogRef", "model %q requires the %q entitlement, which is not present", model.ID, model.Entitlement.Feature)
@@ -483,9 +499,15 @@ func (k *checker) models() {
 		if !d.IsEnabled() {
 			continue
 		}
+		if prof.Server != nil && !prof.Server.Authenticates {
+			k.warnf(p, "%s (%s) has no authentication of its own: anything that reaches port %d on %s can use it without a gateway key; keep that port off untrusted networks",
+				d.Name, prof.EngineComponent(), k.c.ModelPort(i), strings.Join(placed, ", "))
+		}
 		for r, n := range placed {
 			memory[n] += d.GPUMemoryUtilization
-			instances[n]++
+			if prof.IsVLLM() {
+				instances[n]++ // a server engine's memory is capped at its share
+			}
 			if r == 0 {
 				reserve(n, k.c.ModelPort(i), fmt.Sprintf("model %q", d.Name), p+".port")
 				if len(placed) > 1 {
@@ -511,6 +533,43 @@ func (k *checker) models() {
 		if total := memory[n] + float64(instances[n])*VLLMInstanceOverhead; total > MaxNodeMemoryFraction+1e-9 {
 			k.warnf("spec.models", "node %q: with about %.1f GiB of vLLM overhead per model its deployments need %.2f of unified memory, over the %.2f limit; little is left for the OS and other apps",
 				n, VLLMInstanceOverhead*GB10MemoryGiB, total, MaxNodeMemoryFraction)
+		}
+	}
+}
+
+// adapters: LoRA adapters are served under their own names next to the
+// deployments, on the base model's vLLM.
+func (k *checker) adapters() {
+	taken := map[string]string{}
+	for _, d := range k.c.Spec.Models {
+		taken[d.Name] = "model deployment " + d.Name
+	}
+	for i, d := range k.c.Spec.Models {
+		if len(d.Adapters) == 0 {
+			continue
+		}
+		p := fmt.Sprintf("spec.models[%d]", i)
+		if m, ok := k.cat.Lookup(d.CatalogRef); ok && !m.IsChat() {
+			k.errorf(p+".adapters", "%q is %s model; LoRA adapters are served on chat models only", d.Name, withArticle(m.Task()))
+		}
+		for _, a := range d.Args {
+			if a == "--lora-modules" || strings.HasPrefix(a, "--lora-modules=") {
+				k.errorf(p+".args", "--lora-modules is rendered from adapters; list the adapter there instead")
+			}
+		}
+		for j, a := range d.Adapters {
+			ap := fmt.Sprintf("%s.adapters[%d]", p, j)
+			if owner, dup := taken[a.Name]; dup {
+				k.errorf(ap+".name", "model name %q is already used by %s", a.Name, owner)
+			} else {
+				taken[a.Name] = fmt.Sprintf("adapter %s on %s", a.Name, d.Name)
+			}
+			if !path.IsAbs(a.Path) || path.Clean(a.Path) != a.Path {
+				k.errorf(ap+".path", "%q must be an absolute, clean directory on the inference node", a.Path)
+			}
+			if a.Entitlement != "" && d.IsEnabled() && !k.opts.Features[a.Entitlement] {
+				k.warnf(ap, "adapter %q is not served: entitlement %q is not present", a.Name, a.Entitlement)
+			}
 		}
 	}
 }
@@ -556,17 +615,25 @@ func (k *checker) profileFor(d ModelDeployment, m *CatalogModel, nodes int, path
 func (k *checker) routing() {
 	r := k.c.Spec.Routing
 	served := map[string]bool{}
-	embedding := map[string]bool{} // embedding models are served, but never a chat route
+	nonChat := map[string]string{}    // embedding and speech models are served, but never a chat route
+	unentitled := map[string]string{} // adapters waiting for an entitlement -> feature
 	chatModels := 0
 	for _, d := range k.c.Spec.Models {
 		if !d.IsEnabled() {
 			continue
 		}
 		served[d.Name] = true
-		if m, ok := k.cat.Lookup(d.CatalogRef); ok && m.IsEmbedding() {
-			embedding[d.Name] = true
+		if m, ok := k.cat.Lookup(d.CatalogRef); ok && !m.IsChat() {
+			nonChat[d.Name] = m.Task()
 		} else {
 			chatModels++
+		}
+		for _, a := range d.Adapters {
+			unentitled[a.Name] = a.Entitlement
+		}
+		for _, a := range d.ServedAdapters(k.opts.Features) {
+			served[a.Name] = true
+			delete(unentitled, a.Name)
 		}
 	}
 	external := map[string]bool{}
@@ -579,10 +646,12 @@ func (k *checker) routing() {
 		switch {
 		case external[name] && strings.HasPrefix(path, "spec.routing.rules"):
 			// A rule may send matching requests to an external model.
+		case unentitled[name] != "":
+			k.errorf(path, "adapter %q is not served: entitlement %q is not present", name, unentitled[name])
 		case !served[name]:
 			k.errorf(path, "%q is not an enabled deployment", name)
-		case embedding[name]:
-			k.errorf(path, "%q is an embedding model; it cannot answer chat requests", name)
+		case nonChat[name] != "":
+			k.errorf(path, "%q is %s model; it cannot answer chat requests", name, withArticle(nonChat[name]))
 		}
 	}
 
@@ -607,6 +676,8 @@ func (k *checker) routing() {
 		switch {
 		case gated && !k.opts.Features[rule.Requires.Entitlement]:
 			k.warnf(p, "rule %q is inactive: entitlement %q is not present; matching requests go to the default model", rule.Name, rule.Requires.Entitlement)
+		case unentitled[rule.Target] != "":
+			k.warnf(p+".target", "rule %q is inactive: adapter %q needs entitlement %q, which is not present; matching requests go to the default model", rule.Name, rule.Target, unentitled[rule.Target])
 		case !served[rule.Target] && gated:
 			k.warnf(p+".target", "rule %q is inactive: %q is not deployed", rule.Name, rule.Target)
 		default:
@@ -627,7 +698,7 @@ func (k *checker) routing() {
 
 	for i, key := range r.Keys {
 		for j, m := range key.Models {
-			if m != "auto" && !served[m] && !external[m] {
+			if m != "auto" && !served[m] && !external[m] && unentitled[m] == "" {
 				k.warnf(fmt.Sprintf("spec.routing.keys[%d].models[%d]", i, j), "%q is not an enabled deployment", m)
 			}
 		}
@@ -699,6 +770,13 @@ func (k *checker) guardrails() {
 				k.errorf(fmt.Sprintf("spec.models[%d].guardrails[%d]", i, j), "no guardrail policy %q in spec.routing.guardrails", name)
 			}
 		}
+		for a, ad := range d.Adapters {
+			for j, name := range ad.Guardrails {
+				if !names[name] {
+					k.errorf(fmt.Sprintf("spec.models[%d].adapters[%d].guardrails[%d]", i, a, j), "no guardrail policy %q in spec.routing.guardrails", name)
+				}
+			}
+		}
 	}
 }
 
@@ -711,6 +789,9 @@ func (k *checker) providers() {
 	taken := map[string]string{"auto": "vSR routing"}
 	for _, d := range k.c.Spec.Models {
 		taken[d.Name] = "model deployment " + d.Name
+		for _, a := range d.Adapters {
+			taken[a.Name] = fmt.Sprintf("adapter %s on %s", a.Name, d.Name)
+		}
 	}
 	names := map[string]bool{}
 	for i, pr := range r.Providers {
@@ -773,4 +854,12 @@ func containsAny(s string, subs ...string) bool {
 		}
 	}
 	return false
+}
+
+// withArticle is "an embedding", "a speech-to-text".
+func withArticle(s string) string {
+	if s != "" && strings.ContainsRune("aeiou", rune(s[0])) {
+		return "an " + s
+	}
+	return "a " + s
 }

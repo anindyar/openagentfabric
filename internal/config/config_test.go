@@ -34,7 +34,7 @@ func mustCatalog(t *testing.T) *Catalog {
 
 func TestExamplesAreValid(t *testing.T) {
 	cat := mustCatalog(t)
-	for _, path := range []string{pairExample, triangleExample, ppsExample} {
+	for _, path := range []string{pairExample, triangleExample, ppsExample, hospitalExample} {
 		t.Run(path, func(t *testing.T) {
 			r := Validate(mustCluster(t, path), cat, Options{})
 			if !r.OK() {

@@ -51,7 +51,7 @@ func (s *Server) acceptLicenses(w http.ResponseWriter, r *http.Request) {
 	}
 	now := s.cfg.Now().UTC().Format(time.RFC3339)
 	accept := func(cur []byte) ([]byte, []string, error) {
-		return withAcceptances(cur, req.Subjects, urls, by, now)
+		return config.WithAcceptances(cur, req.Subjects, urls, by, now)
 	}
 	doc, added, err := accept(base)
 	if err != nil {
@@ -68,34 +68,4 @@ func (s *Server) acceptLicenses(w http.ResponseWriter, r *http.Request) {
 		return d, err
 	}
 	writeJSON(w, code, p)
-}
-
-// withAcceptances appends the subjects not yet accepted in cur to
-// spec.licenseAcceptances.
-func withAcceptances(cur []byte, subjects []string, urls map[string]string, by, at string) ([]byte, []string, error) {
-	c, err := config.ParseCluster(cur)
-	if err != nil {
-		return nil, nil, err
-	}
-	have := map[string]bool{}
-	for _, a := range c.Spec.LicenseAcceptances {
-		have[a.Subject] = true
-	}
-	ed, err := config.NewEditor(cur)
-	if err != nil {
-		return nil, nil, err
-	}
-	var added []string
-	for _, sub := range subjects {
-		if have[sub] {
-			continue
-		}
-		have[sub] = true
-		if err := ed.Append(config.LicenseAcceptance{Subject: sub, URL: urls[sub], AcceptedBy: by, AcceptedAt: at}, "licenseAcceptances"); err != nil {
-			return nil, nil, err
-		}
-		added = append(added, sub)
-	}
-	doc, err := ed.Bytes()
-	return doc, added, err
 }

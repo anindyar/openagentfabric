@@ -493,6 +493,51 @@
           "items": {
             "$ref": "#/$defs/name"
           }
+        },
+        "adapters": {
+          "description": "LoRA adapters served by this deployment's vLLM, each under its own model name. Not served while the deployment is disabled.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/adapter"
+          },
+          "default": []
+        }
+      }
+    },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "path",
+        "rank"
+      ],
+      "properties": {
+        "name": {
+          "description": "Served model name of the adapter. Clients, routing rules and key model lists use it like a deployment name; it must be unique among deployments, adapters and provider models.",
+          "$ref": "#/$defs/servedModelName"
+        },
+        "path": {
+          "description": "Absolute directory on every node of the deployment's placement holding the PEFT adapter (adapter_config.json and adapter_model.safetensors). Mounted read-only; OAF does not fetch it.",
+          "type": "string",
+          "pattern": "^/"
+        },
+        "rank": {
+          "description": "LoRA rank (r in adapter_config.json). vLLM's --max-lora-rank is the largest served rank, rounded up to a size vLLM supports.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        },
+        "entitlement": {
+          "description": "If set, the adapter is served only while a valid entitlement grants this feature (e.g. ddx).",
+          "type": "string"
+        },
+        "guardrails": {
+          "description": "Guardrail policies for requests that name the adapter. Unset: the deployment's guardrails.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/name"
+          }
         }
       }
     },

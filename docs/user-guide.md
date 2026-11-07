@@ -714,11 +714,18 @@ Each entry under `spec.models` is one served model:
       gpuMemoryUtilization: 0.55
 ```
 
-- **Weights (until M2):** copy the Hugging Face snapshot of the pinned revision to
-  `/var/lib/oaf/models/<catalog id>/` on **every** node of the placement. On a pair, download once
-  and copy it over the fabric:
-  `rsync -a /var/lib/oaf/models/gpt-oss-120b/ 192.168.31.1:/var/lib/oaf/models/gpt-oss-120b/`.
-  vLLM runs with `HF_HUB_OFFLINE=1` and never downloads anything itself.
+- **Weights:** `oaf apply` has the agent on each node of the placement download the catalog's pinned
+  revision into `/var/lib/oaf/models/<catalog id>/` (every file checked, resumable) and start the
+  model once they are complete; `oaf status` shows the progress. oafd starts the download as soon as
+  a model is chosen in the console. Weights already there (with the `.oaf-complete` marker, or copied
+  by hand, e.g. over the fabric with `rsync`) are not fetched again. vLLM runs with
+  `HF_HUB_OFFLINE=1` and never downloads anything itself.
+- **Gated models** (MedGemma) need a Hugging Face access token from an account that accepted the
+  model's terms on Hugging Face. Give it once, on the control node:
+  `printf %s "$HF_TOKEN" | sudo oaf secrets set hf-token` (or have `HF_TOKEN` in the environment of
+  `oaf apply`, which wins). It is sent to the agents with gated downloads only and never written to
+  disk on the nodes; `oaf apply` warns when a gated model has none, and its download fails with
+  "gated models need an access token" until it does.
 - **Memory shares:** vLLM takes about 90% of unified memory unless told otherwise, so every
   deployment states its share. The shares on one node must add up to 0.90 or less, which leaves room
   for the OS and the OAF services. Each vLLM instance also uses about 4.6 GiB outside its share
@@ -737,6 +744,7 @@ Each entry under `spec.models` is one served model:
   `AGENT_GATEWAY_EMBEDDING_DIMENSIONS`. To add it to an existing cluster.yaml (comments kept,
   validated before it is written): `sudo oaf models add bge-m3 --catalog-ref bge-m3`, then
   `sudo oaf apply`; the bootstrap does this itself when enough memory is free.
+- **Speech:** see [Speech](#speech) below.
 - **Licences:** components or models whose terms are not plain open source must be accepted first. Read
   the page that `oaf validate` names and record it under `spec.licenseAcceptances`. The vLLM image
   ships NVIDIA's CUDA libraries, so it needs `image/vllm`:
@@ -757,8 +765,153 @@ Each entry under `spec.models` is one served model:
 - **Disabling** a model (`enabled: false`) and running `oaf apply` stops and removes it on every node.
   Its weights stay on disk.
 
-*(planned, M2: `oaf models search/pull` downloads from Hugging Face, fans out over the fabric, checks
-disk and checksums, and benchmarks each model against its catalog baseline.)*
+### Speech
+
+Speech-to-text and text-to-speech models are catalog models like the others, served by name through
+the gateway with the same keys and Langfuse traces (the gateway passes audio through as is, so
+guardrail policies do not apply to it), and never a chat route (`model: auto`, routing defaults and
+rules refuse them, like embeddings).
+
+| Catalog id | Class | Engine | Serves | Upstream model name |
+|---|---|---|---|---|
+| `whisper-large-v3-turbo` | `speech-to-text` | `vllm-audio` (GPU) | `/v1/audio/transcriptions`, `/v1/audio/translations` (to English) | the deployment name |
+| `kokoro-82m` | `text-to-speech` | `kokoro-fastapi` (CPU) | `/v1/audio/speech` | `kokoro`: the gateway passes speech requests through unchanged, so the deployment must be named `kokoro` (`oaf validate` says so) |
+
+```sh
+sudo oaf models add stt --catalog-ref whisper-large-v3-turbo      # share 0.04, to be measured
+sudo oaf models add kokoro --catalog-ref kokoro-82m                  # share 0.02 (a memory cap), to be measured
+sudo oaf licenses accept image/vllm-audio --by you@example.com   # NVIDIA CUDA terms, after reading them
+docker build -t vllm-audio:0.31.0 deploy/engines/vllm-audio       # once per box: see its README
+sudo oaf images push vllm-audio:0.31.0 --component vllm-audio
+sudo oaf apply
+```
+
+- **Whisper** runs on vLLM. vLLM's published image lacks the audio libraries Whisper needs, so it runs
+  on `vllm-audio`: that image plus vLLM's `audio` extra, built once on the box from
+  `deploy/engines/vllm-audio` and pushed to the control node's registry. Until it is pushed the
+  deployment is not started and `oaf apply` says so. Its weights (1.6 GB) download like any model's.
+- **Kokoro** runs in Kokoro-FastAPI's CPU image (82M parameters; the server's GPU build has no kernels
+  for GB10). Its weights and voices are inside the pinned image, so nothing is downloaded. The share is
+  a memory cap on its container, not a vLLM setting. Voices: English (US `af_*`/`am_*`, UK `bf_*`/`bm_*`),
+  Spanish, French, Hindi, Italian, Japanese, Portuguese, Mandarin; OpenAI voice names (`alloy`, `nova`,
+  ...) map to them. There is no Arabic voice.
+- **Kokoro has no authentication of its own**: the gateway's keys protect the gateway, not the server's
+  own port (`oaf validate` names it). Keep that port off untrusted networks.
+- `oaf keys issue` passes the names to apps as `AGENT_GATEWAY_STT_MODEL` and `AGENT_GATEWAY_TTS_MODEL`.
+- Memory: Whisper is one more vLLM, so it costs its share plus vLLM's ~4.6 GiB of fixed overhead.
+
+Dictation (multipart, as the OpenAI SDK's `audio.transcriptions.create` sends it):
+
+```sh
+curl http://<gateway>:4000/v1/audio/transcriptions -H "Authorization: Bearer $KEY" \
+  -F model=stt -F file=@note.wav -F language=en -F response_format=json
+# {"text": "..."}
+curl http://<gateway>:4000/v1/audio/translations -H "Authorization: Bearer $KEY" \
+  -F model=stt -F file=@arabic-note.wav     # English text from any supported language
+```
+
+Read-aloud (JSON in, audio out):
+
+```sh
+curl http://<gateway>:4000/v1/audio/speech -H "Authorization: Bearer $KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"kokoro","input":"The patient is stable.","voice":"af_heart","response_format":"mp3"}' \
+  -o reply.mp3
+```
+
+The gateway picks the deployment from `model` (the multipart field for transcriptions and
+translations, the JSON field for speech) and rewrites it to the name the engine answers to. This needs
+agentgateway v1.7.0 or later, which the bundle pins: v1.6.0 routed `/v1/audio/transcriptions` only.
+
+### LoRA adapters
+
+A fine-tune shipped as a PEFT LoRA adapter (a few MB to a few hundred MB) is not a model of its own:
+it is listed under the deployment of its base model and served by the same vLLM, under its own name.
+It takes no port, no memory share and no extra vLLM overhead.
+
+```yaml
+  models:
+    - name: gpt-oss-20b
+      catalogRef: gpt-oss-20b
+      placement: { node: spark-1 }
+      gpuMemoryUtilization: 0.20
+      maxModelLen: 8192
+      adapters:
+        - name: spetaar-ddx                         # the name clients and rules use
+          path: /var/lib/oaf/adapters/spetaar-ddx   # adapter_config.json + adapter_model.safetensors
+          rank: 16                                  # r in adapter_config.json
+          entitlement: ddx                          # optional: served only while entitled
+          guardrails: [phi]                         # optional: default is the deployment's
+```
+
+- **Files:** copy the adapter directory to `path` on **every** node of the placement. OAF mounts it
+  read-only (`/adapters/<name>` in the container) and never downloads it. `oaf validate` reads
+  `adapter_config.json` when the directory is on the host it runs on: a rank smaller than the
+  adapter's `r` is an error (vLLM would refuse it), as is a directory with no adapter weights; an
+  adapter trained on another base model is a warning.
+- **Rank:** vLLM sizes its LoRA buffers for the largest rank it may load, so `rank` is required.
+  OAF passes the largest served rank to `--max-lora-rank`, rounded up to a size vLLM accepts (1, 8,
+  16, 32, 64, 128, 256, 320, 512), adds `--enable-lora`, `--max-loras` when there are several, and
+  `--lora-modules`. Flags the catalog profile or the deployment's `args` already set are kept; do not
+  put `--lora-modules` in `args`.
+- **Names:** an adapter's name is a model name like any other: it must be unique among deployments,
+  adapters and external provider models. `model: spetaar-ddx` reaches the adapter;
+  `model: gpt-oss-20b` still reaches the base model. App keys can list it under `--models`.
+- **Routing:** rules, `defaults.fast` and `defaults.fallback` may target an adapter; vSR sees it as a
+  model of its own, and the fallback rules are unchanged (an adapter shares its base's health).
+- **When it is served:** only while its deployment is enabled and, if it names an `entitlement`,
+  while a valid entitlement grants that feature. Otherwise it is left out of vLLM, the gateway and
+  vSR, `oaf validate` says so, and a rule that targets it is inactive (its prompts go to the fast
+  model). Entitlement verification is not implemented yet, so today an entitled adapter is never
+  served; leave `entitlement` out until it is.
+- **Replacing** a deployment's base model (`POST /models/{name}/replace` with another catalog model)
+  drops its adapters: they only load on the model they were trained for.
+
+`examples/cluster.hospital.yaml` is a complete example: Ornith, gpt-oss-20b with the Spetaar DDx
+adapter, MedGemma and bge-m3 on one box, with a rule sending differential-diagnosis prompts to the
+adapter.
+
+### Changing models and routing from an installer
+
+Apps and their installers never edit cluster.yaml by hand. Each command below edits it with its
+comments kept, validates the result against the catalog (memory budget, routing targets, licences)
+and writes it only if it has no errors; warnings are printed. Each is idempotent, so an installer can
+run it again. None of them deploys anything: run `sudo oaf apply` at the end. All take `-f` and
+`--catalog`.
+
+| Command | Does |
+|---|---|
+| `oaf models add <name> --catalog-ref <id> [--node N] [--util F] [--max-model-len N]` | adds a deployment (no-op if `<name>` exists) |
+| `oaf models set <name> [--util F] [--max-model-len N] [--enabled=false]` | changes one; shrink a model before adding another |
+| `oaf models adapter add <deployment> <adapter> --path <dir> --rank N [--entitlement F] [--guardrails a,b]` | adds or updates a LoRA adapter (prints what changed) |
+| `oaf models adapter remove <deployment> <adapter>` | removes it |
+| `oaf routing rule set <name> --target <model> [--keywords "a,b"] [--min-tokens N] [--case-sensitive] [--requires-entitlement F] [--before <rule>]` | adds or replaces a rule; a new one goes last unless `--before` |
+| `oaf routing rule remove <name>` | removes it |
+| `oaf routing mode observe\|active` | observe only records vSR's decisions; active applies them |
+| `oaf routing defaults [--fast M] [--fallback M]` | the `model: auto` default and fallback |
+| `oaf licenses needed [--json]` | the licences deployed models and engines still need |
+| `oaf licenses accept <subject>... --by <who>` | records a person's acceptance (`model/<id>`, `image/<component>`) |
+
+The hospital profile from a fresh box (`scripts/spark-bootstrap.sh`, Ornith at its default share):
+
+```sh
+sudo oaf models set ornith --util 0.25 --max-model-len 65536
+sudo oaf models add gpt-oss-20b --catalog-ref gpt-oss-20b
+sudo oaf licenses accept model/medgemma-27b-it image/vllm --by admin@hospital.example   # after the person accepted
+sudo oaf models add medgemma --catalog-ref medgemma-27b-it
+sudo oaf models adapter add gpt-oss-20b spetaar-ddx --path /var/lib/oaf/adapters/spetaar-ddx --rank 16
+sudo oaf routing rule set differential --target spetaar-ddx --keywords "differential diagnosis,ddx,rule out"
+sudo oaf routing rule set medical --target medgemma --keywords "patient,symptoms,medication"
+sudo oaf routing mode active
+printf %s "$HF_TOKEN" | sudo oaf secrets set hf-token
+sudo oaf apply
+```
+
+A model's licence must be accepted before `oaf models add` takes it. Record only what a person
+accepted. Rules are ordered and the first match wins, so put specific rules before broad ones
+(`--before`).
+
+*(planned: `oaf models search`, and benchmarks of each model against its catalog baseline.)*
 
 ## 8. Day-2 operations
 
@@ -994,7 +1147,8 @@ vLLM has no container limit: its share is set by `gpuMemoryUtilization`.
 ### Commands
 `oaf validate`, `oaf preflight [--ssh]`, `oaf pki init`, `oaf node serve`, `oaf fabric check`,
 `oaf install`, `oaf apply [--dry-run]`, `oaf status`, `oaf uninstall --yes [--purge]`, `oaf reset --yes [--keep-weights] [--keep-images]`,
-`oaf keys issue [--admin]|rotate|list|serve`, `oaf models add`, `oaf serve`, `oaf secrets set`,
-`oaf observability ...`, `oaf version`.
+`oaf keys issue [--admin]|rotate|list|serve`, `oaf models add|set|adapter add|adapter remove`,
+`oaf routing rule set|rule remove|mode|defaults`, `oaf licenses needed|accept`, `oaf serve`,
+`oaf secrets set`, `oaf observability ...`, `oaf version`.
 Every command has `--help`. Commands that act on the cluster take `-f` (cluster.yaml),
 `--catalog`, `--pki-dir`, `--secrets-dir` and `--timeout`.

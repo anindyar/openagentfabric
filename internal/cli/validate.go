@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -22,7 +23,8 @@ func newValidateCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Validate cluster.yaml and the model catalog",
 		Long: "Checks cluster.yaml and catalog/models.yaml against their schemas and the semantic rules\n" +
-			"(topology, placement, memory budget, routing targets, licences). Exits non-zero on errors.",
+			"(topology, placement, memory budget, routing targets, licences), and the files of LoRA\n" +
+			"adapters this host can see. Exits non-zero on errors.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runValidate(cmd.OutOrStdout(), clusterPath, catalogPath)
@@ -44,6 +46,8 @@ func runValidate(out io.Writer, clusterPath, catalogPath string) error {
 	}
 	// Entitlement verification arrives later; until then no features are granted.
 	r := config.Validate(c, cat, config.Options{})
+	// LoRA adapters are local files: check those this host can see.
+	r.Issues = append(r.Issues, config.CheckAdapterFiles(c, cat, os.DirFS("/"))...)
 	for _, i := range r.Errors() {
 		fmt.Fprintf(out, "error:   %s\n", i)
 	}

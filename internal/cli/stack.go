@@ -140,6 +140,7 @@ func runApply(ctx context.Context, out io.Writer, f *stackFlags, dryRun bool) er
 		}
 		return err
 	}
+	attachHFToken(projects, hfToken(f.secretsDir), out)
 	for d, comp := range render.UnpinnedLocal(s.cluster, s.catalog, s.versions) {
 		_, _ = fmt.Fprintf(out, "warning: model %s not started: %s has no published image; push it with `oaf images push <image> --component %s`\n", d, comp, comp)
 	}

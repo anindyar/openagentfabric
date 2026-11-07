@@ -23,6 +23,8 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	nodev1 "openagentfabric.dev/oaf/internal/gen/oaf/node/v1"
 )
 
@@ -135,12 +137,14 @@ func (w *Weights) All() []*nodev1.WeightsStatus {
 // WhenComplete runs fn once dir's weights are complete (at once if they
 // are); key replaces an earlier waiter with the same key.
 func (w *Weights) WhenComplete(dir, key string, fn func()) {
+	// Checked under the lock: a download that completes concurrently either
+	// finds this waiter or has written its marker before the check.
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	if Complete(dir) {
 		go fn()
 		return
 	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	w.init()
 	if w.waiters[dir] == nil {
 		w.waiters[dir] = map[string]func(){}
@@ -177,7 +181,11 @@ func (w *Weights) remember(spec *nodev1.WeightsSpec) {
 	if os.MkdirAll(dir, 0o755) != nil {
 		return
 	}
-	data, _ := json.Marshal(spec)
+	// The access token stays in memory: a resumed download of a gated repo
+	// fails until the next apply sends the token again.
+	kept := proto.Clone(spec).(*nodev1.WeightsSpec)
+	kept.Token = ""
+	data, _ := json.Marshal(kept)
 	_ = os.WriteFile(filepath.Join(dir, spec.GetModelId()+".json"), data, 0o644)
 }
 
@@ -239,6 +247,15 @@ type hfFile struct {
 	SHA256 string // LFS files only
 }
 
+// authorize sends the spec's access token (gated repos). Go's client drops
+// the header when Hugging Face redirects a file to another host (its CDN),
+// whose signed URL needs none.
+func authorize(req *http.Request, spec *nodev1.WeightsSpec) {
+	if t := spec.GetToken(); t != "" {
+		req.Header.Set("Authorization", "Bearer "+t)
+	}
+}
+
 func (w *Weights) base() string {
 	if w.BaseURL != "" {
 		return strings.TrimRight(w.BaseURL, "/")
@@ -257,6 +274,7 @@ func (w *Weights) client() *http.Client {
 func (w *Weights) list(ctx context.Context, spec *nodev1.WeightsSpec) ([]hfFile, error) {
 	u := fmt.Sprintf("%s/api/models/%s/revision/%s?blobs=true", w.base(), spec.GetRepo(), url.PathEscape(spec.GetRevision()))
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	authorize(req, spec)
 	resp, err := w.client().Do(req)
 	if err != nil {
 		return nil, err
@@ -418,6 +436,7 @@ func (w *Weights) fetch(ctx context.Context, p *pull, f hfFile, target string) e
 	if offset < f.Size {
 		u := fmt.Sprintf("%s/%s/resolve/%s/%s", w.base(), p.spec.GetRepo(), url.PathEscape(p.spec.GetRevision()), escapePath(f.Name))
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		authorize(req, p.spec)
 		if offset > 0 {
 			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", offset))
 		}
